@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="robots" content="noindex">
+<title>unignorable — the city's own record of what it keeps ignoring</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{
+    --bg:#080b11; --panel:#0e1420; --line:#1d2737; --ink:#eaf0fb; --dim:#7e8aa0;
+    --red:#ff5a47; --amber:#ffc24b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  #app{display:flex;flex-direction:column;height:100%}
+  header{padding:14px 18px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0c111b,#080b11)}
+  .topline{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .views{display:flex;gap:3px;background:#0b111c;border:1px solid var(--line);border-radius:999px;padding:3px;flex:none}
+  .vbtn{font-size:12.5px;padding:5px 14px;border-radius:999px;color:var(--dim);cursor:pointer;user-select:none}
+  .vbtn.on{background:#1a2535;color:var(--ink)}
+  #trends{position:absolute;inset:0;background:var(--bg);overflow:auto;display:none;z-index:800}
+  #trends.show{display:block}
+  .tpad{padding:22px 20px 44px;max-width:920px;margin:0 auto}
+  #trends h2{font-size:19px;font-weight:800;margin:0 0 4px;letter-spacing:-.3px}
+  .tsub{font-size:13px;color:var(--dim);margin:0 0 18px}
+  #chart{background:#0a0f18;border:1px solid var(--line);border-radius:12px;padding:8px}
+  .tlegend{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;font-size:12.5px;color:var(--dim)}
+  .tlegend span{display:flex;align-items:center;gap:6px}
+  .tlegend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .brand{display:flex;align-items:baseline;gap:10px}
+  .brand h1{margin:0;font-size:21px;font-weight:800;letter-spacing:-.5px}
+  .brand h1 b{color:var(--red)}
+  .brand .tag{font-size:12.5px;color:var(--dim)}
+  .strip{display:flex;gap:22px;margin-top:10px;flex-wrap:wrap}
+  .stat{display:flex;flex-direction:column}
+  .stat .v{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
+  .stat .l{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px}
+  .stat .v.warn{color:var(--amber)}
+  .fresh{margin-top:9px;font-size:10.5px;color:#5e6a80;letter-spacing:.3px;display:flex;align-items:center;gap:6px}
+  .fresh .ok{width:6px;height:6px;border-radius:50%;background:#36c98a;display:inline-block}
+  .chips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .chip{font-size:12px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);
+    background:#0b111c;color:var(--dim);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
+  .chip .dot{width:8px;height:8px;border-radius:50%}
+  .chip.on{color:var(--ink);border-color:#2c3a52;background:#121b2b}
+  main{flex:1;position:relative}
+  #map{position:absolute;inset:0;background:#0a0f17}
+  .leaflet-container{background:#0a0f17}
+  /* Issue card */
+  #card{position:absolute;right:0;top:0;bottom:0;width:360px;max-width:88vw;background:var(--panel);
+    border-left:1px solid var(--line);transform:translateX(100%);transition:transform .22s ease;
+    z-index:1000;display:flex;flex-direction:column;overflow:auto}
+  #card.open{transform:none}
+  .card-pad{padding:18px 18px 24px}
+  .x{position:absolute;top:12px;right:14px;font-size:22px;color:var(--dim);cursor:pointer;line-height:1}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;color:#0b0e14}
+  .addr{font-size:17px;font-weight:800;margin:12px 0 2px;line-height:1.25}
+  .sub{font-size:12.5px;color:var(--dim)}
+  .big{margin:18px 0 4px;font-size:40px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-1px}
+  .big small{font-size:14px;font-weight:600;color:var(--dim);letter-spacing:0}
+  .row{display:flex;justify-content:space-between;padding:11px 0;border-top:1px solid var(--line);font-size:13px}
+  .row .k{color:var(--dim)}
+  .row .v{font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+  .ignored{color:var(--amber)}
+  .live{display:inline-flex;align-items:center;gap:6px;color:var(--red);font-size:11.5px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.6px;margin-top:6px}
+  .live .pulse{width:8px;height:8px;border-radius:50%;background:var(--red);animation:p 1.6s infinite}
+  @keyframes p{0%,100%{opacity:1}50%{opacity:.25}}
+  .status{margin-top:13px;padding:11px 12px;border-radius:11px;font-weight:800;font-size:14px;letter-spacing:.2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .status .sm{font-weight:600;font-size:11.5px;color:var(--dim);letter-spacing:0}
+  .status .rec{font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;background:#2a1c10;color:var(--amber);letter-spacing:.3px}
+  .st-persist{background:#1d0f0f;color:#ff6b5a;border:1px solid #3a1d1d}
+  .st-active{background:#170f12;color:#ff8b7a;border:1px solid #33201f}
+  .st-emerge{background:#1c1608;color:var(--amber);border:1px solid #3a2c14}
+  .st-resolved{background:#0c1118;color:#9fb0c8;border:1px solid var(--line)}
+  .spark{margin-top:11px}
+  .spark svg{display:block;height:30px;width:100%}
+  .sl-ax{display:flex;justify-content:space-between;font-size:9.5px;color:#5e6a80;margin-top:3px}
+  .predict{margin-top:11px;font-size:12px;line-height:1.5;color:#aebbd0;background:#0a0f18;border:1px dashed #2a3850;border-radius:9px;padding:9px 11px}
+  .histrow{margin-top:11px}
+  .histtoggle{font-size:11.5px;color:var(--dim);border:1px solid var(--line);background:#0b111c;border-radius:999px;padding:5px 11px;cursor:pointer;user-select:none}
+  .histtoggle.on{color:var(--ink);border-color:#2c3a52;background:#121b2b}
+  .quote{margin:16px 0;padding:12px 13px;background:#0a0f18;border-left:3px solid var(--amber);
+    border-radius:0 8px 8px 0;font-size:12.5px;color:#cdd6e6;line-height:1.45}
+  .sect{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
+  .sect-h{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
+  .city .cityline{font-size:13.5px;line-height:1.5;color:#cdd6e6}
+  .city .cite{margin-top:6px;font-size:11px;color:#5e6a80;font-style:italic}
+  .verdict{font-size:14px;font-weight:800;letter-spacing:.3px;padding:11px 12px;border-radius:10px;background:#0a0f18}
+  .verdict .vsub{font-weight:600;color:var(--dim);font-size:11.5px;letter-spacing:0}
+  .verdict.still{color:var(--red);border:1px solid #3a1d1d}
+  .verdict.cleared{color:#36c98a;border:1px solid #163a2a}
+  .verdict.none{color:var(--dim);font-weight:600;border:1px solid var(--line)}
+  .verdict .clash{margin-top:7px;font-size:11.5px;font-weight:700;color:var(--amber);letter-spacing:0}
+  .thread{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+  .thread .empty{font-size:12.5px;color:var(--dim);line-height:1.5;padding:2px 0}
+  .post{background:#0b111c;border:1px solid var(--line);border-radius:10px;padding:10px 11px}
+  .ptag{display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
+  .ptag.still_here{background:#3a1d1d;color:#ff8b7a}
+  .ptag.worse{background:#3a2a16;color:var(--amber)}
+  .ptag.cleaned,.ptag.gone{background:#163a2a;color:#36c98a}
+  .ptext{font-size:13px;color:var(--ink);line-height:1.45;white-space:pre-wrap;word-break:break-word}
+  .pmeta{font-size:10.5px;color:#5e6a80;margin-top:6px}
+  .acts{display:flex;gap:8px;margin-top:16px}
+  .acts button{flex:1;padding:12px;border-radius:11px;font-size:13px;font-weight:800;cursor:pointer;border:1px solid var(--line)}
+  .seen-btn{background:var(--red);color:#fff;border-color:var(--red)!important}
+  .seen-btn.done{background:#16202f;color:var(--ink);border-color:var(--line)!important}
+  .add-btn{background:#16202f;color:var(--ink)}
+  .pform{margin-top:10px;display:flex;flex-direction:column;gap:9px}
+  .pform textarea{width:100%;min-height:62px;resize:vertical;background:#0a0f18;border:1px solid var(--line);border-radius:10px;color:var(--ink);font:inherit;font-size:13px;padding:10px}
+  .schips{display:flex;gap:6px;flex-wrap:wrap}
+  .schips span{font-size:12px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);color:var(--dim);cursor:pointer;user-select:none}
+  .schips span.on{background:#1a2535;color:var(--ink);border-color:#2c3a52}
+  .post-btn{background:var(--red);color:#fff;padding:12px;border:none;border-radius:11px;font-weight:800;font-size:14px;cursor:pointer}
+  .hint{position:absolute;left:12px;bottom:12px;z-index:600;font-size:11.5px;color:var(--dim);
+    background:rgba(8,11,17,.8);padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
+  .leaflet-popup-content-wrapper{background:#0e1420;color:var(--ink);border:1px solid var(--line)}
+  .leaflet-popup-tip{background:#0e1420}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="topline">
+      <div class="brand">
+        <h1>un<b>ignor</b>able</h1>
+        <span class="tag">the city's own record of what it keeps closing — and keeps ignoring</span>
+      </div>
+      <div class="views" id="views">
+        <span class="vbtn on" data-v="map">Map</span>
+        <span class="vbtn" data-v="trends">Trends</span>
+      </div>
+    </div>
+    <div class="strip">
+      <div class="stat"><span class="v" id="s-issues">—</span><span class="l">active right now</span></div>
+      <div class="stat"><span class="v" id="s-worst">—</span><span class="l">chronic (persistent)</span></div>
+      <div class="stat"><span class="v warn" id="s-ignored">—</span><span class="l">closures, problem came back</span></div>
+      <div class="stat"><span class="v" id="s-reports">—</span><span class="l">311 reports</span></div>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="histrow"><span class="histtoggle" id="histToggle" onclick="toggleHistory()">＋ show resolved (history)</span></div>
+    <div class="fresh" id="fresh"></div>
+  </header>
+  <main>
+    <div id="map"></div>
+    <div class="hint" id="hint">Bigger dot = reported more. Tap one.</div>
+    <section id="trends"><div class="tpad">
+      <h2 id="t-head">Is it getting worse?</h2>
+      <p class="tsub">Monthly 311 reports by type, 2021–2026 — the question sidewalk was built to answer, now living here.</p>
+      <div id="chart"></div>
+      <div class="tlegend" id="t-legend"></div>
+    </div></section>
+    <aside id="card"><span class="x" onclick="closeCard()">×</span><div class="card-pad" id="cardBody"></div></aside>
+  </main>
+</div>
+<script>
+const TYPES = {
+  'Encampment':                {c:'#ff6b4a', label:'Encampment'},
+  'Drug Activity':             {c:'#c77dff', label:'Drug Activity'},
+  'Homeless Person Assistance':{c:'#4ad6c8', label:'Homeless Assist'},
+  'Panhandling':               {c:'#ffd166', label:'Panhandling'},
+};
+const active = new Set(Object.keys(TYPES));
+let ALL = [], layer, map;
+
+const fmt = n => n.toLocaleString('en-US');
+const stillHere = i => i.last_seen >= '2026-01-01';
+
+const map_ = L.map('map', {zoomControl:true, preferCanvas:true}).setView([40.735,-73.98], 12);
+map = map_;
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  {attribution:'© OpenStreetMap © CARTO', maxZoom:19}).addTo(map);
+const canvas = L.canvas({padding:.5});
+
+function radius(n){ return Math.min(26, 4 + Math.sqrt(n)*0.9); }
+
+let showResolved = false;
+function draw(){
+  if(layer) layer.remove();
+  layer = L.layerGroup().addTo(map);
+  const shown = ALL.filter(i => active.has(i.type) &&
+    (i.status==='active' || (showResolved && i.status==='resolved')));
+  shown.forEach(i => {
+    const col = TYPES[i.type].c;
+    const persist = i.pattern==='persistent';
+    const resolved = i.status==='resolved';
+    L.circleMarker([i.lat,i.lng], {
+      renderer:canvas,
+      radius: radius(i.n) * (persist?1.18:1),
+      color: col, weight: persist?2:1,
+      fillColor: col,
+      fillOpacity: resolved?0.12:(persist?0.6:0.42),
+      opacity: resolved?0.4:0.85
+    }).on('click', ()=>openCard(i)).addTo(layer);
+  });
+}
+function toggleHistory(){
+  showResolved = !showResolved;
+  const el = document.getElementById('histToggle');
+  el.classList.toggle('on', showResolved);
+  el.textContent = showResolved ? '− hide resolved' : '＋ show resolved (history)';
+  if(window.pulse) window.pulse(showResolved?'show_resolved':'hide_resolved');
+  draw();
+}
+
+let current = null, selStatus = null;
+const STATUS_LABEL = {still_here:'Still here', worse:'Got worse', cleaned:'Cleaned up', gone:'Gone'};
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function ago(ts){
+  const s=(Date.now()-new Date(ts).getTime())/1000;
+  if(s<60) return 'just now';
+  if(s<3600) return Math.floor(s/60)+'m ago';
+  if(s<86400) return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
+}
+
+let DATA_THROUGH = '';
+const PAT = {
+  persistent:{ic:'🔴',label:'PERSISTENT',cls:'st-persist'},
+  ongoing:   {ic:'🔴',label:'ACTIVE',cls:'st-active'},
+  emerging:  {ic:'🟠',label:'EMERGING',cls:'st-emerge'},
+  resolved:  {ic:'⚪',label:'LIKELY RESOLVED',cls:'st-resolved'},
+};
+function human(d){
+  if(d>=365) return (d/365).toFixed(d>=730?0:1)+(d>=730?' yrs':' yr');
+  if(d>=60) return Math.round(d/30)+' months';
+  if(d>=14) return Math.round(d/7)+' weeks';
+  return d+' day'+(d===1?'':'s');
+}
+function statusLine(i){
+  if(i.pattern==='persistent') return `active ${human(i.current_days)} straight`;
+  if(i.pattern==='ongoing')    return `active · this run ${human(i.current_days)}`;
+  if(i.pattern==='emerging')   return `new · started ${human(i.current_days)} ago`;
+  return `quiet ${human(i.silence)} · normal gap here is ~${i.cadence}d`;
+}
+function predictLine(i){
+  if(i.status==='resolved')
+    return `🔮 Model: <b>likely resolved</b> — silent ${i.silence} days against its ~${i.cadence}-day cadence (${i.confidence}× past normal). <b>Neighbors — is it actually gone?</b>`;
+  if(i.pattern==='persistent')
+    return `🔮 Model: <b>active & chronic</b> — ${human(i.current_days)} of continuous reports, no break in the city's own data.`;
+  if(i.pattern==='emerging')
+    return `🔮 Model: <b>emerging</b> — first activity ${human(i.current_days)} ago. Worth watching.`;
+  return `🔮 Model: <b>active</b> — current run started ${human(i.current_days)} ago.`;
+}
+async function loadSparkline(i){
+  try{
+    const r = await fetch(`/api/episodes?type=${encodeURIComponent(i.type)}&id=${encodeURIComponent(i.id)}`);
+    renderSparkline(document.getElementById('spark'), await r.json(), i.type);
+  }catch(e){}
+}
+function renderSparkline(el, eps, type){
+  if(!el) return;
+  if(!eps || !eps.length){ el.innerHTML=''; return; }
+  const col = TYPES[type].c;
+  const start = Date.parse(eps[0][0]+'T00:00:00Z');
+  const end = Date.parse((DATA_THROUGH||eps[eps.length-1][1])+'T00:00:00Z');
+  const span = Math.max(1, end-start);
+  const W=320,H=30, x = t => ((Date.parse(t+'T00:00:00Z')-start)/span)*W;
+  const maxC = Math.max(...eps.map(e=>e[2]));
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="none">`;
+  svg += `<line x1="0" y1="${H-3}" x2="${W}" y2="${H-3}" stroke="#1d2737"/>`;
+  eps.forEach(([s,e,c])=>{
+    const x1=x(s), x2=Math.max(x(e),x1+2), h=4+(c/maxC)*(H-9);
+    svg += `<rect x="${x1.toFixed(1)}" y="${(H-3-h).toFixed(1)}" width="${(x2-x1).toFixed(1)}" height="${h.toFixed(1)}" rx="1.5" fill="${col}" opacity="0.9"/>`;
+  });
+  svg += `</svg>`;
+  el.innerHTML = svg + `<div class="sl-ax"><span>${eps[0][0].slice(0,7)}</span><span>${eps.length} episode${eps.length>1?'s':''}</span><span>now</span></div>`;
+}
+
+function openCard(i){
+  current = i; selStatus = null;
+  const t = TYPES[i.type];
+  const rd = (i.avg_return_days!=null) ? i.avg_return_days : null;
+  const rdTxt = rd==null ? null : (rd < 1 ? 'the same day' : (rd < 1.5 ? '1 day' : rd+' days'));
+  if(window.pulse) window.pulse('issue_open',{type:i.type,id:i.id,reports:i.n});
+  document.getElementById('cardBody').innerHTML = `
+    <span class="badge" style="background:${t.c}">${t.label}</span>
+    <div class="addr">${(i.addr||'Unknown location').replace(/\s+/g,' ').trim()}</div>
+    <div class="sub">${i.borough||''} · ${i.agency||'NYC'} · Council District ${i.council||'—'} · CB ${i.board||'—'}</div>
+
+    <div class="status ${PAT[i.pattern].cls}">
+      ${PAT[i.pattern].ic} ${PAT[i.pattern].label}
+      <span class="sm">${statusLine(i)}</span>
+      ${i.episode_count>1?`<span class="rec">flared up ${i.episode_count}×</span>`:''}
+    </div>
+    <div class="spark" id="spark"></div>
+    <div class="predict">${predictLine(i)}</div>
+
+    <div class="sect city">
+      <div class="sect-h">🏛 The city’s story</div>
+      <div class="cityline">Reported <b>${fmt(i.n)}×</b> since ${i.first_seen}. Marked
+        <b>“resolved” ${fmt(i.closed_n)}×</b>. It came back <b>${fmt(i.returned_n)}×</b>${rdTxt?` — ${rdTxt} after they closed it`:''}.</div>
+      <div class="cite">their numbers, not the truth ↓</div>
+    </div>
+
+    <div class="sect truth">
+      <div class="sect-h">What’s actually there</div>
+      <div id="verdict" class="verdict none">checking the block…</div>
+      <div id="thread" class="thread"></div>
+    </div>
+
+    <div class="acts">
+      <button class="seen-btn" id="seenBtn" onclick="seeOften()">I see this often</button>
+      <button class="add-btn" onclick="toggleForm()">Add what you see →</button>
+    </div>
+    <div class="pform" id="pform" hidden>
+      <textarea id="ptext" maxlength="500" placeholder="What do you actually see here right now? (anonymous)"></textarea>
+      <div class="schips" id="schips">
+        <span data-s="still_here" onclick="selectChip(this)">Still here</span>
+        <span data-s="worse" onclick="selectChip(this)">Got worse</span>
+        <span data-s="cleaned" onclick="selectChip(this)">Cleaned up</span>
+        <span data-s="gone" onclick="selectChip(this)">Gone now</span>
+      </div>
+      <button class="post-btn" id="postBtn" onclick="submitPost()">Post anonymously</button>
+    </div>`;
+  document.getElementById('card').classList.add('open');
+  loadSparkline(i);
+  loadThread();
+}
+function closeCard(){ document.getElementById('card').classList.remove('open'); }
+
+function toggleForm(){
+  const f = document.getElementById('pform'); f.hidden = !f.hidden;
+  if(!f.hidden) document.getElementById('ptext').focus();
+}
+function selectChip(el){
+  const chips = document.getElementById('schips').children;
+  if(selStatus===el.dataset.s){ selStatus=null; el.classList.remove('on'); }
+  else { selStatus=el.dataset.s; [...chips].forEach(x=>x.classList.toggle('on', x===el)); }
+}
+
+async function loadThread(){
+  try{
+    const i = current;
+    const r = await fetch(`/api/thread?type=${encodeURIComponent(i.type)}&id=${encodeURIComponent(i.id)}`);
+    renderThread(await r.json());
+  }catch(e){}
+}
+function renderThread(t){
+  const i = current, v = document.getElementById('verdict'); if(!v) return;
+  const cityClosed = i.closed_n>0;
+  if(t.verdict==='still_here'){
+    v.className='verdict still';
+    v.innerHTML = `🚩 STILL HERE <span class="vsub">· ${t.corrob} neighbor${t.corrob===1?'':'s'} confirm${t.corrob===1?'s':''}${t.lastTs?` · last ${ago(t.lastTs)}`:''}</span>`
+      + (cityClosed?`<div class="clash">the city calls this “resolved.” the block says otherwise.</div>`:'');
+  } else if(t.verdict==='cleared'){
+    v.className='verdict cleared';
+    v.innerHTML = `✓ NEIGHBORS SAY THIS IS CLEARED <span class="vsub">${t.lastTs?`· last ${ago(t.lastTs)}`:''}</span>`;
+  } else {
+    v.className='verdict none';
+    v.innerHTML = `Unverified — no one has confirmed what’s here. <b>Be the first.</b>`;
+  }
+  const th = document.getElementById('thread');
+  th.innerHTML = !t.posts.length
+    ? `<div class="empty">No commentary yet. The city’s number is the only story here — change that.</div>`
+    : t.posts.map(p=>`
+      <div class="post">
+        ${p.status?`<span class="ptag ${p.status}">${STATUS_LABEL[p.status]}</span>`:''}
+        ${p.text?`<div class="ptext">${esc(p.text)}</div>`:''}
+        <div class="pmeta">anon · ${ago(p.ts)}</div>
+      </div>`).join('');
+}
+
+function syncSeen(t){
+  const it = ALL.find(x=>x.type===current.type && x.id===current.id);
+  if(it) it.seen = t.corrob;
+}
+
+async function seeOften(){
+  const i = current, btn = document.getElementById('seenBtn');
+  btn.disabled = true; btn.classList.add('done'); btn.textContent = '✓ Seen';
+  if(window.pulse) window.pulse('see_often',{type:i.type,id:i.id});
+  try{
+    const r = await fetch('/api/seen',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:i.type,id:i.id})});
+    const t = await r.json(); renderThread(t); syncSeen(t);
+  }catch(e){}
+}
+
+async function submitPost(){
+  const i = current, text = document.getElementById('ptext').value.trim();
+  if(!text && !selStatus) return;
+  const btn = document.getElementById('postBtn'); btn.disabled=true; btn.textContent='Posting…';
+  if(window.pulse) window.pulse('post_added',{type:i.type,id:i.id,status:selStatus||undefined});
+  try{
+    const r = await fetch('/api/post',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:i.type,id:i.id,text,status:selStatus})});
+    const t = await r.json();
+    document.getElementById('ptext').value=''; selStatus=null;
+    document.getElementById('pform').hidden=true;
+    [...document.getElementById('schips').children].forEach(x=>x.classList.remove('on'));
+    renderThread(t); syncSeen(t);
+  }catch(e){} finally { btn.disabled=false; btn.textContent='Post anonymously'; }
+}
+
+function buildChips(){
+  const c = document.getElementById('chips');
+  Object.entries(TYPES).forEach(([k,v])=>{
+    const el = document.createElement('div');
+    el.className='chip on'; el.innerHTML=`<span class="dot" style="background:${v.c}"></span>${v.label}`;
+    el.onclick=()=>{ if(active.has(k)){active.delete(k);el.classList.remove('on');}
+      else{active.add(k);el.classList.add('on');} draw(); };
+    c.appendChild(el);
+  });
+}
+
+// View toggle: Map ↔ Trends (the absorbed sidewalk lens)
+document.getElementById('views').addEventListener('click', e=>{
+  const b = e.target.closest('.vbtn'); if(!b) return;
+  document.querySelectorAll('.vbtn').forEach(x=>x.classList.toggle('on', x===b));
+  const v = b.dataset.v, isTrends = v==='trends';
+  document.getElementById('trends').classList.toggle('show', isTrends);
+  document.getElementById('chips').style.display = isTrends?'none':'';
+  document.getElementById('hint').style.display = isTrends?'none':'';
+  if(window.pulse) window.pulse(isTrends?'view_trends':'view_map');
+  if(isTrends) renderTrends();
+});
+
+let trendsDone=false;
+async function renderTrends(){
+  if(trendsDone) return; trendsDone=true;
+  const data = await (await fetch('/api/trends')).json();
+  const months = [...new Set(data.map(r=>r.month))].sort();
+  const idx = {}; data.forEach(r=>{ idx[r.type+r.month]=r.n; });
+  const series = {};
+  Object.keys(TYPES).forEach(t=> series[t] = months.map(m=> idx[t+m]||0));
+  const maxN = Math.max(1, ...Object.values(series).flat());
+  const W=900,H=320,P=38;
+  const X = i => P + (months.length<2?0:i/(months.length-1))*(W-P*2);
+  const Y = n => H-P - n/maxN*(H-P*2);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet">`;
+  months.forEach((m,i)=>{ if(m.endsWith('-01')){
+    svg += `<line x1="${X(i).toFixed(1)}" y1="${P-8}" x2="${X(i).toFixed(1)}" y2="${H-P}" stroke="#162033"/>`;
+    svg += `<text x="${X(i).toFixed(1)}" y="${H-P+18}" fill="#7e8aa0" font-size="11" text-anchor="middle">${m.slice(0,4)}</text>`;
+  }});
+  Object.entries(series).forEach(([t,arr])=>{
+    const pts = arr.map((n,i)=>`${X(i).toFixed(1)},${Y(n).toFixed(1)}`).join(' ');
+    svg += `<polyline points="${pts}" fill="none" stroke="${TYPES[t].c}" stroke-width="2" stroke-linejoin="round"/>`;
+  });
+  svg += `</svg>`;
+  document.getElementById('chart').innerHTML = svg;
+  document.getElementById('t-legend').innerHTML = Object.entries(TYPES)
+    .map(([t,v])=>`<span><i style="background:${v.c}"></i>${v.label}</span>`).join('');
+  const enc = series['Encampment'];
+  const f = enc.slice(0,12).reduce((a,b)=>a+b,0), l = enc.slice(-12).reduce((a,b)=>a+b,0);
+  const ch = f? Math.round((l/f-1)*100):0;
+  document.getElementById('t-head').innerHTML =
+    `Encampment reports are <b style="color:${ch>=0?'var(--red)':'#4ad6c8'}">${ch>=0?'up':'down'} ${Math.abs(ch)}%</b> year over year`;
+}
+
+(async function(){
+  buildChips();
+  ALL = await (await fetch('/api/issues')).json();
+  const reports = ALL.reduce((a,i)=>a+i.n,0);
+  const closed = ALL.reduce((a,i)=>a+i.closed_n,0);
+  const back = ALL.reduce((a,i)=>a+i.returned_n,0);
+  document.getElementById('s-issues').textContent = fmt(ALL.filter(i=>i.status==='active').length);
+  document.getElementById('s-worst').textContent = fmt(ALL.filter(i=>i.pattern==='persistent').length);
+  document.getElementById('s-ignored').textContent = Math.round(back/closed*100)+'%';
+  document.getElementById('s-reports').textContent = fmt(reports);
+  const through = ALL.reduce((a,i)=> i.last_seen>a?i.last_seen:a, '');
+  DATA_THROUGH = through;
+  const d = new Date(through+'T00:00:00');
+  document.getElementById('fresh').innerHTML =
+    `<span class="ok"></span>NYC 311 open data · current through ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} · refreshed daily`;
+  draw();
+})();
+</script>
+<!-- Pulse first-party analytics (factory standard, zero-dep beacon). Exposes window.pulse for custom events. -->
+<script>(function(){if(location.hostname==="localhost")return;var I="https://pulse.polyfeeds.dev/api/ingest";function s(e,x){try{var b=JSON.stringify(Object.assign({event:e,path:location.pathname,referrer:document.referrer||undefined,screen:innerWidth+"x"+innerHeight},x||{}));if(navigator.sendBeacon){navigator.sendBeacon(I,new Blob([b],{type:"text/plain"}))}else{fetch(I,{method:"POST",headers:{"Content-Type":"text/plain"},keepalive:true,body:b})}}catch(e){}}window.pulse=s;s("page_view");var t=Date.now();function d(){s("page_dwell",{dwellMs:Date.now()-t})}addEventListener("pagehide",d);document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden")d()})})();</script>
+</body>
+</html>
