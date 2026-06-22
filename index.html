@@ -115,6 +115,11 @@
   .schips span{font-size:12px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);color:var(--dim);cursor:pointer;user-select:none}
   .schips span.on{background:#1a2535;color:var(--ink);border-color:#2c3a52}
   .post-btn{background:var(--red);color:#fff;padding:12px;border:none;border-radius:11px;font-weight:800;font-size:14px;cursor:pointer}
+  .photo-btn{background:#0a0f18;border:1px dashed #2a3850;color:#aebbd0;border-radius:10px;padding:11px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;text-align:center}
+  .photo-prev{position:relative;width:100%;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+  .photo-prev img{display:block;width:100%;max-height:220px;object-fit:cover}
+  .photo-x{position:absolute;top:6px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(8,11,17,.85);color:#fff;font-size:19px;line-height:28px;text-align:center;cursor:pointer;border:1px solid var(--line)}
+  .pphoto{display:block;width:100%;max-height:260px;object-fit:cover;border-radius:8px;margin-bottom:8px;cursor:pointer;border:1px solid var(--line)}
   .hint{position:absolute;left:12px;bottom:12px;z-index:600;font-size:11.5px;color:var(--dim);
     background:rgba(8,11,17,.8);padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
   .leaflet-popup-content-wrapper{background:#0e1420;color:var(--ink);border:1px solid var(--line)}
@@ -206,7 +211,7 @@ function toggleHistory(){
   draw();
 }
 
-let current = null, selStatus = null;
+let current = null, selStatus = null, photoData = null;
 const STATUS_LABEL = {still_here:'Still here', worse:'Got worse', cleaned:'Cleaned up', gone:'Gone'};
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function ago(ts){
@@ -271,7 +276,7 @@ function renderSparkline(el, eps, type){
 }
 
 function openCard(i){
-  current = i; selStatus = null;
+  current = i; selStatus = null; photoData = null;
   const t = TYPES[i.type];
   const rd = (i.avg_return_days!=null) ? i.avg_return_days : null;
   const rdTxt = rd==null ? null : (rd < 1 ? 'the same day' : (rd < 1.5 ? '1 day' : rd+' days'));
@@ -314,6 +319,9 @@ function openCard(i){
         <span data-s="cleaned" onclick="selectChip(this)">Cleaned up</span>
         <span data-s="gone" onclick="selectChip(this)">Gone now</span>
       </div>
+      <input type="file" id="pfile" accept="image/*" capture="environment" hidden onchange="onPhotoPick(this)">
+      <button type="button" class="photo-btn" id="photoBtn" onclick="document.getElementById('pfile').click()">📷 Add a photo — the proof the city can’t see</button>
+      <div class="photo-prev" id="photoPrev" hidden><img id="photoImg" alt=""><span class="photo-x" onclick="clearPhoto()">×</span></div>
       <button class="post-btn" id="postBtn" onclick="submitPost()">Post anonymously</button>
     </div>`;
   document.getElementById('card').classList.add('open');
@@ -330,6 +338,39 @@ function selectChip(el){
   const chips = document.getElementById('schips').children;
   if(selStatus===el.dataset.s){ selStatus=null; el.classList.remove('on'); }
   else { selStatus=el.dataset.s; [...chips].forEach(x=>x.classList.toggle('on', x===el)); }
+}
+
+// Downscale the picked photo in-browser (canvas) so a 4MB phone shot ships as a ~150KB JPEG.
+function downscale(file, maxDim, quality){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const scale = Math.min(1, maxDim/Math.max(img.width, img.height));
+      const w = Math.round(img.width*scale), h = Math.round(img.height*scale);
+      const c = document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(img.src);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+async function onPhotoPick(input){
+  const file = input.files && input.files[0]; input.value='';
+  if(!file) return;
+  try{
+    photoData = await downscale(file, 1280, 0.72);
+    document.getElementById('photoImg').src = photoData;
+    document.getElementById('photoPrev').hidden = false;
+    document.getElementById('photoBtn').textContent = '📷 Change photo';
+  }catch(e){}
+}
+function clearPhoto(){
+  photoData = null;
+  document.getElementById('photoPrev').hidden = true;
+  document.getElementById('photoImg').src = '';
+  document.getElementById('photoBtn').textContent = '📷 Add a photo — the proof the city can’t see';
 }
 
 async function loadThread(){
@@ -359,6 +400,7 @@ function renderThread(t){
     : t.posts.map(p=>`
       <div class="post">
         ${p.status?`<span class="ptag ${p.status}">${STATUS_LABEL[p.status]}</span>`:''}
+        ${p.photo?`<img class="pphoto" src="/photos/${esc(p.photo)}" loading="lazy" alt="citizen photo" onclick="window.open('/photos/${esc(p.photo)}','_blank')">`:''}
         ${p.text?`<div class="ptext">${esc(p.text)}</div>`:''}
         <div class="pmeta">anon · ${ago(p.ts)}</div>
       </div>`).join('');
@@ -381,15 +423,16 @@ async function seeOften(){
 
 async function submitPost(){
   const i = current, text = document.getElementById('ptext').value.trim();
-  if(!text && !selStatus) return;
+  if(!text && !selStatus && !photoData) return;
   const btn = document.getElementById('postBtn'); btn.disabled=true; btn.textContent='Posting…';
-  if(window.pulse) window.pulse('post_added',{type:i.type,id:i.id,status:selStatus||undefined});
+  if(window.pulse) window.pulse('post_added',{type:i.type,id:i.id,status:selStatus||undefined,photo:photoData?1:undefined});
   try{
-    const r = await fetch('/api/post',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:i.type,id:i.id,text,status:selStatus})});
+    const r = await fetch('/api/post',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:i.type,id:i.id,text,status:selStatus,photo:photoData})});
     const t = await r.json();
     document.getElementById('ptext').value=''; selStatus=null;
     document.getElementById('pform').hidden=true;
     [...document.getElementById('schips').children].forEach(x=>x.classList.remove('on'));
+    clearPhoto();
     renderThread(t); syncSeen(t);
   }catch(e){} finally { btn.disabled=false; btn.textContent='Post anonymously'; }
 }

@@ -11,13 +11,18 @@ db.exec(`
     ts        TEXT NOT NULL,
     kind      TEXT NOT NULL,   -- 'seen' (one-tap corroboration) | 'comment'
     text      TEXT,
-    status    TEXT             -- 'still_here' | 'worse' | 'cleaned' | 'gone' | NULL
+    status    TEXT,            -- 'still_here' | 'worse' | 'cleaned' | 'gone' | NULL
+    photo     TEXT             -- filename in data/photos/, or NULL. The proof 311 can't have.
   );
   CREATE INDEX IF NOT EXISTS idx_posts_issue ON posts(issue_key);
 `);
+// Migrate older DBs that predate the photo column (the proof layer).
+if (!db.prepare(`PRAGMA table_info(posts)`).all().some(c => c.name === 'photo')) {
+  db.exec(`ALTER TABLE posts ADD COLUMN photo TEXT`);
+}
 
-const qInsert   = db.prepare(`INSERT INTO posts(issue_key,ts,kind,text,status) VALUES(?,?,?,?,?)`);
-const qByIssue  = db.prepare(`SELECT id,ts,kind,text,status FROM posts WHERE issue_key=? ORDER BY id DESC LIMIT 80`);
+const qInsert   = db.prepare(`INSERT INTO posts(issue_key,ts,kind,text,status,photo) VALUES(?,?,?,?,?,?)`);
+const qByIssue  = db.prepare(`SELECT id,ts,kind,text,status,photo FROM posts WHERE issue_key=? ORDER BY id DESC LIMIT 80`);
 const qCounts   = db.prepare(`
   SELECT issue_key,
          SUM(CASE WHEN kind='seen' OR status IN('still_here','worse') THEN 1 ELSE 0 END) AS corrob
@@ -44,8 +49,8 @@ function thread(issueKey) {
   };
 }
 
-function addPost(issueKey, kind, text, status) {
-  qInsert.run(issueKey, new Date().toISOString(), kind, text || null, status || null);
+function addPost(issueKey, kind, text, status, photo) {
+  qInsert.run(issueKey, new Date().toISOString(), kind, text || null, status || null, photo || null);
   return thread(issueKey);
 }
 

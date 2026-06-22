@@ -75,10 +75,17 @@ launchctl list | grep unignorable          # confirm the schedule is loaded
 - Register in dash (`dash/src/lib/config.ts` SUBDOMAINS) so it shows on dash.polyfeeds.dev
 - Mark `sidewalk/CLAUDE.md` consolidated (it still says "Status: live")
 
+**Shipped 2026-06-22 — PHOTO CAPTURE on existing issues (moat, phase 1):**
+- Citizens can now attach a **photo** to any Issue card's thread — the proof layer 311 open data structurally can't have (descriptor "N/A"; 252K mobile photos withheld). Photo is encouraged, not required (a text/status post still works).
+- Pipeline is zero-dep: pick/camera (`capture=environment`) → **downscale in-browser** via `<canvas>` to ~1280px JPEG q0.72 (a 4MB phone shot ships as ~150KB) → base64 → POST `/api/post`. Server (`savePhoto`) validates it's a `data:image/(jpeg|png|webp)` URL ≤2MB decoded, writes bytes to `data/photos/<randomhex>.ext`, stores the filename on the post. Served by `GET /photos/<file>` (immutable cache; filenames are random hex so path-traversal can't escape; `path.basename` + MIME allowlist). Photos render at the top of each thread post, tap to open full.
+- DB: `posts.photo` column added to `ugc.db` (with a PRAGMA-guarded `ALTER TABLE` migration for older DBs). `data/photos/` gitignored (user binary content).
+- **First spam guard shipped too** (partial #3): per-IP write limiter on `/api/post` + `/api/seen` — `cf-connecting-ip`/`x-forwarded-for`-aware, 12 writes / 5 min, returns 429. In-memory (resets on restart). Full content moderation still TODO.
+- Verified end-to-end locally (post→store→thread→serve, oversize reject, bad-dataurl reject, traversal block, rate-limit burst). Test posts cleaned from DB. **Awaiting Paul's on-device QA** (open a dot → "Add what you see" → 📷).
+
 **NEXT SESSION — pick up here (open threads, in priority order):**
-1. **Paul's QA on the episode model** — does the active/resolved cutoff feel right? Does the prediction read as credible? Tune `K / MIN_GAP / MAX_GAP / PERSIST` at the top of `scripts/build.js` if not. (Awaiting his read after kicking tires.)
-2. **Report-capture / submission flow = THE REAL MOAT (deliberately deferred).** 311 open data has NO photos / no free-text (descriptor is "N/A"; 252K mobile reports' photos are withheld). So the rich layer (photo + description at the spot) is what WE create as the third party. The Issue is already modeled as a neutral spine ready for citizen-born issues. This is the big next build.
-3. **Comment moderation / rate-limit** — the thread layer is fully open + anonymous with NO spam/abuse guard. Needs one before public.
+1. **Citizen-BORN issues = the rest of the moat (deferred fork).** Phase 1 (above) attaches photos to *city-born* issues. The bigger inversion still to build: pin-drop / GPS a spot the city has **no record of** → a citizen Issue that renders on the map distinct from city dots ("0 city reports — the city's record is blank, the block says otherwise"). Spine already modeled for it; needs a `citizen_issues` table merged into `/api/issues` + map styling. Decided this session to ship photo-on-existing first.
+2. **Paul's QA on the episode model** — does the active/resolved cutoff feel right? Does the prediction read as credible? Tune `K / MIN_GAP / MAX_GAP / PERSIST` at the top of `scripts/build.js` if not. (Awaiting his read after kicking tires.)
+3. **Comment/photo moderation** — rate-limit shipped (above); still need content moderation (abuse/illegal-image handling) + maybe a report-button before a real public push.
 4. The repo housekeeping batch above (ecosystem/registry/dash/sidewalk-CLAUDE) — all live stuff works without it; it's about boot-canonical + visibility.
 5. Maybe-later: share card per Issue (populus OG-card pattern → travels to X/press/council); fold in muster as the voice report path; bounties marketplace (the old `snitch` idea).
 
