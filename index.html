@@ -120,6 +120,8 @@
   .photo-prev img{display:block;width:100%;max-height:220px;object-fit:cover}
   .photo-x{position:absolute;top:6px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(8,11,17,.85);color:#fff;font-size:19px;line-height:28px;text-align:center;cursor:pointer;border:1px solid var(--line)}
   .pphoto{display:block;width:100%;max-height:260px;object-fit:cover;border-radius:8px;margin-bottom:8px;cursor:pointer;border:1px solid var(--line)}
+  .formnote{font-size:11.5px;color:var(--dim);line-height:1.45;padding:2px 2px 0}
+  .pending-ack{background:#0a0f18;border:1px solid #163a2a;color:#36c98a;border-radius:11px;padding:13px 14px;font-size:13px;font-weight:700;line-height:1.5}
   .hint{position:absolute;left:12px;bottom:12px;z-index:600;font-size:11.5px;color:var(--dim);
     background:rgba(8,11,17,.8);padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
   .leaflet-popup-content-wrapper{background:#0e1420;color:var(--ink);border:1px solid var(--line)}
@@ -322,7 +324,8 @@ function openCard(i){
       <input type="file" id="pfile" accept="image/*" capture="environment" hidden onchange="onPhotoPick(this)">
       <button type="button" class="photo-btn" id="photoBtn" onclick="document.getElementById('pfile').click()">📷 Add a photo — the proof the city can’t see</button>
       <div class="photo-prev" id="photoPrev" hidden><img id="photoImg" alt=""><span class="photo-x" onclick="clearPhoto()">×</span></div>
-      <button class="post-btn" id="postBtn" onclick="submitPost()">Post anonymously</button>
+      <div class="formnote">📋 A person reviews every report before it’s published — and before we file it to the city on your behalf.</div>
+      <button class="post-btn" id="postBtn" onclick="submitPost()">Submit for review</button>
     </div>`;
   document.getElementById('card').classList.add('open');
   loadSparkline(i);
@@ -430,11 +433,16 @@ async function submitPost(){
     const r = await fetch('/api/post',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:i.type,id:i.id,text,status:selStatus,photo:photoData})});
     const t = await r.json();
     document.getElementById('ptext').value=''; selStatus=null;
-    document.getElementById('pform').hidden=true;
     [...document.getElementById('schips').children].forEach(x=>x.classList.remove('on'));
     clearPhoto();
+    if(t.pending){
+      document.getElementById('pform').innerHTML =
+        `<div class="pending-ack">✓ Thanks — your report is in.<br>A person reviews every report before it’s published. It’ll appear here once approved.</div>`;
+    } else {
+      document.getElementById('pform').hidden=true;
+    }
     renderThread(t); syncSeen(t);
-  }catch(e){} finally { btn.disabled=false; btn.textContent='Post anonymously'; }
+  }catch(e){} finally { btn.disabled=false; btn.textContent='Submit for review'; }
 }
 
 function buildChips(){

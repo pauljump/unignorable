@@ -1,5 +1,11 @@
-// UGC store — citizen commentary + status on top of the city's 311 issues.
+// UGC store — citizen reports + corroboration on top of the city's 311 issues.
 // Built-in node:sqlite (zero npm deps). The citizen layer that overrides the city's "resolved".
+//
+// Moderation model (Paul reviews personally — the gate before we file to 311 on a citizen's behalf):
+//   • a REPORT (kind='comment' — photo and/or written description) lands `mod='pending'`,
+//     invisible to the public until Paul approves it in the review queue.
+//   • a TAP (kind='seen' — "I see this often") is live corroboration, not a 311 filing, so `mod='approved'`.
+// Public read paths (thread/counts/verdict) only ever reflect mod='approved'.
 const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
 
@@ -9,24 +15,31 @@ db.exec(`
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     issue_key TEXT NOT NULL,
     ts        TEXT NOT NULL,
-    kind      TEXT NOT NULL,   -- 'seen' (one-tap corroboration) | 'comment'
+    kind      TEXT NOT NULL,   -- 'seen' (one-tap corroboration) | 'comment' (a report)
     text      TEXT,
     status    TEXT,            -- 'still_here' | 'worse' | 'cleaned' | 'gone' | NULL
-    photo     TEXT             -- filename in data/photos/, or NULL. The proof 311 can't have.
+    photo     TEXT,            -- filename in data/photos/, or NULL. The proof 311 can't have.
+    mod       TEXT NOT NULL DEFAULT 'pending'  -- 'pending' | 'approved' | 'rejected'
   );
   CREATE INDEX IF NOT EXISTS idx_posts_issue ON posts(issue_key);
 `);
-// Migrate older DBs that predate the photo column (the proof layer).
-if (!db.prepare(`PRAGMA table_info(posts)`).all().some(c => c.name === 'photo')) {
-  db.exec(`ALTER TABLE posts ADD COLUMN photo TEXT`);
-}
+// Migrate older DBs lacking newer columns — must precede any index on those columns.
+const cols = db.prepare(`PRAGMA table_info(posts)`).all().map(c => c.name);
+if (!cols.includes('photo')) db.exec(`ALTER TABLE posts ADD COLUMN photo TEXT`);
+if (!cols.includes('mod'))   db.exec(`ALTER TABLE posts ADD COLUMN mod TEXT NOT NULL DEFAULT 'pending'`);
+db.exec(`CREATE INDEX IF NOT EXISTS idx_posts_mod ON posts(mod)`);
 
-const qInsert   = db.prepare(`INSERT INTO posts(issue_key,ts,kind,text,status,photo) VALUES(?,?,?,?,?,?)`);
-const qByIssue  = db.prepare(`SELECT id,ts,kind,text,status,photo FROM posts WHERE issue_key=? ORDER BY id DESC LIMIT 80`);
-const qCounts   = db.prepare(`
+const qInsert  = db.prepare(`INSERT INTO posts(issue_key,ts,kind,text,status,photo,mod) VALUES(?,?,?,?,?,?,?)`);
+const qByIssue = db.prepare(`SELECT id,ts,kind,text,status,photo FROM posts WHERE issue_key=? AND mod='approved' ORDER BY id DESC LIMIT 80`);
+const qCounts  = db.prepare(`
   SELECT issue_key,
          SUM(CASE WHEN kind='seen' OR status IN('still_here','worse') THEN 1 ELSE 0 END) AS corrob
-  FROM posts GROUP BY issue_key`);
+  FROM posts WHERE mod='approved' GROUP BY issue_key`);
+// Review queue — Paul's personal gate. Oldest first (FIFO triage).
+const qPending = db.prepare(`SELECT id,issue_key,ts,kind,text,status,photo FROM posts WHERE mod='pending' ORDER BY id ASC LIMIT 300`);
+const qPendCount = db.prepare(`SELECT COUNT(*) AS n FROM posts WHERE mod='pending'`);
+const qGetOne  = db.prepare(`SELECT id,issue_key,photo,mod FROM posts WHERE id=?`);
+const qSetMod  = db.prepare(`UPDATE posts SET mod=? WHERE id=?`);
 
 // Verdict from the crowd — the citizen verdict is the truth (city "closed" is only a claim).
 function verdictOf(posts) {
@@ -50,8 +63,9 @@ function thread(issueKey) {
 }
 
 function addPost(issueKey, kind, text, status, photo) {
-  qInsert.run(issueKey, new Date().toISOString(), kind, text || null, status || null, photo || null);
-  return thread(issueKey);
+  const mod = kind === 'seen' ? 'approved' : 'pending';    // taps live; reports wait for Paul
+  qInsert.run(issueKey, new Date().toISOString(), kind, text || null, status || null, photo || null, mod);
+  return { ...thread(issueKey), pending: mod === 'pending' };
 }
 
 function countsAll() {
@@ -60,4 +74,15 @@ function countsAll() {
   return m;
 }
 
-module.exports = { addPost, thread, countsAll };
+// --- Review queue (Paul's gate) ---
+function pending()      { return qPending.all(); }
+function pendingCount() { return qPendCount.get().n; }
+// Returns the affected row (incl. photo filename) so the server can clean up files on reject.
+function decide(id, action) {
+  const row = qGetOne.get(id);
+  if (!row || row.mod !== 'pending') return null;
+  qSetMod.run(action === 'approve' ? 'approved' : 'rejected', id);
+  return row;
+}
+
+module.exports = { addPost, thread, countsAll, pending, pendingCount, decide };

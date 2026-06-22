@@ -58,6 +58,24 @@ const readBody = (req) => new Promise((resolve) => {
   req.on('end', () => { try { resolve(JSON.parse(b || '{}')); } catch { resolve({}); } });
 });
 
+// Review key — Paul's personal gate. Stable secret in data/admin-key (gitignored), generated once.
+const KEY_FILE = path.join(DIR, 'data', 'admin-key');
+let REVIEW_KEY = process.env.REVIEW_KEY || '';
+if (!REVIEW_KEY) {
+  try { REVIEW_KEY = fs.readFileSync(KEY_FILE, 'utf8').trim(); } catch {}
+  if (!REVIEW_KEY) { REVIEW_KEY = crypto.randomBytes(16).toString('hex'); fs.writeFileSync(KEY_FILE, REVIEW_KEY); }
+}
+const authed = (u) => REVIEW_KEY && u.searchParams.get('k') === REVIEW_KEY;
+
+// A report attaches to a city Issue; that Issue carries the location/type a 311 filing needs.
+const ISSUE_BY_KEY = new Map(ISSUES.map(i => [key(i.type, i.id), i]));
+const issueMeta = (issueKey) => {
+  const i = ISSUE_BY_KEY.get(issueKey);
+  if (!i) return { type: issueKey.split('|')[0], addr: null };
+  return { type: i.type, addr: i.addr, borough: i.borough, council: i.council,
+           board: i.board, agency: i.agency, lat: i.lat, lng: i.lng };
+};
+
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
 
@@ -125,6 +143,25 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, JSON.stringify({ ok: true, ...t }), 'application/json');
   }
 
+  // --- Review queue (Paul's personal gate before anything is public / filed to 311) ---
+  if (u.pathname === '/api/review') {
+    if (!authed(u)) return send(res, 401, '{"ok":false}', 'application/json');
+    const items = ugc.pending().map(p => ({ ...p, issue: issueMeta(p.issue_key) }));
+    return send(res, 200, JSON.stringify({ ok: true, count: items.length, items }), 'application/json');
+  }
+  if (u.pathname === '/api/review/decide' && req.method === 'POST') {
+    if (!authed(u)) return send(res, 401, '{"ok":false}', 'application/json');
+    const { id, action } = await readBody(req);
+    if (!['approve', 'reject'].includes(action)) return send(res, 400, '{"ok":false}', 'application/json');
+    const row = ugc.decide(id, action);
+    if (row && action === 'reject' && row.photo) { try { fs.unlinkSync(path.join(PHOTO_DIR, row.photo)); } catch {} }
+    return send(res, 200, JSON.stringify({ ok: !!row, count: ugc.pendingCount() }), 'application/json');
+  }
+  if (u.pathname === '/review') {
+    if (!authed(u)) return send(res, 401, 'unauthorized', 'text/plain');
+    return send(res, 200, fs.readFileSync(path.join(DIR, 'review.html')), 'text/html; charset=utf-8');
+  }
+
   if (u.pathname === '/' || u.pathname === '/index.html') {
     return send(res, 200, fs.readFileSync(path.join(DIR, 'index.html')), 'text/html; charset=utf-8');
   }
@@ -132,4 +169,7 @@ const server = http.createServer(async (req, res) => {
   send(res, 404, 'not found', 'text/plain');
 });
 
-server.listen(PORT, () => console.log(`unignorable on :${PORT} — ${ISSUES.length} issues`));
+server.listen(PORT, () => {
+  console.log(`unignorable on :${PORT} — ${ISSUES.length} issues`);
+  console.log(`review queue → /review?k=${REVIEW_KEY}`);
+});
