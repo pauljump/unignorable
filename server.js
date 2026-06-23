@@ -1,10 +1,40 @@
 // unignorable — zero-dep civic accountability map.
 // City 311 data is the BAIT (their self-serving "resolved 100x"); citizen commentary is the TRUTH.
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const ugc = require('./ugc');
+
+// --- Geocode (OpenStreetMap Nominatim), proxied + cached server-side. NYC-bounded. ---
+// Nominatim usage policy requires a descriptive User-Agent and an identifiable contact; bounded
+// to NYC's viewbox so "3 Peter Cooper Rd" resolves to the right block, not a same-named street.
+const NYC_VIEWBOX = '-74.2591,40.9176,-73.7004,40.4774'; // left,top,right,bottom
+const GEO_UA = 'unignorable/1.0 (NYC 311 accountability map; +https://unignorable.polyfeeds.dev)';
+const geoCache = new Map(); // LRU: query → JSON string of [{name,lat,lng}]
+function geocode(q) {
+  return new Promise((resolve, reject) => {
+    const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&addressdetails=0'
+      + '&countrycodes=us&bounded=1&viewbox=' + encodeURIComponent(NYC_VIEWBOX)
+      + '&q=' + encodeURIComponent(q);
+    const req = https.get(url, { headers: { 'User-Agent': GEO_UA, 'Accept': 'application/json' } }, (r) => {
+      let b = ''; r.on('data', c => b += c);
+      r.on('end', () => {
+        try {
+          const arr = JSON.parse(b);
+          const out = (Array.isArray(arr) ? arr : []).slice(0, 5).map(x => ({
+            name: x.display_name, lat: +x.lat, lng: +x.lon,
+          })).filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lng));
+          resolve(JSON.stringify(out));
+        } catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(6000, () => req.destroy(new Error('geocode timeout')));
+  });
+}
 
 const DIR = __dirname;
 const PORT = process.env.PORT || 8000;
@@ -53,6 +83,32 @@ const send = (res, code, body, type) => {
   res.writeHead(code, { 'Content-Type': type, 'Access-Control-Allow-Origin': '*' });
   res.end(body);
 };
+// Gzip a response body when the client accepts it, falling back to identity otherwise.
+// The 6.26 MB /api/issues blob is render-blocking; gzip cuts it ~89% with zero new deps.
+const sendMaybeGzip = (req, res, body, type) => {
+  const ae = req.headers['accept-encoding'] || '';
+  if (/\bgzip\b/.test(ae)) {
+    const gz = Buffer.isBuffer(body) && body._gz ? body._gz : zlib.gzipSync(body);
+    res.writeHead(200, { 'Content-Type': type, 'Content-Encoding': 'gzip',
+      'Vary': 'Accept-Encoding', 'Access-Control-Allow-Origin': '*' });
+    return res.end(gz);
+  }
+  return send(res, 200, body, type);
+};
+// Cache the (large, static-ish) issues payload + its gzip, keyed on a cheap signature of the
+// dynamic `seen` counts. Counts change only when an approved report lands, so this is a near-static
+// blob most of the time — we avoid re-serializing AND re-gzipping 6 MB on every request.
+let ISSUES_CACHE = null; // { sig, raw:Buffer, gz:Buffer }
+function issuesPayload() {
+  const counts = ugc.countsAll();
+  const sig = JSON.stringify(counts);
+  if (ISSUES_CACHE && ISSUES_CACHE.sig === sig) return ISSUES_CACHE;
+  const out = ISSUES.map(({ episodes, headline_kind, nothing_found, ...i }) =>
+    ({ ...i, seen: counts[key(i.type, i.id)] || 0 }));
+  const raw = Buffer.from(JSON.stringify(out));
+  ISSUES_CACHE = { sig, raw, gz: zlib.gzipSync(raw) };
+  return ISSUES_CACHE;
+}
 const readBody = (req) => new Promise((resolve) => {
   let b = ''; req.on('data', c => b += c);
   req.on('end', () => { try { resolve(JSON.parse(b || '{}')); } catch { resolve({}); } });
@@ -86,7 +142,24 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (u.pathname === '/api/trends') {
-    return send(res, 200, TRENDS, 'application/json');
+    return sendMaybeGzip(req, res, TRENDS, 'application/json');
+  }
+
+  // Address geocode — server-side proxy to OpenStreetMap Nominatim so the UA + referer policy and
+  // a small LRU cache live here (Nominatim demands a descriptive UA, ~1 req/sec, no heavy use; a
+  // shared tunnel IP would get rate-limited if every client called it directly). NYC viewbox-bounded.
+  if (u.pathname === '/api/geocode') {
+    const q = (u.searchParams.get('q') || '').trim();
+    if (q.length < 3) return send(res, 200, '[]', 'application/json');
+    const ckey = q.toLowerCase();
+    const cached = geoCache.get(ckey);
+    if (cached) { geoCache.delete(ckey); geoCache.set(ckey, cached); return send(res, 200, cached, 'application/json'); }
+    try {
+      const out = await geocode(q);
+      geoCache.set(ckey, out);
+      if (geoCache.size > 400) geoCache.delete(geoCache.keys().next().value); // LRU evict oldest
+      return send(res, 200, out, 'application/json');
+    } catch { return send(res, 200, '[]', 'application/json'); }
   }
 
   // Citizen-submitted proof photo, served by id. Filenames are random hex; path-traversal can't escape.
@@ -104,9 +177,14 @@ const server = http.createServer(async (req, res) => {
   // The map: city-sourced issues + status/pattern summary + live corroboration count.
   // Episodes (the timeline) are omitted here and lazy-loaded per card via /api/episodes.
   if (u.pathname === '/api/issues') {
-    const counts = ugc.countsAll();
-    const out = ISSUES.map(({ episodes, ...i }) => ({ ...i, seen: counts[key(i.type, i.id)] || 0 }));
-    return send(res, 200, JSON.stringify(out), 'application/json');
+    const c = issuesPayload();
+    const ae = req.headers['accept-encoding'] || '';
+    if (/\bgzip\b/.test(ae)) {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip',
+        'Vary': 'Accept-Encoding', 'Access-Control-Allow-Origin': '*' });
+      return res.end(c.gz);
+    }
+    return send(res, 200, c.raw, 'application/json');
   }
 
   // Episode timeline for one issue (the sparkline) — lazy-loaded on card open.
@@ -162,7 +240,10 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, fs.readFileSync(path.join(DIR, 'review.html')), 'text/html; charset=utf-8');
   }
 
-  if (u.pathname === '/' || u.pathname === '/index.html') {
+  // The landing ("The Record") and the live map are ONE document: index.html decides what to
+  // render from location (hash / query). /map is the map-first entry (deep-links target it);
+  // / is the shame-board landing. Same file → one /api/issues fetch, every map fn reused.
+  if (u.pathname === '/' || u.pathname === '/index.html' || u.pathname === '/map') {
     return send(res, 200, fs.readFileSync(path.join(DIR, 'index.html')), 'text/html; charset=utf-8');
   }
 
