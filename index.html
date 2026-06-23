@@ -16,7 +16,9 @@
   html,body{margin:0;height:100%;overflow-x:hidden;background:var(--bg);color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
   #app{display:flex;flex-direction:column;height:100%}
-  header{padding:14px 18px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0c111b,#080b11)}
+  header{padding:8px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0c111b,#080b11)}
+  /* Map-first: heavy header chrome (tag, stat strip, freshness, history toggle) hidden via the
+     rules below so the map is the majority of the screen. Kept in markup for the full redesign. */
   .topline{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
   .views{display:flex;gap:3px;background:#0b111c;border:1px solid var(--line);border-radius:999px;padding:3px;flex:none}
   .vbtn{font-size:12.5px;padding:5px 14px;border-radius:999px;color:var(--dim);cursor:pointer;user-select:none}
@@ -31,17 +33,17 @@
   .tlegend span{display:flex;align-items:center;gap:6px}
   .tlegend i{width:11px;height:11px;border-radius:3px;display:inline-block}
   .brand{display:flex;align-items:baseline;gap:10px}
-  .brand h1{margin:0;font-size:21px;font-weight:800;letter-spacing:-.5px}
+  .brand h1{margin:0;font-size:18px;font-weight:800;letter-spacing:-.5px}
   .brand h1 b{color:var(--red)}
-  .brand .tag{font-size:12.5px;color:var(--dim)}
-  .strip{display:flex;gap:22px;margin-top:10px;flex-wrap:wrap}
+  .brand .tag{font-size:12.5px;color:var(--dim);display:none}
+  .strip{display:none;gap:22px;margin-top:10px;flex-wrap:wrap}
   .stat{display:flex;flex-direction:column}
   .stat .v{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
   .stat .l{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px}
   .stat .v.warn{color:var(--amber)}
-  .fresh{margin-top:9px;font-size:10.5px;color:#8a96ad;letter-spacing:.3px;display:flex;align-items:center;gap:6px}
+  .fresh{margin-top:9px;font-size:10.5px;color:#8a96ad;letter-spacing:.3px;display:none;align-items:center;gap:6px}
   .fresh .ok{width:6px;height:6px;border-radius:50%;background:#36c98a;display:inline-block}
-  .chips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .chips{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
   .chip{font-size:12px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);
     background:#0b111c;color:var(--dim);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
   .chip .dot{width:8px;height:8px;border-radius:50%}
@@ -82,7 +84,7 @@
   .sl-ax{display:flex;justify-content:space-between;font-size:9.5px;color:#8a96ad;margin-top:3px}
   .predict{margin-top:11px;font-size:12px;line-height:1.5;color:#aebbd0;background:#0a0f18;border:1px solid var(--line);border-left:3px solid #2c3a52;border-radius:0 9px 9px 0;padding:9px 11px}
   .predict-h{font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);margin-bottom:5px}
-  .histrow{margin-top:11px}
+  .histrow{margin-top:11px;display:none}
   .histtoggle{font-size:11.5px;color:var(--dim);border:1px solid var(--line);background:#0b111c;border-radius:999px;padding:5px 11px;cursor:pointer;user-select:none}
   .histtoggle.on{color:var(--ink);border-color:#2c3a52;background:#121b2b}
   .quote{margin:16px 0;padding:12px 13px;background:#0a0f18;border-left:3px solid var(--amber);
