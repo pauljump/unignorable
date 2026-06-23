@@ -1101,7 +1101,7 @@ function routeFromLocation(){
     showMap(); const go=()=>{ map.setView([lat,lng],z); dropMe(lat,lng);
       const n=nearestIssue(lat,lng); if(n&&n.dist<700){ draw(); openCard(n.issue); } }; mapBooted?go():setTimeout(go,150); return; }
   if(p==='/map'){ showMap(); return; }
-  showLanding();
+  showMap();  // default arrival = full-screen map (landing reachable via the wordmark; redesign pending)
 }
 
 (async function(){
