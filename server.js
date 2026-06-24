@@ -160,6 +160,16 @@ function councilFor(council) {
   return m ? { district: n, ...m } : { district: n };
 }
 
+// Two-tier publicness. A verified district lets the page NAME the member (a deliberate artifact you
+// post). INDEXING (Google + sitemap) needs more: the case must be live AND substantive — so a search
+// engine never surfaces an official's name over a stale, trivial, or long-resolved blip.
+const INDEX_MIN_SCORE = 45;
+function isIndexable(i) {
+  const m = councilFor(i.council);
+  if (!(m && m.member && m.verified)) return false;
+  return i.status === 'active' && (Number(i.score) || 0) >= INDEX_MIN_SCORE;
+}
+
 // Inline-SVG episode timeline: each continuous run of reports as a band on a first-seen→today axis.
 function sparkline(issue) {
   const eps = Array.isArray(issue.episodes) ? issue.episodes : [];
@@ -252,7 +262,7 @@ function renderReceipt(issue) {
 
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="${verified ? 'index,follow' : 'noindex'}">
+<meta name="robots" content="${isIndexable(issue) ? 'index,follow' : 'noindex'}">
 <title>${esc(ogTitle)}</title>
 <meta property="og:type" content="article">
 <meta property="og:title" content="${esc(ogTitle)}">
@@ -358,6 +368,16 @@ function renderReceipt(issue) {
   <div class="stamp">${stamp}<br>This page documents a <b>government’s</b> response to a public-safety obstruction. It is not about, and does not identify, any individual experiencing homelessness — they are failed by this inaction, not the cause of it.</div>
 </div></body></html>`;
 }
+
+// Sitemap of the INDEXABLE receipts only — an Issue is indexable iff its district is verified
+// (same gate as the page's robots meta), so a sitemap can never expose an unconfirmed name.
+const SITEMAP = (() => {
+  const urls = ISSUES
+    .filter(isIndexable)
+    .map(i => `  <url><loc>${PUBLIC_ORIGIN}/i?t=${encodeURIComponent(i.type)}&amp;id=${encodeURIComponent(i.id)}</loc></url>`);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
+})();
+const ROBOTS = `User-agent: *\nAllow: /\nSitemap: ${PUBLIC_ORIGIN}/sitemap.xml\n`;
 
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
@@ -466,6 +486,9 @@ const server = http.createServer(async (req, res) => {
     if (!authed(u)) return send(res, 401, 'unauthorized', 'text/plain');
     return send(res, 200, fs.readFileSync(path.join(DIR, 'review.html')), 'text/html; charset=utf-8');
   }
+
+  if (u.pathname === '/robots.txt') return send(res, 200, ROBOTS, 'text/plain');
+  if (u.pathname === '/sitemap.xml') return send(res, 200, SITEMAP, 'application/xml');
 
   // The RECEIPT: a public, named, dated accountability page for one Issue (/i?t=…&id=…).
   if (u.pathname === '/i' || u.pathname === '/issue') {

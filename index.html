@@ -113,6 +113,7 @@
   .seen-btn{background:var(--red);color:#fff;border-color:var(--red)!important}
   .seen-btn.done{background:#16202f;color:var(--ink);border-color:var(--line)!important}
   .add-btn{background:#16202f;color:var(--ink)}
+  .receipt-link{display:block;margin-top:9px;padding:12px;border-radius:11px;background:#1a1410;border:1px solid var(--amber,#ffb020);color:var(--amber,#ffb020);font-weight:800;font-size:13px;text-align:center;text-decoration:none}
   .pform{margin-top:10px;display:flex;flex-direction:column;gap:9px}
   .pform textarea{width:100%;min-height:62px;resize:vertical;background:#0a0f18;border:1px solid var(--line);border-radius:10px;color:var(--ink);font:inherit;font-size:13px;padding:10px}
   .schips{display:flex;gap:6px;flex-wrap:wrap}
@@ -646,6 +647,7 @@ function openCard(i){
       <button class="seen-btn" id="seenBtn" onclick="seeOften()">I see this often</button>
       <button class="add-btn" onclick="toggleForm()">Add what you see →</button>
     </div>
+    <a class="receipt-link" href="/i?t=${encodeURIComponent(i.type)}&id=${encodeURIComponent(i.id)}" target="_blank" rel="noopener" onclick="window.pulse&&window.pulse('receipt_open',{type:i.type,id:i.id})">📄 Get the public receipt — names who’s accountable, built to post →</a>
     <div class="pform" id="pform" hidden>
       <textarea id="ptext" maxlength="500" placeholder="What do you actually see here right now? (anonymous)"></textarea>
       <div class="schips" id="schips">
