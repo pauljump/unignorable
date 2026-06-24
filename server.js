@@ -177,6 +177,19 @@ function sparkline(issue) {
     + `<line x1="0" y1="7" x2="100" y2="7" stroke="#2a2f37" stroke-width="0.5"/>${bands}</svg>`;
 }
 
+// What the law says — only for types with a clean, citable ordinance. We deliberately attach NO
+// penalty to service-call types (Homeless Person Assistance) or protected conduct (Panhandling):
+// asserting criminality there is rebuttable. A sidewalk structure is the clean case.
+const LAW = {
+  'Encampment': {
+    code: 'NYC Admin. Code § 16-122',
+    rule: 'It is unlawful to erect a shed, structure, or other obstruction — or to leave movable property — upon any public street or sidewalk.',
+    penalty: 'Fine of $50–$250, up to 10 days’ imprisonment, or both — per offense.',
+    also: 'Blocking the pedestrian right-of-way is separately prohibited under § 19-136.',
+    src: 'https://codelibrary.amlegal.com/codes/newyorkcity/latest/NYCadmin/0-0-0-26202',
+  },
+};
+
 function renderReceipt(issue) {
   const addr = titleCase(issue.addr) || 'this location';
   const boro = titleCase(issue.borough);
@@ -188,6 +201,7 @@ function renderReceipt(issue) {
   const ard = (issue.avg_return_days != null && Number.isFinite(issue.avg_return_days)) ? issue.avg_return_days : null;
   const m = councilFor(issue.council);
   const verified = !!(m && m.member && m.verified); // gates name display + indexing
+  const law = LAW[issue.type];
   const cau = OFFICIALS.cau;
   const shareUrl = `${PUBLIC_ORIGIN}/i?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`;
   const mapUrl = `${PUBLIC_ORIGIN}/map?focus=${encodeURIComponent(issue.type + '|' + issue.id)}`;
@@ -223,7 +237,10 @@ function renderReceipt(issue) {
     ].filter(Boolean).join(' · ');
     officialBlock = `<div class="who-name">${esc(m.member)}</div>`
       + `<div class="who-role">NYC Council Member, District ${m.district}${m.borough ? ' · ' + esc(m.borough) : ''}</div>`
-      + (contacts ? `<div class="who-contact">${contacts}</div>` : '');
+      + (contacts ? `<div class="who-contact">${contacts}</div>` : '')
+      + `<div class="who-now">Represents this block today. ${issue.status === 'active'
+          ? 'It is still here on their watch — and within their power to move DHS, Sanitation, and NYPD on it now.'
+          : 'The record is theirs to answer for.'}</div>`;
   } else {
     const dn = m && m.district ? m.district : (issue.council || '—');
     officialBlock = `<div class="who-name">Council District ${esc(dn)}</div>`
@@ -276,6 +293,12 @@ function renderReceipt(issue) {
   .who-contact{margin-top:8px;font-size:14px}
   .who-verdict{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:14px;color:var(--ink)}
   .who-verdict b{color:var(--alarm)}
+  .who-now{margin-top:10px;font-size:14px;color:var(--amber)}
+  .law-code{font-weight:800;font-size:16px}
+  .law-rule{margin-top:6px;font-size:14px;color:var(--ink)}
+  .law-pen{margin-top:10px;font-size:14px}
+  .law-pen span{display:inline-block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--alarm);font-weight:700;margin-right:6px}
+  .law-also{margin-top:10px;font-size:12px;color:var(--mut)}
   .ask li{margin:8px 0}
   .actions{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0 6px}
   .btn{display:inline-block;padding:11px 16px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none}
@@ -310,6 +333,14 @@ function renderReceipt(issue) {
     ${officialBlock}
     <div class="who-verdict">What the record shows: the city closed this <b>${fmtN(cn)} times</b>${nf ? ` — ${fmtN(nf)} of them as “nothing found”` : ''}. What changed on the block: <b>${issue.status === 'active' ? 'nothing — it’s still here' : 'it kept coming back'}</b>. Responding agency on the tickets: ${esc(issue.agency || 'NYC')}.</div>
   </div>
+
+  ${law ? `<h2>What the law says</h2>
+  <div class="card law">
+    <div class="law-code">${esc(law.code)}</div>
+    <div class="law-rule">${esc(law.rule)}</div>
+    <div class="law-pen"><span>Penalty</span> ${esc(law.penalty)}</div>
+    <div class="law-also">${esc(law.also)} · <a href="${esc(law.src)}">read the statute →</a></div>
+  </div>` : ''}
 
   <h2>What we are asking for</h2>
   <div class="card ask"><ul style="margin:0;padding-left:18px">
