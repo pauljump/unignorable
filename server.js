@@ -200,6 +200,16 @@ const LAW = {
   },
 };
 
+// Humanize a duration for the hero headline ("9 months", "2 years"). Time is the gut-punch.
+const humanizeDur = (days) => {
+  if (days == null || !Number.isFinite(days)) return '';
+  if (days >= 365) { const y = days / 365; return (y >= 2 ? Math.round(y) + ' years' : y.toFixed(1).replace(/\.0$/, '') + ' years'); }
+  if (days >= 55) return Math.round(days / 30.4) + ' months';
+  if (days >= 13) return Math.round(days / 7) + ' weeks';
+  return Math.max(1, Math.round(days)) + ' days';
+};
+const monthYear = (iso) => { const t = Date.parse((iso || '') + 'T00:00:00Z'); return Number.isFinite(t) ? new Date(t).toLocaleString('en-US', { month: 'long', year: 'numeric' }) : ''; };
+
 function renderReceipt(issue) {
   const addr = titleCase(issue.addr) || 'this location';
   const boro = titleCase(issue.borough);
@@ -213,22 +223,40 @@ function renderReceipt(issue) {
   const verified = !!(m && m.member && m.verified); // gates name display + indexing
   const law = LAW[issue.type];
   const cau = OFFICIALS.cau;
+  const active = issue.status === 'active';
+  const yrsTxt = fmtYears(known) || 'years';
   const shareUrl = `${PUBLIC_ORIGIN}/i?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`;
   const mapUrl = `${PUBLIC_ORIGIN}/map?focus=${encodeURIComponent(issue.type + '|' + issue.id)}`;
 
-  // The damning one-liner (title/OG) — derived, factual, sourced to the record.
-  const ogTitle = known != null
-    ? `The city has known about ${addr} for ${fmtN(known)} days.`
-    : `${addr} — the city's own record.`;
-  const ogDesc = `${issue.type} reported ${fmtN(issue.n)}× to NYC 311`
-    + (nf ? `, closed "nothing found" ${fmtN(nf)}×` : '')
-    + (issue.status === 'active' ? '. Still here.' : '.')
+  // The current INSTANCE (episode model) is the spine of the stripped view: how long THIS run has
+  // been an active problem, and how many times it was reported in that run. Not the noisy lifetime total.
+  const eps = Array.isArray(issue.episodes) ? issue.episodes : [];
+  const curEp = eps.length ? eps[eps.length - 1] : null;
+  const instStart = curEp ? curEp[0] : issue.first_seen;
+  const instReports = curEp ? curEp[2] : issue.n;
+  const instDays = (issue.current_days != null && active) ? issue.current_days : daysSince(instStart);
+  const durTxt = humanizeDur(instDays);
+  const startTxt = monthYear(instStart);
+
+  // The citizen layer, on top of the city's record.
+  let T = { corrob: 0, posts: [], verdict: 'unverified' };
+  try { T = ugc.thread(issue.type + '|' + issue.id); } catch {}
+  const corrob = T.corrob || 0;
+  const latest = (T.posts && T.posts[0]) || null; // newest approved citizen comment
+
+  // Title/OG — lead with TIME (the gut-punch), keep the counts for the indictment below.
+  const ogTitle = active && durTxt
+    ? `A tent has been here ${durTxt} — and the city has known the whole time.`
+    : `${area}: ${fmtN(issue.n)} reports on the city's own record.`;
+  const ogDesc = `Reported ${fmtN(issue.n)}× to NYC 311 over ${yrsTxt}; the city closed it ${fmtN(cn)}×`
+    + (active ? `. Still here.` : '.')
     + (verified ? ` Accountable: Council Member ${m.member}.` : '');
 
   // Public-pressure tweet, pre-filled, tagging the official if we have a handle.
   const tag = (m && m.x) ? `@${m.x.replace(/^@/, '')} ` : '';
-  const tweet = `${tag}${addr}: reported ${fmtN(issue.n)}× to NYC 311, closed "nothing found" ${fmtN(nf)}×. `
-    + (issue.status === 'active' ? `Still here after ${fmtN(known)} days. ` : '')
+  const tweet = `${tag}`
+    + (active && durTxt ? `There's been a tent at ${addr} for ${durTxt}. ` : `${addr}: `)
+    + `NYC 311 was told ${fmtN(issue.n)}× and closed it ${fmtN(cn)}×. ${active ? 'Still here. ' : ''}`
     + `Clear the sidewalk AND connect these neighbors to services. Your move.`;
   const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}&url=${encodeURIComponent(shareUrl)}`;
 
@@ -282,6 +310,19 @@ function renderReceipt(issue) {
   .word{font-weight:800;letter-spacing:.06em;font-size:14px;color:var(--ink);text-decoration:none}
   .word b{color:var(--alarm)}
   .tag{font-size:11px;color:var(--mut)}
+  .hero{padding:24px 0 4px}
+  .dur{font-size:62px;line-height:.92;font-weight:800;letter-spacing:-.02em;margin:6px 0 2px}
+  .lead{font-size:18px;line-height:1.42;margin:10px 0 0;color:var(--ink)}
+  .indict{font-size:16px;line-height:1.5;background:var(--card);border:1px solid var(--line);border-left:3px solid var(--alarm);border-radius:10px;padding:14px 16px;margin:18px 0}
+  .indict b{color:var(--alarm)}
+  .ugc{margin:16px 0 6px;font-size:15px}
+  .ugc .hdr b{color:#3ddc84}
+  .ugc .q{margin-top:9px;padding:12px 14px;background:#11161d;border-radius:10px;border-left:3px solid var(--amber);font-size:14px;color:var(--ink);font-style:italic}
+  details.record{margin:20px 0 0;border-top:1px solid var(--line)}
+  details.record>summary{cursor:pointer;list-style:none;padding:16px 0 4px;font-weight:800;color:var(--amber);font-size:15px}
+  details.record>summary::-webkit-details-marker{display:none}
+  details.record[open]>summary{color:var(--mut)}
+  .disclose{font-size:13px;color:var(--mut);line-height:1.55}
   .kicker{margin:22px 0 4px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--alarm);font-weight:700}
   h1{margin:0 0 6px;font-size:27px;line-height:1.18;font-weight:800}
   .sub{color:var(--mut);font-size:15px;margin:0 0 18px}
@@ -319,53 +360,64 @@ function renderReceipt(issue) {
 </style></head><body><div class="wrap">
   <div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">UN<b>IGNOR</b>ABLE</a><span class="tag">a public receipt</span></div>
 
-  <div class="kicker">${esc(issue.type)} · ${esc(area)}</div>
-  <h1>${esc(ogTitle)}</h1>
-  <p class="sub">${issue.status === 'active' ? 'Still active.' : 'On the record.'} ${verified ? 'The official responsible is named below.' : ''}</p>
+  <div class="hero">
+    <div class="kicker">${esc(issue.type)} · ${esc(area)}</div>
+    ${active && durTxt
+      ? `<div class="dur">${esc(durTxt)}</div>
+    <p class="lead">A tent has been an active problem on this block since <b>${esc(startTxt)}</b> — <b>${fmtN(instReports)} reports</b> in that stretch alone — and it’s <b>still open</b>.</p>`
+      : `<div class="dur">${fmtN(issue.n)}</div>
+    <p class="lead">reports on the city’s own record for this block${startTxt ? ` since ${esc(startTxt)}` : ''}.</p>`}
 
-  ${known != null ? `<div class="clock"><div class="n">${fmtN(known)} days</div><div class="c">since the first 311 report at this spot — ${esc(issue.first_seen)}${fmtYears(known) ? ' (' + fmtYears(known) + ')' : ''}</div></div>` : ''}
+    <div class="indict">In ${esc(yrsTxt)}, the city was told <b>${fmtN(issue.n)} times</b> and closed the case <b>${fmtN(cn)} times</b>${nf ? ` — <b>${fmtN(nf)}</b> of them claiming nothing was there` : ''}. ${active ? 'It’s still here.' : 'It kept coming back.'} Knowing isn’t fixing.</div>
 
-  <div class="headline">${esc(issue.headline || '')}</div>
-
-  <div class="grid">
-    ${stat(fmtN(issue.n), 'times reported to 311', true)}
-    ${stat(fmtN(cn), 'closed by the city')}
-    ${stat(fmtN(nf), '“nothing found” closures', true)}
-    ${stat(fmtN(rn), 'came back after closing', true)}
-    ${stat(ard != null ? ard.toFixed(1) + 'd' : '—', 'avg. before it returned')}
-    ${stat(fmtN(issue.episode_count), 'separate flare-ups')}
+    ${corrob > 0 ? `<div class="ugc"><div class="hdr">👁 <b>The block says it’s still here</b> — ${fmtN(corrob)} ${corrob === 1 ? 'neighbor confirms' : 'neighbors confirm'}.</div>${latest && latest.text ? `<div class="q">“${esc(latest.text)}”${latest.photo ? ' 📷' : ''}</div>` : ''}</div>` : ''}
   </div>
-
-  <div class="spark"><div class="cap">every red band = a stretch the city was getting reports and closing them. ${esc(issue.first_seen)} → today.</div>${sparkline(issue)}</div>
-
-  <h2>Who is accountable</h2>
-  <div class="card">
-    ${officialBlock}
-    <div class="who-verdict">What the record shows: the city closed this <b>${fmtN(cn)} times</b>${nf ? ` — ${fmtN(nf)} of them as “nothing found”` : ''}. What changed on the block: <b>${issue.status === 'active' ? 'nothing — it’s still here' : 'it kept coming back'}</b>. Responding agency on the tickets: ${esc(issue.agency || 'NYC')}.</div>
-  </div>
-
-  ${law ? `<h2>What the law says</h2>
-  <div class="card law">
-    <div class="law-code">${esc(law.code)}</div>
-    <div class="law-rule">${esc(law.rule)}</div>
-    <div class="law-pen"><span>Penalty</span> ${esc(law.penalty)}</div>
-    <div class="law-also">${esc(law.also)} · <a href="${esc(law.src)}">read the statute →</a></div>
-  </div>` : ''}
-
-  <h2>What we are asking for</h2>
-  <div class="card ask"><ul style="margin:0;padding-left:18px">
-    <li><b>Clear the sidewalk.</b> A persistent street obstruction blocks the public right-of-way (NYC Admin Code §16-122 / §19-136). The city has clear authority to act.</li>
-    <li><b>Connect these neighbors to services.</b> File this as an outreach request to DHS so the people here are offered shelter and help — clearing without serving just moves the problem.</li>
-    <li><b>Make it stick.</b> When the city last did this right (Sheepshead Bay), it cleared the site <i>and</i> prevented its return. Closing a ticket is not fixing the problem.</li>
-  </ul></div>
 
   <div class="actions">
     <a class="btn x" href="${esc(tweetUrl)}">Name them publicly →</a>
     <a class="btn ghost" href="${esc(mapUrl)}">See it on the map</a>
   </div>
-  <div class="fine">Posting this tags the responsible office with the city’s own numbers. That’s the point.</div>
+  <div class="fine">Posting tags the responsible office with the city’s own numbers. That’s the point.</div>
 
-  <div class="stamp">${stamp}<br>This page documents a <b>government’s</b> response to a public-safety obstruction. It is not about, and does not identify, any individual experiencing homelessness — they are failed by this inaction, not the cause of it.</div>
+  <details class="record"><summary>See the full record →</summary>
+
+    <div class="headline">${esc(issue.headline || '')}</div>
+    <div class="grid">
+      ${stat(fmtN(issue.n), 'times reported to 311', true)}
+      ${stat(fmtN(cn), 'closed by the city')}
+      ${stat(fmtN(nf), '“nothing found” closures', true)}
+      ${stat(fmtN(rn), 'came back after closing', true)}
+      ${stat(ard != null ? ard.toFixed(1) + 'd' : '—', 'avg. before it returned')}
+      ${stat(fmtN(issue.episode_count), 'separate flare-ups')}
+    </div>
+    <div class="spark"><div class="cap">every red band = a stretch the city was getting reports and closing them. ${esc(issue.first_seen)} → today.</div>${sparkline(issue)}</div>
+
+    <h2>Who is accountable</h2>
+    <div class="card">
+      ${officialBlock}
+      <div class="who-verdict">What the record shows: the city closed this <b>${fmtN(cn)} times</b>${nf ? ` — ${fmtN(nf)} of them as “nothing found”` : ''}. What changed on the block: <b>${active ? 'nothing — it’s still here' : 'it kept coming back'}</b>. Responding agency on the tickets: ${esc(issue.agency || 'NYC')}.</div>
+    </div>
+
+    ${law ? `<h2>What the law says</h2>
+    <div class="card law">
+      <div class="law-code">${esc(law.code)}</div>
+      <div class="law-rule">${esc(law.rule)}</div>
+      <div class="law-pen"><span>Penalty</span> ${esc(law.penalty)}</div>
+      <div class="law-also">${esc(law.also)} · <a href="${esc(law.src)}">read the statute →</a></div>
+    </div>` : ''}
+
+    <h2>What we are asking for</h2>
+    <div class="card ask"><ul style="margin:0;padding-left:18px">
+      <li><b>Clear the sidewalk.</b> A persistent street obstruction blocks the public right-of-way (NYC Admin Code §16-122 / §19-136). The city has clear authority to act.</li>
+      <li><b>Connect these neighbors to services.</b> File this as an outreach request to DHS so the people here are offered shelter and help — clearing without serving just moves the problem.</li>
+      <li><b>Make it stick.</b> When the city last did this right (Sheepshead Bay), it cleared the site <i>and</i> prevented its return. Closing a ticket is not fixing the problem.</li>
+    </ul></div>
+
+    <h2>How we define this spot</h2>
+    <div class="card disclose">The “${esc(durTxt || 'duration')}” above is this spot’s current unbroken run of reports — the episode model — not the multi-year total. “This spot” is one ~1-block location in the city’s data, whose coordinates round to about a block; nearby but <i>distinct</i> encampments are tracked as their own spots, never merged in to inflate a number. Every count is NYC’s own 311 record for this location.</div>
+
+    <div class="stamp">${stamp}<br>This page documents a <b>government’s</b> response to a public-safety obstruction. It is not about, and does not identify, any individual experiencing homelessness — they are failed by this inaction, not the cause of it.</div>
+  </details>
 </div></body></html>`;
 }
 
