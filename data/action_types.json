@@ -1,0 +1,83 @@
+[
+  {
+    "id": "corroborate",
+    "title": "Confirm it's still here",
+    "desc": "One tap: you have seen this recently.",
+    "icon": "👁",
+    "kind": "instant",
+    "enabled": true,
+    "template": null
+  },
+  {
+    "id": "testify",
+    "title": "Add what you see",
+    "desc": "Post a description or photo from the block.",
+    "icon": "📝",
+    "kind": "prepared",
+    "enabled": true,
+    "template": "testify"
+  },
+  {
+    "id": "email_official",
+    "title": "Email the council member",
+    "desc": "Send the city's own record to the official who represents this block.",
+    "icon": "✉️",
+    "kind": "prepared",
+    "enabled": true,
+    "template": "email_official"
+  },
+  {
+    "id": "request_cb_agenda",
+    "title": "Ask the community board",
+    "desc": "Request this be placed on the next community board agenda.",
+    "icon": "📋",
+    "kind": "prepared",
+    "enabled": true,
+    "template": "cb_agenda"
+  },
+  {
+    "id": "share_card",
+    "title": "Share the receipt",
+    "desc": "Post this record publicly so more people see it.",
+    "icon": "🔗",
+    "kind": "external",
+    "enabled": true,
+    "template": "share"
+  },
+  {
+    "id": "tip_press",
+    "title": "Tip a local newsroom",
+    "desc": "Send the record to a local reporter covering this neighborhood.",
+    "icon": "📰",
+    "kind": "prepared",
+    "enabled": true,
+    "template": "press_tip"
+  },
+  {
+    "id": "assisted_311",
+    "title": "File a 311 report",
+    "desc": "Coming soon: pre-filled 311 filing with the city's own data.",
+    "icon": "📞",
+    "kind": "coming",
+    "enabled": false,
+    "template": null
+  },
+  {
+    "id": "bounty",
+    "title": "Add a resolution bounty",
+    "desc": "Coming soon: put up a reward for documented resolution.",
+    "icon": "🏆",
+    "kind": "coming",
+    "enabled": false,
+    "template": null
+  },
+  {
+    "id": "watch_kit",
+    "title": "Get the documentation kit",
+    "desc": "Coming soon: download the documentation kit for ongoing record-keeping at this location.",
+    "icon": "📦",
+    "kind": "coming",
+    "enabled": false,
+    "template": null
+  }
+]
