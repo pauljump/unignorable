@@ -647,7 +647,7 @@ function openCard(i){
       <button class="seen-btn" id="seenBtn" onclick="seeOften()">I see this often</button>
       <button class="add-btn" onclick="toggleForm()">Add what you see →</button>
     </div>
-    <a class="receipt-link" href="/i?t=${encodeURIComponent(i.type)}&id=${encodeURIComponent(i.id)}" target="_blank" rel="noopener" onclick="window.pulse&&window.pulse('receipt_open',{type:i.type,id:i.id})">📄 Get the public receipt — names who’s accountable, built to post →</a>
+    <a class="receipt-link" href="${i.campaign?'/c':'/i'}?t=${encodeURIComponent(i.type)}&id=${encodeURIComponent(i.id)}" target="_blank" rel="noopener" onclick="window.pulse&&window.pulse('receipt_open',{type:i.type,id:i.id})">${i.campaign?'Active campaign - join it &rarr;':'&#128196; Get the public receipt - names who&#39;s accountable, built to post &rarr;'}</a>
     <div class="pform" id="pform" hidden>
       <textarea id="ptext" maxlength="500" placeholder="What do you actually see here right now? (anonymous)"></textarea>
       <div class="schips" id="schips">

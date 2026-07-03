@@ -187,3 +187,39 @@ function atomicWrite(file, obj) {
 atomicWrite(path.join(dataDir, 'issues.json'), issues);
 atomicWrite(path.join(dataDir, 'trends.json'), trends);
 console.log(`built ${issues.length} issues + ${trends.length} trend rows (atomic)`);
+
+// ---- Win-condition pass for active campaigns ----
+// Wrapped in try/catch: if ugc.db/campaigns table is absent, the daily refresh must NOT crash.
+// Win = issue resolved (status resolved OR silence > cadence) AND citizen verdict cleared AND
+// episode has been silent >= 60 days. This is the only computed status flip for v1.
+try {
+  const ugc = require('../ugc');
+  const campaigns = ugc.allCampaigns();
+  const issueByKey = new Map(issues.map(r => [r.type + '|' + r.id, r]));
+  let wonCount = 0, checkedCount = 0;
+  for (const camp of campaigns) {
+    if (camp.status !== 'active') continue;
+    checkedCount++;
+    const issue = issueByKey.get(camp.issue_key);
+    if (!issue) continue;
+    // Condition 1: issue resolved (status==='resolved' OR silence > cadence)
+    const isResolved = issue.status === 'resolved' || (Number(issue.silence) > Number(issue.cadence));
+    if (!isResolved) continue;
+    // Condition 2: citizen verdict is 'cleared'
+    let verdict = 'unverified';
+    try { verdict = ugc.thread(camp.issue_key).verdict; } catch {}
+    if (verdict !== 'cleared') continue;
+    // Condition 3: durable silence >= 60 days
+    if (Number(issue.silence) < 60) continue;
+    // All three conditions met: flip to won
+    const wonAt = new Date().toISOString();
+    ugc.setCampaignStatus(camp.issue_key, 'won', wonAt);
+    wonCount++;
+    console.log(`campaign won: ${camp.issue_key} (silence=${issue.silence}d, verdict=${verdict})`);
+  }
+  if (checkedCount > 0 || wonCount > 0)
+    console.log(`win-condition pass: checked ${checkedCount} active campaigns, ${wonCount} newly won`);
+} catch (e) {
+  // Never take the site down — log and continue.
+  console.warn('win-condition pass failed (non-fatal):', e.message);
+}
