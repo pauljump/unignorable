@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Public Accountability Ledger — E 20th St &amp; 2nd Ave, Manhattan</title>
+<style>
+  :root {
+    --bg:     #080b10;
+    --panel:  #0d1118;
+    --raised:  #111720;
+    --line:   #1c2230;
+    --line2:  #242d3c;
+    --ink:    #e6ecf5;
+    --dim:    #7b8899;
+    --faint:  #4a5568;
+    --red:    #ff4d4d;
+    --amber:  #ffb020;
+    --green:  #2ecb82;
+    --stamp-bg: #0e1218;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { scroll-behavior: smooth; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body { overflow-x: hidden; }
+  a { color: var(--amber); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ---- MASTHEAD ---- */
+  .mast {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    background: rgba(8,11,16,.97);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .mast-brand {
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .mast-brand b { color: var(--red); }
+  .mast-loc {
+    font-size: 11px;
+    color: var(--dim);
+    font-weight: 600;
+    letter-spacing: .02em;
+  }
+
+  /* ---- WRAP ---- */
+  .wrap {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 0 16px 80px;
+  }
+
+  /* ---- LOCATION HEADER ---- */
+  .loc-header {
+    padding: 28px 0 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .loc-eyebrow {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 6px;
+  }
+  .loc-title {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -.4px;
+    line-height: 1.15;
+    margin: 0 0 4px;
+  }
+  .loc-sub {
+    font-size: 13px;
+    color: var(--dim);
+    margin: 4px 0 14px;
+  }
+  .loc-maplink {
+    font-size: 12px;
+    color: var(--faint);
+    text-decoration: underline;
+  }
+  .loc-maplink:hover { color: var(--dim); }
+
+  /* ---- SPAN BAR ---- */
+  .span-bar {
+    margin: 18px 0 0;
+    padding: 12px 14px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--faint);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--dim);
+    line-height: 1.5;
+  }
+  .span-bar strong { color: var(--ink); }
+
+  /* ---- OFFICIAL SCORECARD ---- */
+  .official-card {
+    margin: 24px 0 0;
+    background: var(--panel);
+    border: 1px solid var(--line2);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .official-card-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .official-eyebrow {
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 5px;
+  }
+  .official-name {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -.3px;
+    line-height: 1.1;
+  }
+  .official-role {
+    font-size: 12px;
+    color: var(--dim);
+    margin-top: 3px;
+  }
+  .official-contact {
+    font-size: 12px;
+    color: var(--dim);
+    margin-top: 2px;
+  }
+  .official-contact a { color: var(--amber); }
+  .verdict-stamp {
+    flex: none;
+    text-align: right;
+  }
+  .verdict-pill {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: #1a0808;
+    color: var(--red);
+    border: 1px solid #3a1010;
+    white-space: nowrap;
+  }
+  .scorecard-rows {
+    padding: 4px 0;
+  }
+  .scorecard-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    gap: 12px;
+  }
+  .scorecard-row:last-child { border-bottom: none; }
+  .scorecard-label {
+    font-size: 12.5px;
+    color: var(--dim);
+    flex: 1;
+  }
+  .scorecard-val {
+    font-size: 14px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .scorecard-val.alarm { color: var(--red); }
+  .scorecard-val.amber { color: var(--amber); }
+  .scorecard-val.zero { color: var(--dim); }
+  .official-cta {
+    margin: 0;
+    padding: 14px 16px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .btn-primary {
+    display: inline-block;
+    padding: 9px 15px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 13px;
+    background: var(--amber);
+    color: #000;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .btn-primary:hover { opacity: .88; text-decoration: none; }
+  .btn-ghost {
+    display: inline-block;
+    padding: 9px 13px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 13px;
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--line2);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .btn-ghost:hover { border-color: var(--dim); text-decoration: none; }
+
+  /* ---- DOCKET SECTION HEADER ---- */
+  .docket-header {
+    margin: 32px 0 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .docket-title {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .docket-count {
+    font-size: 11px;
+    color: var(--faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- DOCKET ENTRY ---- */
+  .docket-entry {
+    border-bottom: 1px solid var(--line);
+    padding: 16px 0 18px;
+  }
+  .docket-entry.canary-entry {
+    border-left: 3px solid var(--amber);
+    padding-left: 14px;
+    margin-left: -14px;
+  }
+  .entry-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .entry-case {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-bottom: 3px;
+  }
+  .entry-addr {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -.2px;
+    line-height: 1.2;
+  }
+  .entry-type {
+    font-size: 11px;
+    color: var(--dim);
+    margin-top: 2px;
+  }
+  .entry-status {
+    flex: none;
+    text-align: right;
+  }
+  .status-stamp {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 3px 7px;
+    border-radius: 4px;
+  }
+  .status-stamp.here {
+    background: #180a0a;
+    color: var(--red);
+    border: 1px solid #2e1111;
+  }
+  .status-stamp.campaign-open {
+    background: #141000;
+    color: var(--amber);
+    border: 1px solid #2e2500;
+  }
+  .days-open {
+    font-size: 22px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--red);
+    line-height: 1;
+    margin-top: 4px;
+    display: block;
+    text-align: right;
+  }
+  .days-label {
+    font-size: 9px;
+    color: var(--dim);
+    text-align: right;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    margin-top: 1px;
+  }
+
+  /* ---- RECEIPT LEDGER LINE ---- */
+  .receipt-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--dim);
+    margin-top: 7px;
+    flex-wrap: wrap;
+    line-height: 1.6;
+  }
+  .receipt-line .rl-seg {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .receipt-line .rl-sep {
+    color: var(--faint);
+    font-size: 10px;
+  }
+  .rl-n { font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .rl-n.alarm { color: var(--red); }
+  .rl-n.amber { color: var(--amber); }
+
+  /* ---- EVIDENCE PLACEHOLDER ---- */
+  .evidence-row {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .evidence-thumb {
+    width: 52px;
+    height: 52px;
+    border-radius: 7px;
+    background: var(--raised);
+    border: 1px solid var(--line2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    cursor: pointer;
+  }
+  .evidence-thumb svg {
+    width: 18px;
+    height: 18px;
+    fill: var(--faint);
+  }
+  .evidence-add {
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .evidence-add a { color: var(--amber); }
+
+  /* ---- ENTRY FOOTER (CTA) ---- */
+  .entry-footer {
+    margin-top: 11px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .entry-cta {
+    display: inline-block;
+    padding: 7px 11px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--amber);
+    color: #000;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .entry-cta:hover { opacity: .88; text-decoration: none; }
+  .entry-link {
+    font-size: 12px;
+    color: var(--dim);
+    text-decoration: underline;
+  }
+  .entry-link:hover { color: var(--ink); }
+
+  /* ---- FIRST FILED TAG ---- */
+  .first-filed {
+    font-size: 10.5px;
+    color: var(--faint);
+    margin-top: 5px;
+  }
+  .first-filed strong { color: var(--dim); }
+
+  /* ---- CAMPAIGN BADGE ---- */
+  .campaign-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--amber);
+    background: #120f00;
+    border: 1px solid #2e2500;
+    border-radius: 6px;
+    padding: 4px 9px;
+    margin-top: 8px;
+  }
+  .campaign-badge .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--amber);
+    animation: pulse 2.4s infinite;
+    flex: none;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255,176,32,.5); }
+    70% { box-shadow: 0 0 0 6px rgba(255,176,32,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,176,32,0); }
+  }
+
+  /* ---- FUTURE ACTIONS SHELF ---- */
+  .future-shelf {
+    margin: 32px 0 0;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .future-shelf-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .future-shelf-title {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .future-shelf-sub {
+    font-size: 11px;
+    color: var(--faint);
+  }
+  .future-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 16px;
+    border-bottom: 1px solid var(--line);
+    opacity: .42;
+  }
+  .future-row:last-child { border-bottom: none; }
+  .future-icon {
+    font-size: 18px;
+    flex: none;
+    width: 32px;
+    text-align: center;
+  }
+  .future-body { flex: 1; }
+  .future-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .future-desc {
+    font-size: 11.5px;
+    color: var(--dim);
+    margin-top: 2px;
+    line-height: 1.4;
+  }
+  .future-tag {
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--faint);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 3px 6px;
+    white-space: nowrap;
+    flex: none;
+  }
+
+  /* ---- DATA STAMP ---- */
+  .data-stamp {
+    margin: 28px 0 0;
+    padding: 14px 16px;
+    background: var(--stamp-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 11px;
+    color: var(--faint);
+    line-height: 1.6;
+  }
+  .data-stamp strong { color: var(--dim); }
+
+  /* ---- DIVIDER ---- */
+  .docket-end {
+    padding: 20px 0 0;
+    text-align: center;
+    font-size: 11px;
+    color: var(--faint);
+    letter-spacing: .06em;
+  }
+
+  /* ---- SCROLL CUE ---- */
+  @media (max-width: 600px) {
+    .loc-title { font-size: 21px; }
+    .official-name { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="mast">
+  <span class="mast-brand">UN<b>IGNOR</b>ABLE</span>
+  <span class="mast-loc">E 20th St &amp; 2nd Ave</span>
+</div>
+
+<div class="wrap">
+
+  <!-- LOCATION HEADER -->
+  <div class="loc-header">
+    <div class="loc-eyebrow">Public Accountability Ledger</div>
+    <h1 class="loc-title">E 20th St &amp; 2nd Ave<br>Manhattan, District 2</h1>
+    <div class="loc-sub">500m radius &nbsp;&middot;&nbsp; 79 open problems &nbsp;&middot;&nbsp; records going back to May 2021</div>
+    <a href="#" class="loc-maplink">View as map</a>
+
+    <div class="span-bar">
+      <strong>5 years of record.</strong> The earliest filed complaint in this area: <strong>May 17, 2021</strong>. The ledger below is drawn from NYC's own 311 open data. Every number is what the city recorded.
+    </div>
+  </div>
+
+  <!-- OFFICIAL SCORECARD -->
+  <div class="official-card">
+    <div class="official-card-header">
+      <div>
+        <div class="official-eyebrow">Accountable Official</div>
+        <div class="official-name">Harvey Epstein</div>
+        <div class="official-role">NYC Council Member, District 2</div>
+        <div class="official-contact">
+          <a href="tel:2126771077">(212) 677-1077</a>
+          &nbsp;&middot;&nbsp;
+          <a href="mailto:District2@council.nyc.gov">District2@council.nyc.gov</a>
+        </div>
+      </div>
+      <div class="verdict-stamp">
+        <div class="verdict-pill">On Watch</div>
+      </div>
+    </div>
+
+    <div class="scorecard-rows">
+      <div class="scorecard-row">
+        <span class="scorecard-label">Open problems in this area</span>
+        <span class="scorecard-val alarm">79</span>
+      </div>
+      <div class="scorecard-row">
+        <span class="scorecard-label">Worst ignored (days without resolution)</span>
+        <span class="scorecard-val alarm">441 days</span>
+      </div>
+      <div class="scorecard-row">
+        <span class="scorecard-label">Constituent contact campaigns</span>
+        <span class="scorecard-val amber">1 opened</span>
+      </div>
+      <div class="scorecard-row">
+        <span class="scorecard-label">Documented actions taken</span>
+        <span class="scorecard-val zero">0 on record</span>
+      </div>
+    </div>
+
+    <div class="official-cta">
+      <a href="mailto:District2@council.nyc.gov?subject=%5BConstituent%5D%2079%20open%20problems%20in%20the%20E%2020th%20St%20area&body=Dear%20Council%20Member%20Epstein%2C%0A%0AAs%20a%20constituent%20at%20E%2020th%20St%20and%202nd%20Ave%2C%20I%20am%20writing%20about%20the%2079%20currently%20open%20311%20issues%20in%20our%20immediate%20area%2C%20some%20of%20which%20have%20been%20active%20for%20over%20a%20year.%20The%20full%20public%20record%20is%20at%3A%20https%3A%2F%2Funignorable.polyfeeds.dev%0A%0APlease%20advise%20on%20steps%20your%20office%20is%20taking.%0A%0A%5BYour%20name%5D%0A%5BYour%20address%5D" class="btn-primary">Contact Epstein</a>
+      <a href="#" class="btn-ghost">Call (212) 677-1077</a>
+    </div>
+  </div>
+
+  <!-- DOCKET -->
+  <div class="docket-header">
+    <span class="docket-title">Open Docket</span>
+    <span class="docket-count">Showing 12 of 79 active</span>
+  </div>
+
+  <!-- ENTRY 1: CANARY — 335 2 Avenue, 297 days, campaign open -->
+  <div class="docket-entry canary-entry">
+    <div class="entry-top">
+      <div>
+        <div class="entry-case">Case UNI-2025-0909-A</div>
+        <div class="entry-addr">335 2nd Avenue</div>
+        <div class="entry-type">Encampment &nbsp;&middot;&nbsp; 53m from you</div>
+      </div>
+      <div class="entry-status">
+        <div class="status-stamp campaign-open">Campaign Open</div>
+        <span class="days-open">297</span>
+        <div class="days-label">days open</div>
+      </div>
+    </div>
+    <div class="receipt-line">
+      <span class="rl-seg"><span class="rl-n alarm">189</span> reports filed</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">169</span> closed by city</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n alarm">44</span> "nothing found"</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">83</span> returned</span>
+    </div>
+    <div class="first-filed">First filed <strong>Sep 10, 2021</strong> &nbsp;&middot;&nbsp; 9 separate flare-ups over 5 years</div>
+    <div class="campaign-badge">
+      <span class="dot"></span>
+      Campaign opened 2026-07-03 &nbsp;&middot;&nbsp; 1 constituent email prepared
+    </div>
+    <div class="evidence-row">
+      <div class="evidence-thumb">
+        <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+      </div>
+      <div class="evidence-add">Photo from block? <a href="#">Add yours</a></div>
+    </div>
+    <div class="entry-footer">
+      <a href="/c?t=Encampment&id=40.736,-73.983" class="entry-cta">View full receipt</a>
+      <a href="mailto:District2@council.nyc.gov?subject=%5BConstituent%5D%20335%202nd%20Ave%20Encampment%20(297%20days%2C%20189%20reports)&body=Dear%20Council%20Member%20Epstein%2C%0A%0AI%20am%20writing%20about%20a%20persistent%20encampment%20at%20335%202nd%20Avenue%20that%20has%20been%20open%20for%20297%20consecutive%20days.%20NYC%20311%20records%20show%20189%20total%20reports%20and%20169%20closures%2C%20including%2044%20marked%20%22nothing%20found%22.%0A%0AThe%20full%20documented%20record%3A%20https%3A%2F%2Funignorable.polyfeeds.dev%2Fc%3Ft%3DEncampment%26id%3D40.736%252C-73.983%0A%0APlease%20advise%20on%20steps%20your%20office%20is%20taking%20toward%20resolution.%0A%0A%5BYour%20name%5D%0A%5BYour%20address%5D" class="entry-link">Email Epstein about this</a>
+    </div>
+  </div>
+
+  <!-- ENTRY 2: Second Avenue, 441 days -->
+  <div class="docket-entry">
+    <div class="entry-top">
+      <div>
+        <div class="entry-case">Case UNI-2021-0603-B</div>
+        <div class="entry-addr">2nd Avenue (south block)</div>
+        <div class="entry-type">Assistance needed &nbsp;&middot;&nbsp; 490m from you</div>
+      </div>
+      <div class="entry-status">
+        <div class="status-stamp here">Still Here</div>
+        <span class="days-open">441</span>
+        <div class="days-label">days open</div>
+      </div>
+    </div>
+    <div class="receipt-line">
+      <span class="rl-seg"><span class="rl-n alarm">52</span> reports filed</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">44</span> closed by city</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n alarm">31</span> "nothing found"</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">42</span> returned</span>
+    </div>
+    <div class="first-filed">First filed <strong>Jun 3, 2021</strong> &nbsp;&middot;&nbsp; 6 separate episodes over 5 years</div>
+    <div class="evidence-row">
+      <div class="evidence-thumb">
+        <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+      </div>
+      <div class="evidence-add"><a href="#">Add photo evidence</a></div>
+    </div>
+    <div class="entry-footer">
+      <a href="#" class="entry-cta">Contact Epstein</a>
+      <a href="#" class="entry-link">View record</a>
+    </div>
+  </div>
+
+  <!-- ENTRY 3: Irving Place Encampment, 297 days (score 63.2, 379 reports) -->
+  <div class="docket-entry">
+    <div class="entry-top">
+      <div>
+        <div class="entry-case">Case UNI-2021-1129-C</div>
+        <div class="entry-addr">Irving Place</div>
+        <div class="entry-type">Encampment &nbsp;&middot;&nbsp; 420m from you</div>
+      </div>
+      <div class="entry-status">
+        <div class="status-stamp here">Still Here</div>
+        <span class="days-open">119</span>
+        <div class="days-label">days open</div>
+      </div>
+    </div>
+    <div class="receipt-line">
+      <span class="rl-seg"><span class="rl-n alarm">379</span> reports filed</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">370</span> closed by city</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n alarm">181</span> "nothing found"</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">236</span> returned</span>
+    </div>
+    <div class="first-filed">First filed <strong>Nov 29, 2021</strong> &nbsp;&middot;&nbsp; 21 separate episodes</div>
+    <div class="evidence-row">
+      <div class="evidence-thumb">
+        <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+      </div>
+      <div class="evidence-add"><a href="#">Add photo evidence</a></div>
+    </div>
+    <div class="entry-footer">
+      <a href="#" class="entry-cta">Contact Epstein</a>
+      <a href="#" class="entry-link">View record</a>
+    </div>
+  </div>
+
+  <!-- ENTRY 4: Third Avenue (score 65.5, 104 reports) -->
+  <div class="docket-entry">
+    <div class="entry-top">
+      <div>
+        <div class="entry-case">Case UNI-2021-1126-D</div>
+        <div class="entry-addr">3rd Avenue (mid-block)</div>
+        <div class="entry-type">Assistance needed &nbsp;&middot;&nbsp; 399m from you</div>
+      </div>
+      <div class="entry-status">
+        <div class="status-stamp here">Still Here</div>
+        <span class="days-open">76</span>
+        <div class="days-label">days open</div>
+      </div>
+    </div>
+    <div class="receipt-line">
+      <span class="rl-seg"><span class="rl-n alarm">104</span> reports filed</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">69</span> closed by city</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n alarm">52</span> "nothing found"</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">61</span> returned</span>
+    </div>
+    <div class="first-filed">First filed <strong>Nov 26, 2021</strong> &nbsp;&middot;&nbsp; 20 separate episodes</div>
+    <div class="evidence-row">
+      <div class="evidence-thumb">
+        <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+      </div>
+      <div class="evidence-add"><a href="#">Add photo evidence</a></div>
+    </div>
+    <div class="entry-footer">
+      <a href="#" class="entry-cta">Contact Epstein</a>
+      <a href="#" class="entry-link">View record</a>
+    </div>
+  </div>
+
+  <!-- ENTRY 5: First Avenue (128 reports, 18 episodes) -->
+  <div class="docket-entry">
+    <div class="entry-top">
+      <div>
+        <div class="entry-case">Case UNI-2021-0523-E</div>
+        <div class="entry-addr">1st Avenue</div>
+        <div class="entry-type">Assistance needed &nbsp;&middot;&nbsp; 482m from you</div>
+      </div>
+      <div class="entry-status">
+        <div class="status-stamp here">Still Here</div>
+        <span class="days-open">196</span>
+        <div class="days-label">days open</div>
+      </div>
+    </div>
+    <div class="receipt-line">
+      <span class="rl-seg"><span class="rl-n alarm">128</span> reports filed</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">91</span> closed by city</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n alarm">66</span> "nothing found"</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">80</span> returned</span>
+    </div>
+    <div class="first-filed">First filed <strong>May 23, 2021</strong> &nbsp;&middot;&nbsp; 18 separate episodes</div>
+    <div class="evidence-row">
+      <div class="evidence-thumb">
+        <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+      </div>
+      <div class="evidence-add"><a href="#">Add photo evidence</a></div>
+    </div>
+    <div class="entry-footer">
+      <a href="#" class="entry-cta">Contact Epstein</a>
+      <a href="#" class="entry-link">View record</a>
+    </div>
+  </div>
+
+  <!-- ENTRY 6: Irving Place (105 reports) -->
+  <div class="docket-entry">
+    <div class="entry-top">
+      <div>
+        <div class="entry-case">Case UNI-2022-0228-F</div>
+        <div class="entry-addr">Irving Place</div>
+        <div class="entry-type">Assistance needed &nbsp;&middot;&nbsp; 428m from you</div>
+      </div>
+      <div class="entry-status">
+        <div class="status-stamp here">Still Here</div>
+        <span class="days-open">163</span>
+        <div class="days-label">days open</div>
+      </div>
+    </div>
+    <div class="receipt-line">
+      <span class="rl-seg"><span class="rl-n alarm">105</span> reports filed</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">85</span> closed by city</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n alarm">43</span> "nothing found"</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">75</span> returned</span>
+    </div>
+    <div class="first-filed">First filed <strong>Feb 28, 2022</strong> &nbsp;&middot;&nbsp; 10 separate episodes</div>
+    <div class="evidence-row">
+      <div class="evidence-thumb">
+        <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+      </div>
+      <div class="evidence-add"><a href="#">Add photo evidence</a></div>
+    </div>
+    <div class="entry-footer">
+      <a href="#" class="entry-cta">Contact Epstein</a>
+      <a href="#" class="entry-link">View record</a>
+    </div>
+  </div>
+
+  <!-- ENTRY 7: Third Avenue (61 reports, 9 episodes) -->
+  <div class="docket-entry">
+    <div class="entry-top">
+      <div>
+        <div class="entry-case">Case UNI-2021-0728-G</div>
+        <div class="entry-addr">3rd Avenue</div>
+        <div class="entry-type">Assistance needed &nbsp;&middot;&nbsp; 481m from you</div>
+      </div>
+      <div class="entry-status">
+        <div class="status-stamp here">Still Here</div>
+        <span class="days-open">202</span>
+        <div class="days-label">days open</div>
+      </div>
+    </div>
+    <div class="receipt-line">
+      <span class="rl-seg"><span class="rl-n alarm">61</span> reports filed</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">44</span> closed by city</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n alarm">35</span> "nothing found"</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">42</span> returned</span>
+    </div>
+    <div class="first-filed">First filed <strong>Jul 28, 2021</strong> &nbsp;&middot;&nbsp; 9 separate episodes</div>
+    <div class="entry-footer">
+      <a href="#" class="entry-cta">Contact Epstein</a>
+      <a href="#" class="entry-link">View record</a>
+    </div>
+  </div>
+
+  <!-- ENTRY 8: 360 East 15 St (84 reports) -->
+  <div class="docket-entry">
+    <div class="entry-top">
+      <div>
+        <div class="entry-case">Case UNI-2021-0523-H</div>
+        <div class="entry-addr">360 East 15th Street</div>
+        <div class="entry-type">Assistance needed &nbsp;&middot;&nbsp; 442m from you</div>
+      </div>
+      <div class="entry-status">
+        <div class="status-stamp here">Still Here</div>
+        <span class="days-open">17</span>
+        <div class="days-label">days open</div>
+      </div>
+    </div>
+    <div class="receipt-line">
+      <span class="rl-seg"><span class="rl-n alarm">84</span> reports filed</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">59</span> closed by city</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n alarm">47</span> "nothing found"</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">54</span> returned</span>
+    </div>
+    <div class="first-filed">First filed <strong>May 23, 2021</strong> &nbsp;&middot;&nbsp; 16 separate episodes</div>
+    <div class="entry-footer">
+      <a href="#" class="entry-cta">Contact Epstein</a>
+      <a href="#" class="entry-link">View record</a>
+    </div>
+  </div>
+
+  <!-- ENTRY 9: 355 East 23 St (92 reports) -->
+  <div class="docket-entry">
+    <div class="entry-top">
+      <div>
+        <div class="entry-case">Case UNI-2021-0726-I</div>
+        <div class="entry-addr">355 East 23rd Street</div>
+        <div class="entry-type">Assistance needed &nbsp;&middot;&nbsp; 303m from you</div>
+      </div>
+      <div class="entry-status">
+        <div class="status-stamp here">Still Here</div>
+        <span class="days-open">8</span>
+        <div class="days-label">days open</div>
+      </div>
+    </div>
+    <div class="receipt-line">
+      <span class="rl-seg"><span class="rl-n alarm">92</span> reports filed</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">77</span> closed by city</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n alarm">33</span> "nothing found"</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">71</span> returned</span>
+    </div>
+    <div class="first-filed">First filed <strong>Jul 26, 2021</strong> &nbsp;&middot;&nbsp; 19 separate episodes</div>
+    <div class="entry-footer">
+      <a href="#" class="entry-cta">Contact Epstein</a>
+      <a href="#" class="entry-link">View record</a>
+    </div>
+  </div>
+
+  <!-- ENTRY 10: East 14 Street (43 reports) -->
+  <div class="docket-entry">
+    <div class="entry-top">
+      <div>
+        <div class="entry-case">Case UNI-2021-0518-J</div>
+        <div class="entry-addr">East 14th Street</div>
+        <div class="entry-type">Assistance needed &nbsp;&middot;&nbsp; 490m from you</div>
+      </div>
+      <div class="entry-status">
+        <div class="status-stamp here">Still Here</div>
+        <span class="days-open">172</span>
+        <div class="days-label">days open</div>
+      </div>
+    </div>
+    <div class="receipt-line">
+      <span class="rl-seg"><span class="rl-n alarm">43</span> reports filed</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">34</span> closed by city</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n alarm">23</span> "nothing found"</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">33</span> returned</span>
+    </div>
+    <div class="first-filed">First filed <strong>May 18, 2021</strong> &nbsp;&middot;&nbsp; 8 separate episodes</div>
+    <div class="entry-footer">
+      <a href="#" class="entry-cta">Contact Epstein</a>
+      <a href="#" class="entry-link">View record</a>
+    </div>
+  </div>
+
+  <!-- ENTRY 11: East 24 Street Encampment (39 reports) -->
+  <div class="docket-entry">
+    <div class="entry-top">
+      <div>
+        <div class="entry-case">Case UNI-2022-0113-K</div>
+        <div class="entry-addr">East 24th Street</div>
+        <div class="entry-type">Encampment &nbsp;&middot;&nbsp; 483m from you</div>
+      </div>
+      <div class="entry-status">
+        <div class="status-stamp here">Still Here</div>
+        <span class="days-open">197</span>
+        <div class="days-label">days open</div>
+      </div>
+    </div>
+    <div class="receipt-line">
+      <span class="rl-seg"><span class="rl-n alarm">39</span> reports filed</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">33</span> closed by city</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n alarm">24</span> "nothing found"</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">19</span> returned</span>
+    </div>
+    <div class="first-filed">First filed <strong>Jan 13, 2022</strong> &nbsp;&middot;&nbsp; 5 separate episodes</div>
+    <div class="entry-footer">
+      <a href="#" class="entry-cta">Contact Epstein</a>
+      <a href="#" class="entry-link">View record</a>
+    </div>
+  </div>
+
+  <!-- ENTRY 12: 311 East 25 St Panhandling (58 reports) -->
+  <div class="docket-entry">
+    <div class="entry-top">
+      <div>
+        <div class="entry-case">Case UNI-2022-1102-L</div>
+        <div class="entry-addr">311 East 25th Street</div>
+        <div class="entry-type">Panhandling &nbsp;&middot;&nbsp; 433m from you</div>
+      </div>
+      <div class="entry-status">
+        <div class="status-stamp here">Still Here</div>
+        <span class="days-open">62</span>
+        <div class="days-label">days open</div>
+      </div>
+    </div>
+    <div class="receipt-line">
+      <span class="rl-seg"><span class="rl-n alarm">58</span> reports filed</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">58</span> closed by city</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">0</span> "nothing found"</span>
+      <span class="rl-sep">&middot;</span>
+      <span class="rl-seg"><span class="rl-n">51</span> returned</span>
+    </div>
+    <div class="first-filed">First filed <strong>Nov 2, 2022</strong> &nbsp;&middot;&nbsp; 8 separate episodes</div>
+    <div class="entry-footer">
+      <a href="#" class="entry-cta">Contact Epstein</a>
+      <a href="#" class="entry-link">View record</a>
+    </div>
+  </div>
+
+  <div class="docket-end">67 more open cases in this area &nbsp;&middot;&nbsp; <a href="#" style="color:var(--dim);text-decoration:underline">View all</a></div>
+
+  <!-- FUTURE ACTIONS SHELF -->
+  <div class="future-shelf">
+    <div class="future-shelf-header">
+      <span class="future-shelf-title">Pressure Moves</span>
+      <span class="future-shelf-sub">Coming soon</span>
+    </div>
+    <div class="future-row">
+      <div class="future-icon">📋</div>
+      <div class="future-body">
+        <div class="future-label">File to 311 for you</div>
+        <div class="future-desc">Pre-filled report submitted with full location history. One tap from the ledger entry.</div>
+      </div>
+      <div class="future-tag">Soon</div>
+    </div>
+    <div class="future-row">
+      <div class="future-icon">🏦</div>
+      <div class="future-body">
+        <div class="future-label">Fund a challenger</div>
+        <div class="future-desc">Direct a dollar to whoever is running against the incumbent on record. Tied to this ledger entry.</div>
+      </div>
+      <div class="future-tag">Soon</div>
+    </div>
+    <div class="future-row">
+      <div class="future-icon">📡</div>
+      <div class="future-body">
+        <div class="future-label">Watch kit</div>
+        <div class="future-desc">Get a weekly digest of new filings, closures, and any official response on your block.</div>
+      </div>
+      <div class="future-tag">Soon</div>
+    </div>
+    <div class="future-row">
+      <div class="future-icon">📰</div>
+      <div class="future-body">
+        <div class="future-label">Tip the press</div>
+        <div class="future-desc">One-click tip to Town and Village or Gothamist with the full dossier attached.</div>
+      </div>
+      <div class="future-tag">Soon</div>
+    </div>
+  </div>
+
+  <!-- DATA STAMP -->
+  <div class="data-stamp">
+    <strong>Data source:</strong> New York City 311 open data (dataset erm2-nwe9), current through July 1, 2026. All counts are the city's own records. This ledger documents a government's response history at public locations. It does not identify or characterize any individual. Officials named are the elected representatives whose districts cover these locations.
+    <br><br>
+    <strong>Coverage:</strong> 500m radius from E 20th St and 2nd Ave. 161 total records since May 17, 2021. 79 currently active.
+  </div>
+
+</div>
+
+<script>
+  // Stub: scroll-driven entry animations for the docket
+  (function(){
+    if(!('IntersectionObserver' in window)) return;
+    var entries = document.querySelectorAll('.docket-entry');
+    var obs = new IntersectionObserver(function(items){
+      items.forEach(function(item){
+        if(item.isIntersecting){
+          item.target.style.opacity='1';
+          item.target.style.transform='none';
+          obs.unobserve(item.target);
+        }
+      });
+    },{threshold:0.08});
+    entries.forEach(function(el,i){
+      el.style.opacity='0';
+      el.style.transform='translateY(12px)';
+      el.style.transition='opacity .3s ease '+(i*0.04)+'s, transform .3s ease '+(i*0.04)+'s';
+      obs.observe(el);
+    });
+  })();
+</script>
+</body>
+</html>

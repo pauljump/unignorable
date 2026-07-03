@@ -917,6 +917,18 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Citizen-submitted proof photo, served by id. Filenames are random hex; path-traversal can't escape.
+  // design-mock previews for Paul's screenshot laps (basename-safe, html only, noindex)
+  if (u.pathname.startsWith('/design/')) {
+    const path_ = require('path');
+    const name = path_.basename(u.pathname).replace(/[^a-z0-9._-]/gi, '');
+    const file = name.endsWith('.html') ? name : name + '.html';
+    try {
+      const buf = fs.readFileSync(path_.join(__dirname, 'design-mocks', file));
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'no-store' });
+      return res.end(buf);
+    } catch { return send(res, 404, 'not found', 'text/plain'); }
+  }
+
   if (u.pathname.startsWith('/photos/')) {
     const name = path.basename(u.pathname);
     const ext = name.split('.').pop();

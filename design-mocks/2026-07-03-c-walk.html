@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>This is your walk. | unignorable</title>
+<style>
+/* ── tokens ── */
+:root {
+  --bg: #0b0d10;
+  --card: #14171c;
+  --ink: #e8eaed;
+  --mut: #8b9098;
+  --line: #262b32;
+  --alarm: #ff4d4d;
+  --amber: #ffb020;
+  --green: #3ddc84;
+  --photo-bg: #111318;
+  --footer-h: 56px;
+}
+
+/* ── reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: var(--bg); }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+a { color: var(--amber); text-decoration: none; }
+button { font: inherit; cursor: pointer; border: none; background: none; }
+
+/* ── masthead ── */
+.mast {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px;
+  background: rgba(11,13,16,.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.logo { font-weight: 800; font-size: 14px; letter-spacing: .08em; color: var(--ink); }
+.logo b { color: var(--alarm); }
+.mast-loc { font-size: 12px; color: var(--mut); text-align: right; }
+.mast-loc strong { display: block; color: var(--ink); font-size: 13px; }
+
+/* ── footer tally bar ── */
+.tally-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  height: var(--footer-h);
+  background: rgba(11,13,16,.96);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 18px;
+  gap: 12px;
+}
+.tally-count {
+  font-size: 13px; color: var(--mut); flex: 1; min-width: 0;
+}
+.tally-count strong { color: var(--alarm); }
+.tally-official {
+  font-size: 12px; color: var(--mut); text-align: right; flex: 1; min-width: 0;
+}
+.tally-official a {
+  display: block; color: var(--amber); font-weight: 700; font-size: 13px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.map-icon {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: var(--card); border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex: none; text-decoration: none;
+}
+
+/* ── scroll container ── */
+.walk {
+  padding-top: 52px;
+  padding-bottom: calc(var(--footer-h) + 16px);
+}
+
+/* ── opening section ── */
+.opening {
+  min-height: 100svh;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  padding: 32px 22px 32px;
+  position: relative; overflow: hidden;
+  background: var(--bg);
+}
+.opening-bg {
+  position: absolute; inset: 0; z-index: 0;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 32px,
+      rgba(255,255,255,.018) 32px,
+      rgba(255,255,255,.018) 33px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 32px,
+      rgba(255,255,255,.018) 32px,
+      rgba(255,255,255,.018) 33px
+    );
+}
+.opening-content { position: relative; z-index: 1; }
+.opening-eyebrow {
+  font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--mut); margin-bottom: 16px;
+}
+.opening-hed {
+  font-size: clamp(40px, 10vw, 56px); font-weight: 800;
+  line-height: .96; letter-spacing: -.02em;
+  color: var(--ink); margin-bottom: 20px;
+}
+.opening-sub {
+  font-size: 16px; color: var(--mut); line-height: 1.5;
+  max-width: 360px; margin-bottom: 28px;
+}
+.opening-sub strong { color: var(--ink); }
+.scroll-cue {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--mut);
+}
+.scroll-cue svg { animation: bob 1.6s ease-in-out infinite; }
+@keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(4px)} }
+
+/* ── walk stop ── */
+.stop {
+  min-height: 100svh;
+  display: flex; flex-direction: column;
+  padding-bottom: 0;
+  border-top: 1px solid var(--line);
+  position: relative;
+}
+.stop-dist {
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--alarm); font-weight: 700;
+  padding: 22px 22px 0;
+}
+.stop-addr {
+  font-size: 13px; color: var(--mut);
+  padding: 4px 22px 0;
+}
+.day-counter {
+  font-size: clamp(72px, 20vw, 120px); font-weight: 800; line-height: .88;
+  letter-spacing: -.03em; color: var(--alarm);
+  padding: 16px 22px 4px;
+}
+.day-label {
+  font-size: 13px; color: var(--mut); padding: 0 22px 16px;
+}
+.day-label strong { color: var(--ink); }
+
+/* ── photo area ── */
+.photo-area {
+  flex: 1; min-height: 220px; max-height: 320px;
+  background: var(--photo-bg);
+  position: relative; overflow: hidden;
+  margin: 0;
+}
+.photo-texture {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse at 30% 40%, rgba(255,176,32,.04) 0%, transparent 60%),
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 4px,
+      rgba(255,255,255,.012) 4px,
+      rgba(255,255,255,.012) 5px
+    );
+}
+.photo-chip {
+  position: absolute; bottom: 14px; left: 14px;
+  background: rgba(11,13,16,.85); border: 1px solid var(--line);
+  border-radius: 20px; padding: 5px 12px;
+  font-size: 12px; color: var(--mut); font-weight: 600;
+}
+.photo-chip strong { color: var(--ink); }
+.photo-placeholder-label {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  font-size: 12px; color: rgba(139,144,152,.3);
+  letter-spacing: .12em; text-transform: uppercase; text-align: center;
+  pointer-events: none; user-select: none;
+}
+
+/* ── receipt line ── */
+.receipt-line {
+  padding: 16px 22px 4px;
+  font-size: 14px; color: var(--mut); line-height: 1.5;
+}
+.receipt-line strong { color: var(--ink); }
+.receipt-line .alarm { color: var(--alarm); font-weight: 700; }
+
+/* ── stop action ── */
+.stop-action { padding: 14px 22px 22px; }
+.btn-primary {
+  display: inline-block; padding: 12px 20px; border-radius: 10px;
+  font-weight: 700; font-size: 14px; text-decoration: none;
+  background: var(--amber); color: #000;
+}
+.btn-secondary {
+  display: inline-block; padding: 11px 18px; border-radius: 10px;
+  font-weight: 600; font-size: 14px; text-decoration: none;
+  background: transparent; border: 1px solid var(--line); color: var(--ink);
+  margin-left: 10px;
+}
+
+/* ── receipts expander ── */
+details.receipts { border-top: 1px solid var(--line); margin: 0 22px 0; }
+details.receipts > summary {
+  cursor: pointer; list-style: none;
+  padding: 14px 0;
+  font-size: 13px; font-weight: 700; color: var(--amber);
+  display: flex; align-items: center; gap: 6px;
+}
+details.receipts > summary::-webkit-details-marker { display: none; }
+details.receipts > summary .arr { transition: transform .2s; }
+details.receipts[open] > summary .arr { transform: rotate(90deg); }
+.receipt-table {
+  padding-bottom: 16px;
+  font-size: 13px; color: var(--mut); line-height: 1.6;
+}
+.receipt-row {
+  display: flex; justify-content: space-between;
+  padding: 5px 0; border-bottom: 1px solid rgba(38,43,50,.6);
+}
+.receipt-row:last-child { border-bottom: none; }
+.receipt-row .rk { color: var(--ink); }
+.receipt-row .rv.alarm { color: var(--alarm); }
+.receipt-row .rv.green { color: var(--green); }
+
+/* ── closing accountability section ── */
+.accountability {
+  padding: 32px 22px;
+  border-top: 2px solid var(--alarm);
+}
+.section-label {
+  font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--alarm); font-weight: 700; margin-bottom: 16px;
+}
+.official-block {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 18px;
+}
+.official-name { font-size: 22px; font-weight: 800; line-height: 1.1; }
+.official-role { font-size: 13px; color: var(--mut); margin-top: 3px; }
+.official-contact { margin-top: 12px; }
+.official-contact a {
+  display: inline-block; margin-right: 14px; font-size: 14px; color: var(--amber);
+}
+.verdict {
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line);
+  font-size: 14px; line-height: 1.5;
+}
+.verdict strong { color: var(--alarm); }
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 20px;
+  font-size: 12px; font-weight: 700; letter-spacing: .04em;
+  margin-top: 12px;
+}
+.status-pill.pending {
+  background: rgba(255,176,32,.12); color: var(--amber);
+  border: 1px solid rgba(255,176,32,.3);
+}
+.status-pill .dot {
+  width: 7px; height: 7px; border-radius: 50%; background: currentColor;
+}
+.cta-block { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px; }
+.cta-block .btn-primary { font-size: 15px; }
+.cta-block .btn-secondary { font-size: 15px; margin-left: 0; }
+
+/* ── future actions shelf ── */
+.future-shelf { padding: 0 22px 32px; }
+.shelf-title {
+  font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--mut); font-weight: 700; margin-bottom: 16px;
+}
+.shelf-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 0; border-bottom: 1px solid var(--line);
+  opacity: .4;
+}
+.shelf-row:last-child { border-bottom: none; }
+.shelf-icon { font-size: 20px; flex: none; }
+.shelf-meta { flex: 1; min-width: 0; }
+.shelf-name { font-size: 14px; font-weight: 700; color: var(--ink); }
+.shelf-desc { font-size: 12px; color: var(--mut); margin-top: 2px; }
+.shelf-badge {
+  font-size: 11px; font-weight: 700; letter-spacing: .06em;
+  color: var(--mut); white-space: nowrap; flex: none;
+  padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line);
+}
+
+/* ── data stamp ── */
+.data-stamp {
+  margin: 0 22px 40px;
+  padding-top: 20px; border-top: 1px solid var(--line);
+  font-size: 12px; color: var(--mut); line-height: 1.6;
+}
+.data-stamp a { color: var(--mut); text-decoration: underline; }
+
+/* ── desktop ── */
+@media (min-width: 600px) {
+  .walk { max-width: 480px; margin: 0 auto; }
+  .mast, .tally-bar { max-width: 480px; left: 50%; right: auto; transform: translateX(-50%); width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<!-- masthead -->
+<div class="mast">
+  <span class="logo">UN<b>IGNOR</b>ABLE</span>
+  <div class="mast-loc">
+    <strong>E 20th St &amp; 2nd Ave</strong>
+    your block
+  </div>
+</div>
+
+<div class="walk">
+
+  <!-- ── OPENING ── -->
+  <section class="opening">
+    <div class="opening-bg"></div>
+    <div class="opening-content">
+      <div class="opening-eyebrow">Manhattan, District 2 &middot; 79 active issues within 500m</div>
+      <div class="opening-hed">This is your walk.</div>
+      <p class="opening-sub">
+        Every problem below is within <strong>500 meters of where you are standing.</strong>
+        The city has been told about all of them. This is the record of what happened next.
+      </p>
+      <div class="scroll-cue">
+        scroll to walk it
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M8 3v10M4 10l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── STOP 1: canary ── -->
+  <section class="stop" id="stop-1">
+    <div class="stop-dist">335 2nd Ave &middot; 0 ft from you</div>
+    <div class="stop-addr">Encampment &middot; right here</div>
+    <div class="day-counter">DAY<br>297</div>
+    <div class="day-label">ignored since <strong>September 9, 2025</strong></div>
+
+    <div class="photo-area">
+      <div class="photo-texture"></div>
+      <div class="photo-placeholder-label">UGC photos<br>from neighbors</div>
+      <div class="photo-chip"><strong>12</strong> neighbor photos</div>
+    </div>
+
+    <div class="receipt-line">
+      Reported <strong>189 times</strong> to 311 since 2021 &middot;
+      closed <strong class="alarm">169 times</strong> &middot;
+      <strong class="alarm">44</strong> closures said "nothing found" &middot; still here.
+    </div>
+
+    <details class="receipts">
+      <summary><span class="arr">&#9658;</span> Full record</summary>
+      <div class="receipt-table">
+        <div class="receipt-row"><span class="rk">Total 311 reports</span><span class="rv">189</span></div>
+        <div class="receipt-row"><span class="rk">City closures</span><span class="rv alarm">169</span></div>
+        <div class="receipt-row"><span class="rk">"Nothing found" closures</span><span class="rv alarm">44</span></div>
+        <div class="receipt-row"><span class="rk">Returned after closing</span><span class="rv alarm">83</span></div>
+        <div class="receipt-row"><span class="rk">Flare-up episodes</span><span class="rv">9</span></div>
+        <div class="receipt-row"><span class="rk">Current episode started</span><span class="rv">Sep 9, 2025</span></div>
+        <div class="receipt-row"><span class="rk">First recorded</span><span class="rv">Sep 10, 2021</span></div>
+        <div class="receipt-row"><span class="rk">Last reported</span><span class="rv">Jul 1, 2026</span></div>
+      </div>
+    </details>
+
+    <div class="stop-action">
+      <a class="btn-primary" href="/c?t=Encampment&id=40.736,-73.983">See the full receipt</a>
+      <a class="btn-secondary" href="#">Email Harvey Epstein</a>
+    </div>
+  </section>
+
+  <!-- ── STOP 2: 335 2nd Ave HPA ── -->
+  <section class="stop" id="stop-2">
+    <div class="stop-dist">335 2nd Ave &middot; 32m from you</div>
+    <div class="stop-addr">Sidewalk condition &middot; same building</div>
+    <div class="day-counter">DAY<br>49</div>
+    <div class="day-label">current episode, open since <strong>May 15, 2026</strong></div>
+
+    <div class="photo-area">
+      <div class="photo-texture"></div>
+      <div class="photo-placeholder-label">UGC photos<br>from neighbors</div>
+      <div class="photo-chip"><strong>3</strong> neighbor photos</div>
+    </div>
+
+    <div class="receipt-line">
+      Reported <strong>31 times</strong> since August 2022 &middot;
+      closed <strong class="alarm">16 times</strong> &middot;
+      <strong class="alarm">16</strong> closures said "nothing found."
+    </div>
+
+    <details class="receipts">
+      <summary><span class="arr">&#9658;</span> Full record</summary>
+      <div class="receipt-table">
+        <div class="receipt-row"><span class="rk">Total 311 reports</span><span class="rv">31</span></div>
+        <div class="receipt-row"><span class="rk">City closures</span><span class="rv alarm">16</span></div>
+        <div class="receipt-row"><span class="rk">"Nothing found" closures</span><span class="rv alarm">16</span></div>
+        <div class="receipt-row"><span class="rk">First recorded</span><span class="rv">Aug 29, 2022</span></div>
+        <div class="receipt-row"><span class="rk">Pattern</span><span class="rv">Persistent</span></div>
+      </div>
+    </details>
+
+    <div class="stop-action">
+      <a class="btn-primary" href="#">See the full receipt</a>
+      <a class="btn-secondary" href="#">Confirm it's still here</a>
+    </div>
+  </section>
+
+  <!-- ── STOP 3: 2nd Ave Encampment 53m ── -->
+  <section class="stop" id="stop-3">
+    <div class="stop-dist">2nd Ave &middot; 53m from you</div>
+    <div class="stop-addr">Encampment &middot; 4 years on record</div>
+    <div class="day-counter">DAY<br>119</div>
+    <div class="day-label">current episode open since <strong>March 6, 2026</strong></div>
+
+    <div class="photo-area">
+      <div class="photo-texture"></div>
+      <div class="photo-placeholder-label">UGC photos<br>from neighbors</div>
+      <div class="photo-chip"><strong>7</strong> neighbor photos</div>
+    </div>
+
+    <div class="receipt-line">
+      Reported <strong>207 times</strong> since November 2021 &middot;
+      closed <strong class="alarm">201 times</strong> &middot;
+      <strong class="alarm">53</strong> closures said "nothing found."
+    </div>
+
+    <details class="receipts">
+      <summary><span class="arr">&#9658;</span> Full record</summary>
+      <div class="receipt-table">
+        <div class="receipt-row"><span class="rk">Total 311 reports</span><span class="rv">207</span></div>
+        <div class="receipt-row"><span class="rk">City closures</span><span class="rv alarm">201</span></div>
+        <div class="receipt-row"><span class="rk">"Nothing found" closures</span><span class="rv alarm">53</span></div>
+        <div class="receipt-row"><span class="rk">First recorded</span><span class="rv">Nov 2, 2021</span></div>
+        <div class="receipt-row"><span class="rk">Pattern</span><span class="rv">Ongoing</span></div>
+      </div>
+    </details>
+
+    <div class="stop-action">
+      <a class="btn-primary" href="#">See the full receipt</a>
+    </div>
+  </section>
+
+  <!-- ── STOP 4: 254 E 19th St Encampment ── -->
+  <section class="stop" id="stop-4">
+    <div class="stop-dist">254 E 19th St &middot; 66m from you</div>
+    <div class="stop-addr">Encampment &middot; 3 years on record</div>
+    <div class="day-counter">DAY<br>211</div>
+    <div class="day-label">open since <strong>December 4, 2025</strong></div>
+
+    <div class="photo-area">
+      <div class="photo-texture"></div>
+      <div class="photo-placeholder-label">UGC photos<br>from neighbors</div>
+      <div class="photo-chip"><strong>5</strong> neighbor photos</div>
+    </div>
+
+    <div class="receipt-line">
+      Reported <strong>51 times</strong> &middot;
+      closed <strong class="alarm">51 times</strong> &middot;
+      <strong class="alarm">39</strong> closures said "nothing found." Still here.
+    </div>
+
+    <details class="receipts">
+      <summary><span class="arr">&#9658;</span> Full record</summary>
+      <div class="receipt-table">
+        <div class="receipt-row"><span class="rk">Total 311 reports</span><span class="rv">51</span></div>
+        <div class="receipt-row"><span class="rk">City closures</span><span class="rv alarm">51</span></div>
+        <div class="receipt-row"><span class="rk">"Nothing found" closures</span><span class="rv alarm">39</span></div>
+        <div class="receipt-row"><span class="rk">Closure rate</span><span class="rv alarm">100%</span></div>
+        <div class="receipt-row"><span class="rk">First recorded</span><span class="rv">Dec 14, 2022</span></div>
+      </div>
+    </details>
+
+    <div class="stop-action">
+      <a class="btn-primary" href="#">See the full receipt</a>
+    </div>
+  </section>
+
+  <!-- ── STOP 5: 3rd Ave Encampment 189m ── -->
+  <section class="stop" id="stop-5">
+    <div class="stop-dist">3rd Ave &middot; 189m from you</div>
+    <div class="stop-addr">Encampment &middot; 5 years on record</div>
+    <div class="day-counter">DAY<br>119</div>
+    <div class="day-label">current episode, first recorded <strong>August 2021</strong></div>
+
+    <div class="photo-area">
+      <div class="photo-texture"></div>
+      <div class="photo-placeholder-label">UGC photos<br>from neighbors</div>
+      <div class="photo-chip"><strong>9</strong> neighbor photos</div>
+    </div>
+
+    <div class="receipt-line">
+      Reported <strong>91 times</strong> since August 2021 &middot;
+      closed <strong class="alarm">89 times</strong> &middot;
+      <strong class="alarm">51</strong> closures said "nothing found."
+    </div>
+
+    <details class="receipts">
+      <summary><span class="arr">&#9658;</span> Full record</summary>
+      <div class="receipt-table">
+        <div class="receipt-row"><span class="rk">Total 311 reports</span><span class="rv">91</span></div>
+        <div class="receipt-row"><span class="rk">City closures</span><span class="rv alarm">89</span></div>
+        <div class="receipt-row"><span class="rk">"Nothing found" closures</span><span class="rv alarm">51</span></div>
+        <div class="receipt-row"><span class="rk">First recorded</span><span class="rv">Aug 2, 2021</span></div>
+        <div class="receipt-row"><span class="rk">Pattern</span><span class="rv">Ongoing</span></div>
+      </div>
+    </details>
+
+    <div class="stop-action">
+      <a class="btn-primary" href="#">See the full receipt</a>
+    </div>
+  </section>
+
+  <!-- ── STOP 6: Third Ave HPA 179m ── -->
+  <section class="stop" id="stop-6">
+    <div class="stop-dist">3rd Ave &middot; 179m from you</div>
+    <div class="stop-addr">Sidewalk condition &middot; 5 years on record</div>
+    <div class="day-counter">DAY<br>73</div>
+    <div class="day-label">current episode open since <strong>April 21, 2026</strong></div>
+
+    <div class="photo-area">
+      <div class="photo-texture"></div>
+      <div class="photo-placeholder-label">UGC photos<br>from neighbors</div>
+      <div class="photo-chip"><strong>4</strong> neighbor photos</div>
+    </div>
+
+    <div class="receipt-line">
+      Reported <strong>59 times</strong> since June 2021 &middot;
+      closed <strong class="alarm">40 times</strong> &middot;
+      <strong class="alarm">41</strong> closures said "nothing found" (more "nothing founds" than closures).
+    </div>
+
+    <details class="receipts">
+      <summary><span class="arr">&#9658;</span> Full record</summary>
+      <div class="receipt-table">
+        <div class="receipt-row"><span class="rk">Total 311 reports</span><span class="rv">59</span></div>
+        <div class="receipt-row"><span class="rk">City closures</span><span class="rv alarm">40</span></div>
+        <div class="receipt-row"><span class="rk">"Nothing found" closures</span><span class="rv alarm">41</span></div>
+        <div class="receipt-row"><span class="rk">Returned after closing</span><span class="rv alarm">39</span></div>
+        <div class="receipt-row"><span class="rk">Episodes</span><span class="rv">10</span></div>
+        <div class="receipt-row"><span class="rk">First recorded</span><span class="rv">Jun 3, 2021</span></div>
+      </div>
+    </details>
+
+    <div class="stop-action">
+      <a class="btn-primary" href="#">See the full receipt</a>
+    </div>
+  </section>
+
+  <!-- ── STOP 7: Irving Place ── -->
+  <section class="stop" id="stop-7">
+    <div class="stop-dist">Irving Place &middot; 420m from you</div>
+    <div class="stop-addr">Encampment &middot; 4 years on record</div>
+    <div class="day-counter">DAY<br>119</div>
+    <div class="day-label">current episode open since <strong>March 6, 2026</strong></div>
+
+    <div class="photo-area">
+      <div class="photo-texture"></div>
+      <div class="photo-placeholder-label">UGC photos<br>from neighbors</div>
+      <div class="photo-chip"><strong>11</strong> neighbor photos</div>
+    </div>
+
+    <div class="receipt-line">
+      Reported <strong>379 times</strong> since November 2021 &middot;
+      closed <strong class="alarm">370 times</strong> &middot;
+      <strong class="alarm">181</strong> closures said "nothing found." 21 separate episodes.
+    </div>
+
+    <details class="receipts">
+      <summary><span class="arr">&#9658;</span> Full record</summary>
+      <div class="receipt-table">
+        <div class="receipt-row"><span class="rk">Total 311 reports</span><span class="rv">379</span></div>
+        <div class="receipt-row"><span class="rk">City closures</span><span class="rv alarm">370</span></div>
+        <div class="receipt-row"><span class="rk">"Nothing found" closures</span><span class="rv alarm">181</span></div>
+        <div class="receipt-row"><span class="rk">Returned after closing</span><span class="rv alarm">236</span></div>
+        <div class="receipt-row"><span class="rk">Flare-up episodes</span><span class="rv">21</span></div>
+        <div class="receipt-row"><span class="rk">First recorded</span><span class="rv">Nov 29, 2021</span></div>
+        <div class="receipt-row"><span class="rk">Pattern</span><span class="rv">Ongoing</span></div>
+      </div>
+    </details>
+
+    <div class="stop-action">
+      <a class="btn-primary" href="#">See the full receipt</a>
+    </div>
+  </section>
+
+  <!-- ── STOP 8: 355 E 23rd ── -->
+  <section class="stop" id="stop-8">
+    <div class="stop-dist">355 E 23rd St &middot; 303m from you</div>
+    <div class="stop-addr">Sidewalk condition &middot; 5 years on record</div>
+    <div class="day-counter">DAY<br>8</div>
+    <div class="day-label">reported again <strong>June 25, 2026</strong></div>
+
+    <div class="photo-area">
+      <div class="photo-texture"></div>
+      <div class="photo-placeholder-label">UGC photos<br>from neighbors</div>
+      <div class="photo-chip"><strong>6</strong> neighbor photos</div>
+    </div>
+
+    <div class="receipt-line">
+      Reported <strong>92 times</strong> since July 2021 &middot;
+      closed <strong class="alarm">77 times</strong> &middot;
+      returned <strong class="alarm">71 times</strong> after closing. 19 episodes.
+    </div>
+
+    <details class="receipts">
+      <summary><span class="arr">&#9658;</span> Full record</summary>
+      <div class="receipt-table">
+        <div class="receipt-row"><span class="rk">Total 311 reports</span><span class="rv">92</span></div>
+        <div class="receipt-row"><span class="rk">City closures</span><span class="rv alarm">77</span></div>
+        <div class="receipt-row"><span class="rk">"Nothing found" closures</span><span class="rv alarm">33</span></div>
+        <div class="receipt-row"><span class="rk">Returned after closing</span><span class="rv alarm">71</span></div>
+        <div class="receipt-row"><span class="rk">Episodes</span><span class="rv">19</span></div>
+        <div class="receipt-row"><span class="rk">First recorded</span><span class="rv">Jul 26, 2021</span></div>
+      </div>
+    </details>
+
+    <div class="stop-action">
+      <a class="btn-primary" href="#">See the full receipt</a>
+    </div>
+  </section>
+
+  <!-- ── ACCOUNTABILITY TURN ── -->
+  <section class="accountability" id="accountability">
+    <div class="section-label">The public ledger</div>
+
+    <p style="font-size:17px;line-height:1.5;margin-bottom:20px;font-weight:600;">
+      You have walked past 8 of 79 open problems on this stretch.
+      The city has been told about all of them.
+      Here is who is responsible for what happened next.
+    </p>
+
+    <div class="official-block">
+      <div class="official-name">Harvey Epstein</div>
+      <div class="official-role">NYC Council Member, District 2 &middot; Manhattan</div>
+      <div class="official-contact">
+        <a href="tel:2126771077">(212) 677-1077</a>
+        <a href="mailto:District2@council.nyc.gov">District2@council.nyc.gov</a>
+      </div>
+
+      <div class="verdict">
+        The city's own 311 record shows <strong>hundreds of reports</strong> for conditions on this
+        stretch, including 169 closures on the canary issue alone. Of those closures,
+        <strong>44 stated "nothing found."</strong> The conditions are still here.
+        Responding agency: NYPD and DHS. Council Member Epstein represents this block.
+      </div>
+
+      <div class="status-pill pending">
+        <span class="dot"></span>
+        Contacted: not yet &middot; on the public record
+      </div>
+    </div>
+
+    <div class="cta-block">
+      <a class="btn-primary"
+         href="mailto:District2@council.nyc.gov?subject=%5BConstituent%20Request%5D%20Persistent%20conditions%20on%20E%2020th%20St%20corridor&body=Dear%20Council%20Member%20Epstein%2C%0A%0AI%20am%20a%20constituent%20writing%20about%20persistent%20conditions%20near%20E%2020th%20St%20and%202nd%20Ave%20that%20have%20been%20reported%20to%20311%20hundreds%20of%20times%20without%20durable%20resolution.%0A%0AThe%20public%20record%20is%20at%3A%20https%3A%2F%2Funignorable.polyfeeds.dev%2Fc%3Ft%3DEncampment%26id%3D40.736%2C-73.983%0A%0APlease%20respond%20with%20the%20steps%20your%20office%20is%20taking.%0A%0A%5BYour%20name%5D%0A%5BYour%20address%5D">
+        Email the council member
+      </a>
+      <a class="btn-secondary" href="/c?t=Encampment&id=40.736,-73.983">See canary receipt</a>
+    </div>
+  </section>
+
+  <!-- ── FUTURE ACTIONS ── -->
+  <section class="future-shelf" id="future">
+    <div class="shelf-title">Pressure tools &middot; coming</div>
+
+    <div class="shelf-row">
+      <div class="shelf-icon">&#128203;</div>
+      <div class="shelf-meta">
+        <div class="shelf-name">File to 311 for you</div>
+        <div class="shelf-desc">Pre-filled 311 report with city's own data. One tap.</div>
+      </div>
+      <div class="shelf-badge">Soon</div>
+    </div>
+
+    <div class="shelf-row">
+      <div class="shelf-icon">&#127775;</div>
+      <div class="shelf-meta">
+        <div class="shelf-name">Fund a challenger</div>
+        <div class="shelf-desc">Donate to a candidate running against the incumbent on this record.</div>
+      </div>
+      <div class="shelf-badge">Planned</div>
+    </div>
+
+    <div class="shelf-row">
+      <div class="shelf-icon">&#128249;</div>
+      <div class="shelf-meta">
+        <div class="shelf-name">Watch kit</div>
+        <div class="shelf-desc">Get notified when this block's status changes.</div>
+      </div>
+      <div class="shelf-badge">Planned</div>
+    </div>
+
+    <div class="shelf-row">
+      <div class="shelf-icon">&#128214;</div>
+      <div class="shelf-meta">
+        <div class="shelf-name">Documentation kit</div>
+        <div class="shelf-desc">Download photos, timestamps, and receipts for each stop on this walk.</div>
+      </div>
+      <div class="shelf-badge">Planned</div>
+    </div>
+  </section>
+
+  <!-- ── DATA STAMP ── -->
+  <div class="data-stamp">
+    Built from <a href="https://data.cityofnewyork.us/Social-Services/311-Service-Requests-from-2010-to-Present/erm2-nwe9" target="_blank" rel="noopener">NYC 311 open data (erm2-nwe9)</a>, current through July 1, 2026.
+    79 of 161 issues within 500m of E 20th St &amp; 2nd Ave are currently active.
+    Day counts reflect the current unbroken episode, not the multi-year total.
+    Location coordinates round to approximately one city block.
+    This page documents a government's response record. It does not identify any individual.
+    The city's failure to act is the subject; the city's data is the evidence.
+  </div>
+
+</div>
+<!-- /walk -->
+
+<!-- tally footer bar -->
+<div class="tally-bar" id="tally-bar">
+  <div class="tally-count">
+    you have passed <strong id="tally-num">1</strong> of <strong>79</strong> open problems
+  </div>
+  <a class="map-icon" href="#" title="View map" aria-label="View map">&#128205;</a>
+  <div class="tally-official">
+    District 2<br>
+    <a href="mailto:District2@council.nyc.gov">Harvey Epstein &middot; contact</a>
+  </div>
+</div>
+
+<script>
+(function () {
+  var stops = document.querySelectorAll('.stop');
+  var tallyNum = document.getElementById('tally-num');
+  var seen = 0;
+
+  function update() {
+    var newSeen = 0;
+    var midY = window.scrollY + window.innerHeight * 0.6;
+    stops.forEach(function (el) {
+      if (el.offsetTop < midY) newSeen++;
+    });
+    if (newSeen !== seen) {
+      seen = newSeen;
+      tallyNum.textContent = Math.max(1, seen);
+    }
+  }
+
+  window.addEventListener('scroll', update, { passive: true });
+  update();
+})();
+</script>
+
+</body>
+</html>
