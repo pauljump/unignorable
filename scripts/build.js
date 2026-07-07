@@ -41,6 +41,9 @@ const issues = db.prepare(`
               THEN 1 ELSE 0 END) AS returned_n,
          round(avg(CASE WHEN closed_date IS NOT NULL AND next_created IS NOT NULL AND next_created > closed_date
               THEN julianday(next_created) - julianday(closed_date) END), 1) AS avg_return_days,
+         sum(CASE WHEN closed_date IS NOT NULL AND created_date IS NOT NULL
+              AND julianday(closed_date) < julianday(created_date)
+              THEN 1 ELSE 0 END) AS impossible_closures,
          max(incident_address) AS addr, max(council_district) AS council,
          max(community_board) AS board, max(borough) AS borough
   FROM base GROUP BY type, id HAVING n >= 5 ORDER BY n DESC
@@ -154,11 +157,26 @@ function scoreFor(r) {
   return Math.round(s * 10) / 10;
 }
 
+// Phantom-closure score (0–100): how much this Issue's closure record looks like paper, not fixing.
+// Blends three attributed signals — impossible closures (closed before the report existed),
+// nothing-found rate, and revolving-door speed. Deterministic; cites only literal counts.
+function phantomScore(r) {
+  const cn = num(r.closed_n), nf = num(r.nothing_found), rn = num(r.returned_n), imp = num(r.impossible_closures);
+  const ard = (r.avg_return_days != null && Number.isFinite(r.avg_return_days)) ? r.avg_return_days : 0;
+  // Any impossible closure is damning on its own; more of them (relative to closures) pushes toward 1.
+  const f_imp = imp > 0 ? Math.min(1, 0.6 + 0.4 * Math.min(1, (imp / Math.max(1, cn)) * 3)) : 0;
+  const f_nf  = cn === 0 ? 0 : Math.min(1, nf / cn);
+  const f_fast = (rn >= 5 && ard > 0) ? Math.max(0, Math.min(1, (21 - ard) / 21)) : 0;
+  return Math.round(100 * (0.40 * f_imp + 0.35 * f_nf + 0.25 * f_fast));
+}
+
 for (const r of issues) {
   const h = pickHeadline(r);
   r.headline = h.text;
   r.headline_kind = h.kind;
   r.score = scoreFor(r);
+  r.nothing_found_rate = num(r.closed_n) ? +(num(r.nothing_found) / num(r.closed_n)).toFixed(2) : 0;
+  r.phantom_closure_score = phantomScore(r);
 }
 // Sanity log: top citywide score + per-borough #1 spread (confirms the formula discriminates).
 {
@@ -169,6 +187,151 @@ for (const r of issues) {
     JSON.stringify(byB), '| headline kinds:',
     JSON.stringify(issues.reduce((a, r) => (a[r.headline_kind] = (a[r.headline_kind] || 0) + 1, a), {})));
 }
+
+// ---- DISPARITY ENGINE: how fast the city closes complaints, by council district ----
+// The accusation, built entirely from the city's OWN close timestamps + district field:
+// "the city closes your district's complaints N× slower than the fastest district."
+// No LLM, no characterization of intent — a defensible aggregate fact. Output → disparity.json.
+const round1 = v => v == null ? null : Math.round(v * 10) / 10;
+const DATA_MAX_DATE = iso(DATA_ORD);
+const MIN_DISTRICT_N = 150;   // ignore thin districts; a median off 12 closures isn't a claim
+const plainMedian = a => { if (!a.length) return null; const b = [...a].sort((x, y) => x - y); const m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2; };
+const NF_LIKE = "resolution_description LIKE '%no Encampment was found%' OR resolution_description LIKE '%observed no encampment%' OR resolution_description LIKE '%could not find%' OR resolution_description LIKE '%could not locate%' OR resolution_description LIKE '%did not observe%' OR resolution_description LIKE '%no one was%'";
+const closeRows = db.prepare(`
+  SELECT CAST(council_district AS TEXT) AS cd, borough, complaint_type AS type,
+         julianday(closed_date) - julianday(created_date) AS days,
+         CASE WHEN ${NF_LIKE} THEN 1 ELSE 0 END AS nf
+  FROM sr311
+  WHERE closed_date IS NOT NULL AND created_date IS NOT NULL
+    AND complaint_type IN ${TYPES}
+    AND julianday(closed_date) >= julianday(created_date)
+    AND council_district IS NOT NULL AND CAST(council_district AS INTEGER) > 0
+`).all();
+
+// Bucket close-times by district (overall + per type) and by borough.
+const D = new Map();   // cd -> { borough tally, days:[], nf, byType:Map(type->{days:[],nf}) }
+const B = new Map();   // borough -> { days:[], nf }
+const cityDays = [], cityByType = new Map();
+for (const row of closeRows) {
+  const cd = String(parseInt(row.cd, 10));
+  if (!D.has(cd)) D.set(cd, { boro: {}, days: [], nf: 0, byType: new Map() });
+  const d = D.get(cd);
+  d.days.push(row.days); d.nf += row.nf;
+  d.boro[row.borough] = (d.boro[row.borough] || 0) + 1;
+  if (!d.byType.has(row.type)) d.byType.set(row.type, { days: [], nf: 0 });
+  const dt = d.byType.get(row.type); dt.days.push(row.days); dt.nf += row.nf;
+  if (row.borough) { if (!B.has(row.borough)) B.set(row.borough, { days: [], nf: 0 }); const b = B.get(row.borough); b.days.push(row.days); b.nf += row.nf; }
+  cityDays.push(row.days);
+  if (!cityByType.has(row.type)) cityByType.set(row.type, []); cityByType.get(row.type).push(row.days);
+}
+
+// Close-TIME is kept as an honest secondary fact, but for these NYPD-handled types it's ~0 days
+// citywide (they're closed almost instantly, everywhere) — so it does NOT discriminate. The metric
+// that DOES vary by district, and is squarely on-thesis (closure ≠ resolution), is the DISMISSAL
+// RATE: the share of a district's closed complaints the city marked "nothing found / could not
+// locate." We rank on that. Computed per TYPE to control for complaint-mix (a legal-guardrail
+// requirement: never manufacture a false pattern from an apples-to-oranges aggregate).
+const cityMedian = plainMedian(cityDays);
+const cityNf = [...D.values()].reduce((s, d) => s + d.nf, 0);
+const cityN = cityDays.length;
+const cityDismiss = cityN ? cityNf / cityN : 0;
+const cityTypeDismiss = {}, cityTypeMedian = {};
+for (const [t, arr] of cityByType) cityTypeMedian[t] = plainMedian(arr);
+{
+  const tNf = {}, tN = {};
+  for (const d of D.values()) for (const [t, dt] of d.byType) { tNf[t] = (tNf[t] || 0) + dt.nf; tN[t] = (tN[t] || 0) + dt.days.length; }
+  for (const t of Object.keys(tN)) cityTypeDismiss[t] = tN[t] ? tNf[t] / tN[t] : 0;
+}
+
+// Came-back rate per district (a second honest axis): closures followed by a new report, from the
+// per-Issue returned_n/closed_n already computed. Aggregated over the district's clustered Issues.
+const cbByD = new Map();
+for (const r of issues) {
+  const cd = parseInt(r.council || '0', 10); if (!cd) continue;
+  const a = cbByD.get(cd) || { ret: 0, cl: 0 }; a.ret += num(r.returned_n); a.cl += num(r.closed_n); cbByD.set(cd, a);
+}
+const cbRate = cd => { const a = cbByD.get(cd); return a && a.cl ? +(a.ret / a.cl).toFixed(2) : null; };
+
+// Per-district rows (only districts with enough closures to make a claim).
+let districts = [...D.entries()].map(([cd, d]) => {
+  const boro = Object.entries(d.boro).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  const byType = {};
+  for (const [t, dt] of d.byType) byType[t] = { n: dt.days.length, dismissal_rate: dt.days.length ? +(dt.nf / dt.days.length).toFixed(3) : 0, median_close_days: round1(plainMedian(dt.days)) };
+  return { district: +cd, borough: boro, n: d.days.length,
+           dismissal_rate: d.days.length ? +(d.nf / d.days.length).toFixed(3) : 0,
+           came_back_rate: cbRate(+cd), median_close_days: round1(plainMedian(d.days)), byType };
+}).filter(x => x.n >= MIN_DISTRICT_N);
+
+// Rank by DISMISSAL RATE ascending: rank 1 = the district the city dismisses LEAST (best);
+// rank N = dismissed most (worst). Ratio compares the district to the citywide dismissal rate.
+districts.sort((a, b) => a.dismissal_rate - b.dismissal_rate);
+const totalD = districts.length;
+districts.forEach((x, i) => {
+  x.rank = i + 1; x.total = totalD;
+  x.ratio_vs_median = cityDismiss > 0 ? +(x.dismissal_rate / cityDismiss).toFixed(1) : null;
+});
+
+// Per-type district ranks (for the honest per-Issue badge: this block's type vs the same type citywide).
+const typeRank = {};   // type -> Map(district -> {rank,total,ratio,rate})
+for (const t of Object.keys(cityTypeDismiss)) {
+  const rows = districts.filter(x => x.byType[t] && x.byType[t].n >= 40)
+    .map(x => ({ district: x.district, rate: x.byType[t].dismissal_rate }))
+    .sort((a, b) => a.rate - b.rate);
+  const map = new Map();
+  const cr = cityTypeDismiss[t];
+  rows.forEach((r, i) => map.set(r.district, { rank: i + 1, total: rows.length, rate: r.rate, ratio_vs_median: cr > 0 ? +(r.rate / cr).toFixed(1) : null }));
+  typeRank[t] = map;
+}
+
+// Borough roll-up (the legible headline unit) — same dismissal-rate ranking.
+let boroughs = [...B.entries()].map(([boro, b]) => ({ borough: boro, n: b.days.length, dismissal_rate: b.days.length ? +(b.nf / b.days.length).toFixed(3) : 0, median_close_days: round1(plainMedian(b.days)) }));
+boroughs.sort((a, b) => a.dismissal_rate - b.dismissal_rate);
+boroughs.forEach((x, i) => { x.rank = i + 1; x.total = boroughs.length; x.ratio_vs_median = cityDismiss > 0 ? +(x.dismissal_rate / cityDismiss).toFixed(1) : null; });
+
+// Only types with a real "nothing found" resolution signal can carry a defensible dismissal claim.
+// Drug Activity / Panhandling resolutions don't use that language (~0% citywide), so a ratio there
+// would be noise dressed as a pattern — excluded (legal-guardrail: no false patterns).
+const VALID_TYPES = Object.keys(cityTypeDismiss).filter(t => cityTypeDismiss[t] >= 0.05);
+
+// Stamp each Issue with its district's disparity (rank + ratio, for the per-card badge).
+const districtByNum = new Map(districts.map(x => [x.district, x]));
+for (const r of issues) {
+  const cd = parseInt(r.council || '0', 10);
+  const dstat = districtByNum.get(cd);
+  const tr = typeRank[r.type] && typeRank[r.type].get(cd);
+  if (dstat && tr && VALID_TYPES.includes(r.type)) {
+    // rank_worst counts from the bad end (1 = most-dismissed) — the number the accusation cites.
+    r.disparity = { rank: tr.rank, total: tr.total, rank_worst: tr.total - tr.rank + 1,
+                    rate: tr.rate, ratio_vs_median: tr.ratio_vs_median,
+                    district_rank: dstat.rank, district_total: dstat.total };
+  }
+}
+
+// Precompute the per-type ranked district lists (worst = most-dismissed first) for the client view.
+const ranked = {};
+for (const t of VALID_TYPES) {
+  ranked[t] = districts.filter(x => x.byType[t] && x.byType[t].n >= 40)
+    .map(x => ({ district: x.district, borough: x.borough, n: x.byType[t].n,
+                 dismissal_rate: x.byType[t].dismissal_rate,
+                 ratio_vs_median: typeRank[t].get(x.district)?.ratio_vs_median ?? null }))
+    .sort((a, b) => b.dismissal_rate - a.dismissal_rate)
+    .map((x, i) => ({ ...x, rank_worst: i + 1 }));
+  ranked[t].forEach(x => x.total = ranked[t].length);
+}
+
+const disparity = {
+  generated: DATA_MAX_DATE,
+  scope: 'quality-of-life 311 (Encampment, Homeless Person Assistance, Drug Activity, Panhandling)',
+  metric: 'dismissal rate — share of a district’s closed complaints the city marked "nothing found / could not locate"',
+  note_close_time: 'these complaint types are closed almost instantly citywide (~0 days), so close-TIME does not discriminate; median_close_days is reported for honesty, dismissal_rate is the ranked metric',
+  valid_types: VALID_TYPES,
+  citywide: { dismissal_rate: +cityDismiss.toFixed(3), median_close_days: round1(cityMedian), n: cityN,
+              by_type: Object.fromEntries(Object.keys(cityTypeDismiss).map(t => [t, { dismissal_rate: +cityTypeDismiss[t].toFixed(3), median_close_days: round1(cityTypeMedian[t]) }])) },
+  ranked, districts, boroughs,
+};
+const worst = districts.length ? districts[totalD - 1] : null;
+console.log('disparity: districts', districts.length, '| city dismissal', (cityDismiss * 100).toFixed(0) + '% |',
+  worst ? `most-dismissed = D${worst.district} (${worst.borough}) @ ${(worst.dismissal_rate * 100).toFixed(0)}% = ${worst.ratio_vs_median}× the citywide rate` : 'n/a');
 
 const dist = {};
 for (const r of issues) dist[r.pattern] = (dist[r.pattern] || 0) + 1;
@@ -186,7 +349,8 @@ function atomicWrite(file, obj) {
 }
 atomicWrite(path.join(dataDir, 'issues.json'), issues);
 atomicWrite(path.join(dataDir, 'trends.json'), trends);
-console.log(`built ${issues.length} issues + ${trends.length} trend rows (atomic)`);
+atomicWrite(path.join(dataDir, 'disparity.json'), disparity);
+console.log(`built ${issues.length} issues + ${trends.length} trend rows + ${disparity.districts.length} districts (atomic)`);
 
 // ---- Win-condition pass for active campaigns ----
 // Wrapped in try/catch: if ugc.db/campaigns table is absent, the daily refresh must NOT crash.

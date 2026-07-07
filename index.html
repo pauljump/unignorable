@@ -23,15 +23,46 @@
   .views{display:flex;gap:3px;background:#0b111c;border:1px solid var(--line);border-radius:999px;padding:3px;flex:none}
   .vbtn{font-size:12.5px;padding:5px 14px;border-radius:999px;color:var(--dim);cursor:pointer;user-select:none}
   .vbtn.on{background:#1a2535;color:var(--ink)}
-  #trends{position:absolute;inset:0;background:var(--bg);overflow:auto;display:none;z-index:800}
-  #trends.show{display:block}
+  #trends,#disparity{position:absolute;inset:0;background:var(--bg);overflow:auto;display:none;z-index:800}
+  #trends.show,#disparity.show{display:block}
   .tpad{padding:22px 20px 44px;max-width:920px;margin:0 auto}
-  #trends h2{font-size:19px;font-weight:800;margin:0 0 4px;letter-spacing:-.3px}
+  #trends h2,#disparity h2{font-size:19px;font-weight:800;margin:0 0 4px;letter-spacing:-.3px}
   .tsub{font-size:13px;color:var(--dim);margin:0 0 18px}
   #chart{background:#0a0f18;border:1px solid var(--line);border-radius:12px;padding:8px}
   .tlegend{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;font-size:12.5px;color:var(--dim)}
   .tlegend span{display:flex;align-items:center;gap:6px}
   .tlegend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+  /* Disparity engine view */
+  .dhead{background:#0a0f18;border:1px solid var(--line);border-radius:12px;padding:16px 16px 14px;margin-bottom:16px}
+  .dbig{font-size:15px;line-height:1.5;font-weight:600}
+  .dbig b{color:var(--red);font-weight:800}
+  .dtypes{display:flex;gap:8px;margin:14px 0 6px;flex-wrap:wrap}
+  .dtype{font-size:12px;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:#0b111c;color:var(--dim);cursor:pointer;user-select:none}
+  .dtype.on{color:var(--ink);border-color:#3a4d6b;background:#141f30}
+  .dcap{font-size:12px;color:var(--dim);margin:2px 0 14px}
+  .drow{display:grid;grid-template-columns:150px 1fr 62px;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid #101827}
+  .drow .dl{font-size:12.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .drow .dl span{color:var(--dim);font-size:11px}
+  .dbar{height:16px;border-radius:4px;background:linear-gradient(90deg,#3a1116,#e0525f);min-width:2px}
+  .drow.best .dbar{background:linear-gradient(90deg,#12261a,#3fae6b)}
+  .drow .dv{font-size:12.5px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+  .drow.me{background:#12203a;border-radius:6px}
+  .drow.me .dl{font-weight:800}
+  /* The Inaction Clock (per-issue card) */
+  .clock{background:linear-gradient(180deg,#160c0e,#0c0a10);border:1px solid #3a1c22;border-radius:12px;padding:14px 15px;margin:12px 0}
+  .clock-top{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
+  .clock-days{font-size:34px;font-weight:800;letter-spacing:-1px;color:#ff6b76;line-height:1;font-variant-numeric:tabular-nums}
+  .clock-unit{font-size:12.5px;color:#e2a7ac;font-weight:600}
+  .clock-tick{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;color:#ffb3ba;margin-top:6px;letter-spacing:.5px}
+  .clock-tick span{font-family:inherit;font-size:11px;color:#8a6a6e;letter-spacing:0}
+  .clock-sub{font-size:12px;color:var(--dim);margin-top:8px;line-height:1.45}
+  .clock-flag{font-size:12px;color:#ffd27a;margin-top:8px;background:#241a08;border:1px solid #453410;border-radius:7px;padding:7px 9px;line-height:1.45}
+  .disp-badge{font-size:12.5px;line-height:1.5;color:var(--ink);background:#0c1420;border:1px solid #24405f;border-radius:10px;padding:11px 13px;margin:12px 0 4px;cursor:pointer}
+  .disp-badge b{font-weight:800}
+  .disp-badge.bad{background:#170d10;border-color:#5a2530}
+  .disp-badge.bad b{color:#ff6b76}
+  .disp-badge.ok{background:#0b1510;border-color:#1f4a34}
+  .disp-badge:active{opacity:.7}
   .brand{display:flex;align-items:baseline;gap:10px}
   .brand h1{margin:0;font-size:18px;font-weight:800;letter-spacing:-.5px}
   .brand h1 b{color:var(--red)}
@@ -324,6 +355,7 @@
       <div class="views" id="views">
         <span class="vbtn on" data-v="map">Map</span>
         <span class="vbtn" data-v="trends">Trends</span>
+        <span class="vbtn" data-v="disparity">Disparity</span>
       </div>
     </div>
     <div class="strip">
@@ -357,6 +389,14 @@
       <p class="tsub">Monthly 311 reports by type, 2021–2026 — the question sidewalk was built to answer, now living here.</p>
       <div id="chart"></div>
       <div class="tlegend" id="t-legend"></div>
+    </div></section>
+    <section id="disparity"><div class="tpad">
+      <h2>Whose block does the city write off?</h2>
+      <p class="tsub">Same complaint, 51 council districts. The share the city closes as <b>“nothing found”</b> — from its own resolution notes. It closes them in hours everywhere; the gap is whether it finds anything when it gets there.</p>
+      <div class="dhead" id="d-head"></div>
+      <div class="dtypes" id="d-types"></div>
+      <div class="dcap" id="d-cap"></div>
+      <div id="d-bars"></div>
     </div></section>
     <aside id="card"><span class="x" onclick="closeCard()">×</span><div class="card-pad" id="cardBody"></div></aside>
   </main>
@@ -630,12 +670,20 @@ function openCard(i){
     <div class="spark" id="spark"></div>
     <div class="predict">${predictLine(i)}</div>
 
+    ${i.status==='active'?`<div class="clock" id="clock" data-first="${i.first_seen}">
+      <div class="clock-top"><span class="clock-days" id="clkD">—</span><span class="clock-unit">days the city hasn't fixed this</span></div>
+      <div class="clock-tick" id="clkT">—</div>
+      <div class="clock-sub">First reported ${i.first_seen}. Closed <b>${fmt(i.closed_n)}×</b> since — every closure is a tick on the clock, not a stop.</div>
+      ${i.impossible_closures>0?`<div class="clock-flag">⚠ ${fmt(i.impossible_closures)} ${i.impossible_closures==1?'closure was':'closures were'} timestamped <b>before</b> the report was even filed.</div>`:''}
+    </div>`:''}
+
     <div class="sect city">
       <div class="sect-h">🏛 The city’s story</div>
       <div class="cityline">Reported <b>${fmt(i.n)}×</b> since ${i.first_seen}. Marked
         <b>“resolved” ${fmt(i.closed_n)}×</b>. It came back <b>${fmt(i.returned_n)}×</b>${rdTxt?` — ${rdTxt} after they closed it`:''}.</div>
       <div class="cite">their numbers, not the truth ↓</div>
     </div>
+    ${i.disparity?`<div class="disp-badge ${dispCls(i.disparity)}" onclick="openDisparity('${i.type.replace(/'/g,"\\'")}')">${dispBadgeText(i)}</div>`:''}
 
     <div class="sect truth">
       <div class="sect-h">What’s actually there</div>
@@ -665,8 +713,38 @@ function openCard(i){
   document.getElementById('card').classList.add('open');
   loadSparkline(i);
   loadThread();
+  startClock();
 }
-function closeCard(){ document.getElementById('card').classList.remove('open'); }
+function closeCard(){ document.getElementById('card').classList.remove('open'); if(clockTimer){clearInterval(clockTimer);clockTimer=null;} }
+
+// The Inaction Clock — elapsed time since the FIRST report, ticking every second. A city "closed"
+// is a tick mark on it, never a stop. Days is the accusation; the live HH:MM:SS is the drama.
+let clockTimer=null;
+function startClock(){
+  if(clockTimer){ clearInterval(clockTimer); clockTimer=null; }
+  const el=document.getElementById('clock'); if(!el) return;
+  const first=Date.parse((el.dataset.first||'')+'T00:00:00'); if(isNaN(first)) return;
+  const tick=()=>{
+    const dEl=document.getElementById('clkD'), tEl=document.getElementById('clkT');
+    if(!dEl||!tEl){ clearInterval(clockTimer); clockTimer=null; return; }
+    const totalS=Math.floor((Date.now()-first)/1000); if(totalS<0) return;
+    const days=Math.floor(totalS/86400), h=Math.floor(totalS%86400/3600), m=Math.floor(totalS%3600/60), s=totalS%60;
+    const p=n=>String(n).padStart(2,'0');
+    dEl.textContent=days.toLocaleString('en-US');
+    tEl.innerHTML=`${p(h)}:${p(m)}:${p(s)} <span>and counting</span>`;
+  };
+  tick(); clockTimer=setInterval(tick,1000);
+}
+
+// Disparity badge on the card — always honest about direction (this district can be better OR worse).
+function dispCls(d){ return d.ratio_vs_median>=1.15?'bad':(d.ratio_vs_median<=0.85?'ok':''); }
+function dispBadgeText(i){
+  const d=i.disparity, r=d.ratio_vs_median, tl=((TYPES[i.type]||{}).label||i.type).toLowerCase();
+  if(r>=1.15) return `⚖ The city writes off ${tl} complaints in this district <b>${r}× the citywide rate</b> — #${d.rank_worst} of ${d.total} districts. See the gap →`;
+  if(r<=0.85) return `⚖ This district's ${tl} complaints are written off <b>less</b> than most (${Math.round(d.rate*100)}% vs ${Math.round(d.rate/r*100)}% citywide). See the gap →`;
+  return `⚖ About the citywide rate for ${tl} dismissals here (#${d.rank_worst} of ${d.total}). See the gap →`;
+}
+function openDisparity(t){ dispType=t; const b=document.querySelector('.vbtn[data-v="disparity"]'); if(b) b.click(); }
 
 function toggleForm(){
   const f = document.getElementById('pform'); f.hidden = !f.hidden;
@@ -791,18 +869,62 @@ function buildChips(){
   });
 }
 
-// View toggle: Map ↔ Trends (the absorbed sidewalk lens)
+// View toggle: Map ↔ Trends (absorbed sidewalk lens) ↔ Disparity (the district gap)
 document.getElementById('views').addEventListener('click', e=>{
   const b = e.target.closest('.vbtn'); if(!b) return;
   document.querySelectorAll('.vbtn').forEach(x=>x.classList.toggle('on', x===b));
-  const v = b.dataset.v, isTrends = v==='trends';
-  document.getElementById('trends').classList.toggle('show', isTrends);
-  document.getElementById('chips').style.display = isTrends?'none':'';
-  document.getElementById('hint').style.display = isTrends?'none':'';
-  document.getElementById('findbar').classList.toggle('hide', isTrends);
-  if(window.pulse) window.pulse(isTrends?'view_trends':'view_map');
-  if(isTrends) renderTrends();
+  const v = b.dataset.v, isMap = v==='map';
+  document.getElementById('trends').classList.toggle('show', v==='trends');
+  document.getElementById('disparity').classList.toggle('show', v==='disparity');
+  document.getElementById('chips').style.display = isMap?'':'none';
+  document.getElementById('hint').style.display = isMap?'':'none';
+  document.getElementById('findbar').classList.toggle('hide', !isMap);
+  if(window.pulse) window.pulse('view_'+v);
+  if(v==='trends') renderTrends();
+  if(v==='disparity') renderDisparity();
 });
+
+// --- Disparity view: per-district "nothing found" rate for one complaint type, worst-first ---
+let dispData=null, dispType=null;
+async function renderDisparity(){
+  if(!dispData){
+    try{ dispData = await (await fetch('/api/disparity')).json(); }catch{ dispData={}; }
+  }
+  const vt = dispData.valid_types||[];
+  if(!vt.length){ document.getElementById('d-head').innerHTML='<div class="dbig">Disparity data is rebuilding — check back shortly.</div>'; return; }
+  if(!dispType) dispType = vt.includes('Encampment')?'Encampment':vt[0];
+  // type toggle chips
+  document.getElementById('d-types').innerHTML = vt.map(t=>
+    `<span class="dtype ${t===dispType?'on':''}" data-t="${t}">${(TYPES[t]||{}).label||t}</span>`).join('');
+  document.querySelectorAll('.dtype').forEach(el=> el.onclick=()=>{ dispType=el.dataset.t; drawDisparity(); });
+  drawDisparity();
+}
+function drawDisparity(){
+  const rows = (dispData.ranked||{})[dispType]||[];
+  const cw = ((dispData.citywide||{}).by_type||{})[dispType]||{};
+  const cwPct = Math.round((cw.dismissal_rate||0)*100);
+  const worst = rows[0], best = rows[rows.length-1];
+  const label = ((TYPES[dispType]||{}).label||dispType);
+  // headline accusation, pure city data
+  document.getElementById('d-head').innerHTML = worst&&best ? `
+    <div class="dbig">For <b>${label.toLowerCase()}</b> complaints, the city closes <b>${Math.round(worst.dismissal_rate*100)}%</b> as
+    “nothing found” in <b>District ${worst.district}</b> (${cap(worst.borough)}) — but only
+    <b>${Math.round(best.dismissal_rate*100)}%</b> in District ${best.district} (${cap(best.borough)}).
+    That's <b>${(worst.dismissal_rate/(best.dismissal_rate||1)).toFixed(1)}×</b> more of your neighbors' reports
+    written off, same complaint.</div>` : '';
+  document.getElementById('d-cap').textContent =
+    `Citywide, ${cwPct}% of ${label.toLowerCase()} complaints are closed “nothing found.” ${rows.length} districts with enough reports to rank · NYC 311 open data, ${dispData.generated}.`;
+  const max = Math.max(...rows.map(r=>r.dismissal_rate), 0.01);
+  document.getElementById('d-bars').innerHTML = rows.map(r=>{
+    const pct = Math.round(r.dismissal_rate*100);
+    const isBest = r===best;
+    return `<div class="drow ${isBest?'best':''}">
+      <div class="dl">#${r.rank_worst} · District ${r.district} <span>${cap(r.borough)} · ${fmt(r.n)}</span></div>
+      <div class="dbar" style="width:${Math.max(2,(r.dismissal_rate/max)*100)}%"></div>
+      <div class="dv">${pct}%</div></div>`;
+  }).join('');
+}
+function cap(s){ return s? s.charAt(0)+s.slice(1).toLowerCase() : ''; }
 
 let trendsDone=false;
 async function renderTrends(){

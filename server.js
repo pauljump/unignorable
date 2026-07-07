@@ -40,6 +40,10 @@ const DIR = __dirname;
 const PORT = process.env.PORT || 8000;
 const ISSUES = JSON.parse(fs.readFileSync(path.join(DIR, 'data', 'issues.json'), 'utf8'));
 const TRENDS = fs.readFileSync(path.join(DIR, 'data', 'trends.json'));
+// Disparity engine output (the city's own dismissal-rate gap between districts). Degrades to empty
+// if the build hasn't produced it yet — the /api/disparity route returns {} and the view hides.
+let DISPARITY = Buffer.from('{}');
+try { DISPARITY = fs.readFileSync(path.join(DIR, 'data', 'disparity.json')); } catch {}
 
 // Accountable-officials roster (council district -> member + contact + X handle, Mayor's CAU).
 // Optional: the receipt page degrades to "district N + look-up link" if the file isn't present yet.
@@ -897,6 +901,10 @@ const server = http.createServer(async (req, res) => {
 
   if (u.pathname === '/api/trends') {
     return sendMaybeGzip(req, res, TRENDS, 'application/json');
+  }
+
+  if (u.pathname === '/api/disparity') {
+    return sendMaybeGzip(req, res, DISPARITY, 'application/json');
   }
 
   // Address geocode — server-side proxy to OpenStreetMap Nominatim so the UA + referer policy and
