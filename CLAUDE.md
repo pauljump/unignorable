@@ -50,6 +50,15 @@ pm2 restart unignorable        # after editing server.js / index.html / issues.j
 
 **Status:** LIVE skeleton (2026-06-18) at https://unignorable.polyfeeds.dev — pm2 `unignorable` :8000, pm2 save'd.
 
+**Shipped 2026-07-12 — AREA (ZONE) SHARE — the sharable bundle of many bubbles under one permalink (Phase 1 of 2) — LIVE:**
+- **Why:** every map bubble is one ~1-block cell with its own `/c` permalink + share counter, but a real-world story (e.g. the NY Post "12-block encampment near the Intrepid") is a *zone*. The app knew cells, not zones. This adds the zone object.
+- **`/a/<id>` = a frozen bundle of issue-cells under one URL.** Server-rendered like `/c` (rich OG unfurl on X), reuses `councilFor`/officials/narrative/`titleCase`. Shows: aggregate hero (spots count + "every one still active"), an inline Leaflet mini-map of just that zone, a 6-stat grid (reports / closed / nothing-found / came-back / distinct spots / flare-ups), a type breakdown, the **ranked member spots each deep-linking back to its own `/c`**, the council members whose districts the zone spans, and **"shared N times · viewed M times."**
+- **Mint-on-share:** map has a **"Share this area"** button (bottom-right). It reads `map.getBounds()` + the active type chips → `POST /api/area` → mints a row in `ugc.db` `areas` (bbox + frozen member_keys + stats snapshot) → returns a short `/a/<id>`. A bottom-sheet shows the zone stats + **Post to X** (auto-headline) + **Copy link**. Framing = pan/pinch the map (mobile-correct; drag-to-draw fights pan). Members frozen at mint (the "these instances" set); stats recomputed live at render.
+- **Dedup by fingerprint** (rounded bbox + sorted types) so re-sharing the same zone reuses the same row → `share_count` stays meaningful. **Guards:** empty-area → 400 "no issues in this area"; `AREA_MAX_MEMBERS=400` cap (keeps worst-scoring if over — a zone is a cluster, not the whole city); active-only unless `resolved` flag; `/api/area` rate-limited on the shared 12/5min budget; bad `/a/<id>` → 404.
+- **`ugc.js`:** new `areas` table + `createArea`/`getArea`/`bumpAreaShare`/`bumpAreaView` (mirrors the campaigns/actions pattern; CREATE TABLE IF NOT EXISTS = idempotent migration on the live db). Pulse events `area_share_open`/`area_share_send`.
+- **All additive** — no existing route/render changed. Staged in `/tmp/unig-area`, verified (mint→render→dedup→share/view counters→guards→404 + inline-JS syntax extract), landed 3 code files (data/ untouched), `pm2 restart`, verified live through the tunnel (`/map` + `/a/<id>` both 200). Ready-made Intrepid zone: `/a/ed8a41f133` (23 encampment spots, 2,526 reports, closed 2,472×).
+- **Phase 2 (NOT built, Paul chose "both"):** auto-detected named hotspot zones with permanent pretty slugs (`/a/intrepid`) computed daily in `build.js`. Also deferred: desktop drag-a-box selection; an OG *image* (currently `summary` card, text-only unfurl). **Awaiting Paul's on-device QA.**
+
 **Shipped 2026-06-18:**
 - Clustered Issue map + Issue card + "I see this often" (POST /api/seen)
 - Pulse analytics wired + verified (page_view/dwell + custom `see_often`/`issue_open`); property `unignorable`

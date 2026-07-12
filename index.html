@@ -163,6 +163,27 @@
   .leaflet-popup-content-wrapper{background:#0e1420;color:var(--ink);border:1px solid var(--line)}
   .leaflet-popup-tip{background:#0e1420}
 
+  /* ---------- Share this area: frame a cluster on the map, mint one permalink ---------- */
+  .sharearea{position:absolute;right:12px;bottom:12px;z-index:640;display:flex;align-items:center;gap:7px;
+    font-size:12.5px;font-weight:800;color:#1a1204;background:var(--amber);border:none;border-radius:999px;
+    padding:10px 15px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.45)}
+  .sharearea svg{width:15px;height:15px}
+  .sheetback{position:fixed;inset:0;z-index:1600;background:rgba(4,7,12,.72);display:none;align-items:flex-end;justify-content:center}
+  .sheetback.on{display:flex}
+  .sheet{background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 0 0;width:100%;max-width:560px;
+    padding:20px 18px calc(22px + env(safe-area-inset-bottom));box-shadow:0 -10px 40px rgba(0,0,0,.5)}
+  @media(min-width:600px){.sheetback{align-items:center}.sheet{border-radius:16px}}
+  .sheet h3{margin:0 0 4px;font-size:18px;font-weight:800;color:var(--ink)}
+  .sheet .ssub{margin:0 0 14px;font-size:13px;color:var(--dim);line-height:1.45}
+  .sheet .sbig{color:var(--red);font-weight:800}
+  .sheet .srow{display:flex;gap:9px;margin-top:6px}
+  .sheet .sbtn{flex:1;text-align:center;padding:12px;border-radius:11px;font-weight:800;font-size:14px;text-decoration:none;cursor:pointer;border:none}
+  .sheet .sbtn.x{background:var(--red);color:#fff}
+  .sheet .sbtn.copy{background:var(--amber);color:#1a1204}
+  .sheet .sbtn.ghost{background:transparent;border:1px solid var(--line);color:var(--dim);flex:none;padding:12px 16px}
+  .sheet .slink{margin-top:12px;font-size:12px;color:var(--dim);word-break:break-all;background:#0a0f18;border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+  .sheet .serr{color:#ff8b7a;font-size:13px;margin-top:8px}
+
   /* damning headline on the card — the precomputed most-damning fact, the moat made literal */
   .damning{margin:14px 0 2px;font-size:17px;font-weight:800;line-height:1.35;letter-spacing:-.3px;color:#ffb3a8}
   .damning .sc{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.4px;color:var(--amber);
@@ -384,6 +405,25 @@
       </button>
     </div>
     <div class="hint" id="hint">Bigger dot = reported more. Tap one.</div>
+    <button class="sharearea" id="shareAreaBtn" onclick="shareArea()" title="Share every spot in this view as one link">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
+      Share this area
+    </button>
+    <div class="sheetback" id="sheetBack" onclick="if(event.target===this)closeSheet()">
+      <div class="sheet" id="sheet">
+        <h3 id="sheetTitle">Share this area</h3>
+        <div class="ssub" id="sheetSub">Framing the spots in view…</div>
+        <div id="sheetBody" hidden>
+          <div class="srow">
+            <a class="sbtn x" id="sheetX" href="#" target="_blank" rel="noopener" onclick="sheetShared()">Post to X</a>
+            <button class="sbtn copy" id="sheetCopy" onclick="sheetShared();sheetCopy()">Copy link</button>
+            <button class="sbtn ghost" onclick="closeSheet()">Close</button>
+          </div>
+          <div class="slink" id="sheetLink"></div>
+        </div>
+        <div class="serr" id="sheetErr" hidden></div>
+      </div>
+    </div>
     <section id="trends"><div class="tpad">
       <h2 id="t-head">Is it getting worse?</h2>
       <p class="tsub">Monthly 311 reports by type, 2021–2026 — the question sidewalk was built to answer, now living here.</p>
@@ -583,6 +623,47 @@ function toggleHistory(){
   el.textContent = showResolved ? '− hide resolved' : '＋ show resolved (history)';
   if(window.pulse) window.pulse(showResolved?'show_resolved':'hide_resolved');
   draw();
+}
+
+// --- Share this area: frame the spots in view, mint one permalink (/a/<id>) ---
+let sheetState = { url:null, tweet:null, id:null };
+function shareArea(){
+  const back=document.getElementById('sheetBack');
+  document.getElementById('sheetBody').hidden=true;
+  document.getElementById('sheetErr').hidden=true;
+  document.getElementById('sheetTitle').textContent='Share this area';
+  document.getElementById('sheetSub').textContent='Framing the spots in view…';
+  back.classList.add('on');
+  const b=map.getBounds();
+  const bbox={s:b.getSouth(),w:b.getWest(),n:b.getNorth(),e:b.getEast()};
+  fetch('/api/area',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({bbox:bbox,types:Array.from(active),resolved:showResolved})})
+   .then(r=>r.json())
+   .then(d=>{
+     if(!d.ok){ sheetErr(d.error==='no issues in this area'
+       ? 'No active spots in view. Pan or zoom to a cluster, then try again.'
+       : 'Could not build this area. Try again.'); return; }
+     sheetState={url:d.url,tweet:d.tweet,id:d.id};
+     const st=d.stats||{};
+     document.getElementById('sheetTitle').textContent=d.title||'This area';
+     document.getElementById('sheetSub').innerHTML='<span class="sbig">'+fmt(st.spots||0)+'</span> spot'+(st.spots===1?'':'s')
+       +' · <span class="sbig">'+fmt(st.n||0)+'</span> reports · closed '+fmt(st.closed||0)+'×'
+       +(st.activeSpots?' · '+fmt(st.activeSpots)+' still active':'');
+     document.getElementById('sheetX').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(d.tweet||'');
+     document.getElementById('sheetLink').textContent=d.url;
+     document.getElementById('sheetBody').hidden=false;
+     if(window.pulse) window.pulse('area_share_open');
+   })
+   .catch(()=>sheetErr('Could not build this area. Try again.'));
+}
+function sheetErr(msg){ const e=document.getElementById('sheetErr'); e.textContent=msg; e.hidden=false; document.getElementById('sheetSub').textContent=''; }
+function closeSheet(){ document.getElementById('sheetBack').classList.remove('on'); }
+function sheetShared(){ if(sheetState.id) fetch('/api/area/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:sheetState.id})}).catch(()=>{}); if(window.pulse) window.pulse('area_share_send'); }
+function sheetCopy(){
+  const url=sheetState.url; if(!url) return;
+  (navigator.clipboard?navigator.clipboard.writeText(url):Promise.reject()).then(()=>{
+    const el=document.getElementById('sheetCopy'); const o=el.textContent; el.textContent='Copied!'; setTimeout(()=>{el.textContent=o;},1500);
+  }).catch(()=>window.prompt('Copy this link:',url));
 }
 
 let current = null, selStatus = null, photoData = null;

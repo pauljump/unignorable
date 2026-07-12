@@ -75,6 +75,50 @@ db.exec(`
   if (!actCols.includes('ip_hash')) db.exec(`ALTER TABLE actions ADD COLUMN ip_hash TEXT`);
 }
 
+// ---- Areas table (shareable ZONE bundles — many issue-cells under one permalink) ----
+// A citizen frames a cluster on the map and shares it as ONE URL (/a/<id>). The member set is
+// FROZEN at mint (the "these instances" definition); the page recomputes their stats live at render.
+// fingerprint = stable hash of the rounded bbox + sorted types, so re-sharing the same zone reuses
+// the same row (share_count stays meaningful per-zone instead of minting duplicates).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS areas(
+    id          TEXT PRIMARY KEY,
+    fingerprint TEXT,
+    created_at  TEXT NOT NULL,
+    bbox        TEXT NOT NULL,   -- JSON {s,w,n,e}
+    types       TEXT NOT NULL,   -- JSON array of complaint-type names
+    member_keys TEXT NOT NULL,   -- JSON array of "type|id" (frozen zone membership)
+    snapshot    TEXT,            -- JSON aggregate stats at mint (OG fallback / dedupe display)
+    title       TEXT,
+    share_count INTEGER NOT NULL DEFAULT 0,
+    view_count  INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_areas_fp ON areas(fingerprint);
+`);
+const qAreaInsert = db.prepare(`INSERT INTO areas(id,fingerprint,created_at,bbox,types,member_keys,snapshot,title) VALUES(?,?,?,?,?,?,?,?)`);
+const qAreaGet    = db.prepare(`SELECT * FROM areas WHERE id=?`);
+const qAreaByFp   = db.prepare(`SELECT * FROM areas WHERE fingerprint=? LIMIT 1`);
+const qAreaShare  = db.prepare(`UPDATE areas SET share_count=share_count+1 WHERE id=?`);
+const qAreaView   = db.prepare(`UPDATE areas SET view_count=view_count+1 WHERE id=?`);
+
+// Create (or reuse, by fingerprint) a shareable area. Returns the row.
+function createArea({ fingerprint, bbox, types, memberKeys, snapshot, title }) {
+  if (fingerprint) {
+    const existing = qAreaByFp.get(fingerprint);
+    if (existing) return existing;
+  }
+  const id = crypto.randomBytes(5).toString('hex'); // 10-char short id
+  qAreaInsert.run(
+    id, fingerprint || null, new Date().toISOString(),
+    JSON.stringify(bbox), JSON.stringify(types), JSON.stringify(memberKeys),
+    snapshot ? JSON.stringify(snapshot) : null, title || null,
+  );
+  return qAreaGet.get(id);
+}
+function getArea(id)   { return qAreaGet.get(id) || null; }
+function bumpAreaShare(id) { qAreaShare.run(id); }
+function bumpAreaView(id)  { qAreaView.run(id); }
+
 // Campaign prepared statements.
 const qCampInsert   = db.prepare(`INSERT OR IGNORE INTO campaigns(issue_key,started_at,status) VALUES(?,?,?)`);
 const qCampGet      = db.prepare(`SELECT * FROM campaigns WHERE issue_key=?`);
@@ -201,4 +245,5 @@ function firstActionTs(issueKey, actionType) {
 
 module.exports = { addPost, thread, countsAll, pending, pendingCount, decide,
   startCampaign, getCampaign, setCampaignStatus, allCampaigns,
-  logAction, actionCounts, hasAction, firstActionTs };
+  logAction, actionCounts, hasAction, firstActionTs,
+  createArea, getArea, bumpAreaShare, bumpAreaView };

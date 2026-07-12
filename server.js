@@ -880,6 +880,254 @@ ${actScript}
 </div></body></html>`;
 }
 
+// ---------- AREA (ZONE) SHARE: many issue-cells bundled under one permalink ----------
+// A citizen frames a cluster on the map and shares it as ONE /a/<id> URL. The member set is frozen
+// at mint; the page recomputes their stats live. Reuses councilFor/officials/disparity/narrative.
+const AREA_TYPE_COLORS = {
+  'Encampment': '#ff6b4a', 'Drug Activity': '#c77dff',
+  'Homeless Person Assistance': '#4ad6c8', 'Panhandling': '#ffd166',
+};
+const AREA_MAX_MEMBERS = 400; // a "zone" is a cluster, not the whole city
+
+// Aggregate the city's own record across a set of member issues.
+function areaStats(members) {
+  let n = 0, closed = 0, nf = 0, returned = 0, activeSpots = 0, flareups = 0;
+  let oldest = null, worst = null;
+  const typeAgg = {};                       // type -> { spots, n }
+  const districts = new Set(), boards = new Set(), boroughs = [];
+  for (const i of members) {
+    n += Number(i.n) || 0;
+    closed += Number(i.closed_n) || 0;
+    nf += Number(i.nothing_found) || 0;
+    returned += Number(i.returned_n) || 0;
+    flareups += Number(i.episode_count) || 0;
+    if (i.status === 'active') activeSpots++;
+    if (i.first_seen && (!oldest || i.first_seen < oldest)) oldest = i.first_seen;
+    if (!worst || (Number(i.score) || 0) > (Number(worst.score) || 0)) worst = i;
+    const ta = typeAgg[i.type] || (typeAgg[i.type] = { spots: 0, n: 0 });
+    ta.spots++; ta.n += Number(i.n) || 0;
+    const d = parseInt(String(i.council || '').match(/\d+/)?.[0] || '', 10);
+    if (Number.isFinite(d)) districts.add(d);
+    if (i.board) boards.add(i.board);
+    const b = titleCase(i.borough);
+    if (b && b !== 'Unspecified' && !boroughs.includes(b)) boroughs.push(b);
+  }
+  return { spots: members.length, n, closed, nf, returned, activeSpots, flareups, oldest, worst,
+    typeAgg, districts: [...districts].sort((a, b) => a - b), boards: [...boards], boroughs };
+}
+
+// Human title for a zone — anchored to its worst spot's block + borough.
+function areaTitle(stats) {
+  const boro = stats.boroughs[0] || 'NYC';
+  const anchor = titleCase(stats.worst && stats.worst.addr);
+  return `${fmtN(stats.spots)} ignored spot${stats.spots !== 1 ? 's' : ''}`
+    + (anchor ? ` around ${anchor}` : '') + `, ${boro}`;
+}
+
+// The X/copy tweet for a zone.
+function areaTweet(stats, url) {
+  const where = titleCase(stats.worst && stats.worst.addr) ? `Around ${titleCase(stats.worst.addr)}` : (stats.boroughs[0] || 'NYC');
+  return `${where}: ${fmtN(stats.spots)} chronic spots on NYC's own 311 record — ${fmtN(stats.n)} reports, closed ${fmtN(stats.closed)}×. ${fmtN(stats.activeSpots)} still here. The receipt: ${url}`;
+}
+
+// Resolve verified, named council members spanning the zone's districts (deduped).
+function areaOfficials(districts) {
+  const seen = new Set(), out = [];
+  for (const d of districts) {
+    const m = councilFor(d);
+    if (m && m.member && m.verified && !seen.has(m.member)) { seen.add(m.member); out.push(m); }
+  }
+  return out;
+}
+
+function renderArea(area) {
+  let bbox = {}, types = [], memberKeys = [], snap = {};
+  try { bbox = JSON.parse(area.bbox); } catch {}
+  try { types = JSON.parse(area.types); } catch {}
+  try { memberKeys = JSON.parse(area.member_keys); } catch {}
+  try { snap = area.snapshot ? JSON.parse(area.snapshot) : {}; } catch {}
+
+  // Live member issues (frozen membership, live stats). Ranked worst-first.
+  const members = memberKeys.map(k => ISSUE_BY_KEY.get(k)).filter(Boolean)
+    .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+  const st = areaStats(members);
+  const title = area.title || areaTitle(st);
+  const shareUrl = `${PUBLIC_ORIGIN}/a/${area.id}`;
+  const oldestDays = daysSince(st.oldest);
+  const oldestYrs = fmtYears(oldestDays);
+  const allActive = st.activeSpots === st.spots && st.spots > 1;
+
+  const ogTitle = `${fmtN(st.spots)} spots. ${fmtN(st.n)} reports. The city closed them ${fmtN(st.closed)} times.`;
+  const ogDesc = `${title}. NYC's own 311 record: ${fmtN(st.n)} reports across ${fmtN(st.spots)} nearby spots, closed ${fmtN(st.closed)} times`
+    + (st.nf ? `, ${fmtN(st.nf)} as "nothing found"` : '') + `. ${fmtN(st.activeSpots)} still active.`;
+
+  // Points for the inline mini-map.
+  const pts = members.map(i => ({ lat: i.lat, lng: i.lng, c: AREA_TYPE_COLORS[i.type] || '#ff6b4a',
+    n: i.n, active: i.status === 'active' }));
+  const bb = [bbox.s, bbox.w, bbox.n, bbox.e];
+
+  // Type breakdown chips.
+  const typeChips = Object.entries(st.typeAgg)
+    .sort((a, b) => b[1].n - a[1].n)
+    .map(([t, v]) => `<span class="tchip"><i style="background:${AREA_TYPE_COLORS[t] || '#888'}"></i>${esc(t)} &middot; ${fmtN(v.spots)} spot${v.spots !== 1 ? 's' : ''}</span>`)
+    .join('');
+
+  // Ranked member list (cap 25, note remainder).
+  const CAP = 25;
+  const rows = members.slice(0, CAP).map(i => {
+    const eps = Array.isArray(i.episodes) ? i.episodes : [];
+    const epStart = eps.length ? eps[eps.length - 1][0] : i.first_seen;
+    const dayN = daysSince(epStart) || 0;
+    const url = `${PUBLIC_ORIGIN}/c?t=${encodeURIComponent(i.type)}&id=${encodeURIComponent(i.id)}`;
+    const badge = i.status === 'active'
+      ? `<span class="mb-act">active ${humanizeDur(dayN)}</span>`
+      : `<span class="mb-res">likely resolved</span>`;
+    return `<a class="mrow" href="${esc(url)}">
+      <span class="mdot" style="background:${AREA_TYPE_COLORS[i.type] || '#888'}"></span>
+      <span class="mtxt"><span class="maddr">${esc(titleCase(i.addr) || 'this location')}</span>
+      <span class="mmeta">${esc(i.type)} &middot; ${fmtN(i.n)} reports &middot; closed ${fmtN(Number(i.closed_n) || 0)}× ${badge}</span></span>
+      <span class="mgo">&#8594;</span></a>`;
+  }).join('');
+  const moreRow = members.length > CAP
+    ? `<div class="mmore">+ ${fmtN(members.length - CAP)} more spot${members.length - CAP !== 1 ? 's' : ''} in this area</div>` : '';
+
+  // Who's accountable across the zone.
+  const officials = areaOfficials(st.districts);
+  let whoHtml;
+  if (officials.length) {
+    whoHtml = officials.map(m =>
+      `<div class="who-line"><b>${esc(m.member)}</b> &mdash; Council District ${m.district}${m.borough ? ' &middot; ' + esc(m.borough) : ''}`
+      + (m.x ? ` &middot; <a href="https://twitter.com/${esc(m.x.replace(/^@/, ''))}">@${esc(m.x.replace(/^@/, ''))}</a>` : '') + `</div>`
+    ).join('');
+  } else {
+    whoHtml = `<div class="who-line">Council District${st.districts.length !== 1 ? 's' : ''} ${st.districts.join(', ') || '—'} &middot; <a href="https://council.nyc.gov/districts/">find &amp; name the members &#8594;</a></div>`;
+  }
+
+  const stat = (big, label, alarm) =>
+    `<div class="stat"><div class="big ${alarm ? 'alarm' : ''}">${big}</div><div class="lbl">${label}</div></div>`;
+  const shareCount = Number(area.share_count) || 0;
+  const viewCount = (Number(area.view_count) || 0);
+
+  return `<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>${esc(ogTitle)}</title>
+<meta property="og:type" content="article">
+<meta property="og:title" content="${esc(ogTitle)}">
+<meta property="og:description" content="${esc(ogDesc)}">
+<meta property="og:url" content="${esc(shareUrl)}">
+<meta property="og:site_name" content="unignorable">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="${esc(ogTitle)}">
+<meta name="twitter:description" content="${esc(ogDesc)}">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{--bg:#0b0d10;--card:#14171c;--ink:#e8eaed;--mut:#8b9098;--line:#262b32;--alarm:#ff4d4d;--amber:#ffb020}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  a{color:var(--amber)}
+  .wrap{max-width:680px;margin:0 auto;padding:20px 18px 64px}
+  .mast{display:flex;align-items:center;justify-content:space-between;padding:6px 0 18px;border-bottom:1px solid var(--line)}
+  .word{font-weight:800;letter-spacing:.06em;font-size:14px;color:var(--ink);text-decoration:none}
+  .word b{color:var(--alarm)}
+  .tag{font-size:11px;color:var(--mut)}
+  .kicker{margin:22px 0 4px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--alarm);font-weight:700}
+  .day-hero{font-size:72px;line-height:.92;font-weight:800;letter-spacing:-.02em;margin:6px 0 2px;color:var(--alarm)}
+  .day-sub{font-size:14px;color:var(--mut);margin:4px 0 0}
+  .lead{font-size:18px;line-height:1.42;margin:12px 0 0;color:var(--ink)}
+  .indict{font-size:16px;line-height:1.5;background:var(--card);border:1px solid var(--line);border-left:3px solid var(--alarm);border-radius:10px;padding:14px 16px;margin:18px 0}
+  .indict b{color:var(--alarm)}
+  #amap{height:260px;border-radius:12px;border:1px solid var(--line);margin:16px 0 4px;background:#0a0f17}
+  .leaflet-container{background:#0a0f17}
+  .tchips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
+  .tchip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:5px 11px}
+  .tchip i{width:9px;height:9px;border-radius:50%;display:inline-block}
+  h2{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin:30px 0 10px;font-weight:700}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0 8px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 10px;text-align:center}
+  .stat .big{font-size:22px;font-weight:800}
+  .stat .big.alarm{color:var(--alarm)}
+  .stat .lbl{font-size:11px;color:var(--mut);margin-top:3px;line-height:1.3}
+  .mlist{margin:6px 0 0}
+  .mrow{display:flex;align-items:center;gap:11px;padding:12px 4px;border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink)}
+  .mrow:last-of-type{border-bottom:none}
+  .mdot{width:11px;height:11px;border-radius:50%;flex:none}
+  .mtxt{flex:1;min-width:0}
+  .maddr{display:block;font-weight:700;font-size:14px}
+  .mmeta{display:block;font-size:12px;color:var(--mut);margin-top:2px}
+  .mb-act{color:var(--alarm);font-weight:700}
+  .mb-res{color:var(--mut)}
+  .mgo{color:var(--amber);flex:none}
+  .mmore{font-size:13px;color:var(--mut);padding:12px 4px 0}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .who-line{font-size:14px;margin:6px 0}
+  .who-line b{color:var(--ink)}
+  .share{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:18px 0 6px}
+  .btn{display:inline-block;padding:11px 16px;border-radius:10px;font-weight:700;font-size:14px;text-decoration:none;cursor:pointer;border:none}
+  .btn.x{background:var(--alarm);color:#fff}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+  .scount{font-size:12px;color:var(--mut)}
+  .stamp{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);font-size:12px;color:var(--mut)}
+</style></head><body><div class="wrap">
+  <div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">UN<b>IGNOR</b>ABLE</a><span class="tag">a public receipt</span></div>
+
+  <div class="kicker">${esc(st.boroughs.join(', ') || 'NYC')} &middot; ${fmtN(st.spots)} spot${st.spots !== 1 ? 's' : ''}</div>
+  <div class="day-hero">${fmtN(st.spots)}</div>
+  <div class="day-sub">chronic spots the city keeps closing in this area${allActive ? ' &middot; every one still active today' : (st.activeSpots ? ` &middot; ${fmtN(st.activeSpots)} still open today` : '')}</div>
+  <p class="lead">${esc(title)}.</p>
+
+  <div class="indict">Across ${st.spots === 1 ? 'this spot' : `these <b>${fmtN(st.spots)} spots</b>`}, NYC 311 was told <b>${fmtN(st.n)} times</b> and the city closed the cases <b>${fmtN(st.closed)} times</b>${st.nf ? `, including <b>${fmtN(st.nf)}</b> that claimed nothing was there` : ''}. ${allActive ? 'Every one is still active today.' : (st.activeSpots ? `<b>${fmtN(st.activeSpots)}</b> ${st.activeSpots === 1 ? 'is' : 'are'} still active today.` : '')}${oldestDays != null ? ` The oldest has been on the record since ${esc(fmtDate(st.oldest))} — ${esc(oldestYrs)}.` : ''} Knowing is not fixing.</div>
+
+  <div id="amap"></div>
+  <div class="tchips">${typeChips}</div>
+
+  <h2>The record across this area</h2>
+  <div class="grid">
+    ${stat(fmtN(st.n), 'times reported to 311', true)}
+    ${stat(fmtN(st.closed), 'closed by the city')}
+    ${stat(fmtN(st.nf), '"nothing found" closures', true)}
+    ${stat(fmtN(st.returned), 'came back after closing', true)}
+    ${stat(fmtN(st.spots), 'distinct spots')}
+    ${stat(fmtN(st.flareups), 'separate flare-ups')}
+  </div>
+
+  <h2>Every spot in this area</h2>
+  <div class="mlist">${rows}${moreRow}</div>
+
+  <h2>Who is accountable</h2>
+  <div class="card">${whoHtml}</div>
+
+  <div class="share">
+    <a class="btn x" id="xbtn" href="https://twitter.com/intent/tweet?text=${encodeURIComponent(areaTweet(st, shareUrl))}" target="_blank" rel="noopener" onclick="bumpShare()">Post to X</a>
+    <button class="btn ghost" id="copybtn" onclick="bumpShare();copyLink()">Copy link</button>
+    <span class="scount">${shareCount ? `shared ${fmtN(shareCount)} time${shareCount !== 1 ? 's' : ''} &middot; ` : ''}viewed ${fmtN(viewCount)} time${viewCount !== 1 ? 's' : ''}</span>
+  </div>
+
+  <div class="stamp">Built from New York City's own 311 open data (dataset erm2-nwe9)${st.oldest ? `, ${fmtN(st.spots)} nearby spots from ${esc(fmtDate(st.oldest))} to today` : ''}. This page documents a <b>government's</b> response to public-safety obstructions. It is not about, and does not identify, any individual experiencing homelessness. They are failed by this inaction, not the cause of it.</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+var PTS=${JSON.stringify(pts)}, BB=${JSON.stringify(bb)}, AID=${JSON.stringify(area.id)};
+(function(){
+  var m=L.map('amap',{zoomControl:true,preferCanvas:true,scrollWheelZoom:false});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © CARTO',maxZoom:19}).addTo(m);
+  var cv=L.canvas({padding:.5});
+  PTS.forEach(function(p){
+    L.circleMarker([p.lat,p.lng],{renderer:cv,radius:Math.min(22,4+Math.sqrt(p.n)*0.9),
+      color:p.c,weight:1,fillColor:p.c,fillOpacity:p.active?0.5:0.16,opacity:p.active?0.85:0.4}).addTo(m);
+  });
+  try{ m.fitBounds([[BB[0],BB[1]],[BB[2],BB[3]]],{padding:[24,24]}); }catch(e){ m.setView([40.735,-73.98],13); }
+})();
+function bumpShare(){ fetch('/api/area/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:AID})}).catch(function(){}); }
+function copyLink(){ var url=${JSON.stringify(shareUrl)};
+  (navigator.clipboard?navigator.clipboard.writeText(url):Promise.reject()).then(function(){
+    var el=document.getElementById('copybtn');var o=el.textContent;el.textContent='Copied!';setTimeout(function(){el.textContent=o;},1500);
+  }).catch(function(){window.prompt('Copy this link:',url);});
+}
+</script>
+</div></body></html>`;
+}
+
 // Sitemap of the INDEXABLE receipts only — an Issue is indexable iff its district is verified
 // (same gate as the page's robots meta), so a sitemap can never expose an unconfirmed name.
 const SITEMAP = (() => {
@@ -1018,6 +1266,52 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, JSON.stringify({ ok: true, counts }), 'application/json');
   }
 
+  // --- AREA (zone) share: mint one permalink for a framed cluster of issue-cells ---
+  if (u.pathname === '/api/area' && req.method === 'POST') {
+    if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
+    const body = await readBody(req);
+    const b = body.bbox || {};
+    const s = +b.s, w = +b.w, nn = +b.n, e = +b.e;
+    if (![s, w, nn, e].every(Number.isFinite) || s >= nn || w >= e) {
+      return send(res, 400, '{"ok":false,"error":"bad bbox"}', 'application/json');
+    }
+    const known = Object.keys(AREA_TYPE_COLORS);
+    const reqTypes = Array.isArray(body.types) ? body.types.filter(t => known.includes(t)) : [];
+    const useTypes = (reqTypes.length ? reqTypes : known).slice().sort();
+    const includeResolved = !!body.resolved;
+    let members = ISSUES.filter(i =>
+      i.lat >= s && i.lat <= nn && i.lng >= w && i.lng <= e &&
+      useTypes.includes(i.type) &&
+      (i.status === 'active' || (includeResolved && i.status === 'resolved')));
+    if (!members.length) return send(res, 400, '{"ok":false,"error":"no issues in this area"}', 'application/json');
+    // A zone is a cluster, not the whole city — keep the worst-scoring MAX if over the cap.
+    if (members.length > AREA_MAX_MEMBERS) {
+      members = members.slice().sort((a, c) => (Number(c.score) || 0) - (Number(a.score) || 0)).slice(0, AREA_MAX_MEMBERS);
+    }
+    const memberKeys = members.map(i => key(i.type, i.id));
+    const st = areaStats(members);
+    const snapshot = { spots: st.spots, n: st.n, closed: st.closed, nf: st.nf,
+      activeSpots: st.activeSpots, boroughs: st.boroughs,
+      anchor: titleCase(st.worst && st.worst.addr) || null };
+    const title = areaTitle(st);
+    const r4 = (x) => Math.round(x * 1e4) / 1e4;
+    const fp = crypto.createHash('sha1')
+      .update([r4(s), r4(w), r4(nn), r4(e)].join(',') + '|' + useTypes.join(',') + '|' + (includeResolved ? 'r' : ''))
+      .digest('hex').slice(0, 16);
+    let row;
+    try {
+      row = ugc.createArea({ fingerprint: fp, bbox: { s, w, n: nn, e }, types: useTypes, memberKeys, snapshot, title });
+    } catch (err) { return send(res, 500, '{"ok":false}', 'application/json'); }
+    const url = `${PUBLIC_ORIGIN}/a/${row.id}`;
+    return send(res, 200, JSON.stringify({ ok: true, id: row.id, url, title, stats: snapshot,
+      tweet: areaTweet(st, url) }), 'application/json');
+  }
+  if (u.pathname === '/api/area/share' && req.method === 'POST') {
+    const { id } = await readBody(req);
+    if (id && ugc.getArea(id)) ugc.bumpAreaShare(id);
+    return send(res, 200, '{"ok":true}', 'application/json');
+  }
+
   // --- Review queue (Paul's personal gate before anything is public / filed to 311) ---
   if (u.pathname === '/api/review') {
     if (!authed(u)) return send(res, 401, '{"ok":false}', 'application/json');
@@ -1039,6 +1333,15 @@ const server = http.createServer(async (req, res) => {
 
   if (u.pathname === '/robots.txt') return send(res, 200, ROBOTS, 'text/plain');
   if (u.pathname === '/sitemap.xml') return send(res, 200, SITEMAP, 'application/xml');
+
+  // The AREA (zone) page: /a/<id> — a bundle of issue-cells framed on the map, one permalink.
+  if (u.pathname.startsWith('/a/')) {
+    const id = u.pathname.slice(3).replace(/[^a-f0-9]/gi, '');
+    if (!id || !ugc.getArea(id)) return send(res, 404, 'No such area.', 'text/plain');
+    try { ugc.bumpAreaView(id); } catch {}
+    const area = ugc.getArea(id); // re-read so this view is reflected in the counter
+    return send(res, 200, renderArea(area), 'text/html; charset=utf-8');
+  }
 
   // The CAMPAIGN PAGE: /i, /issue, /c, /campaign all render the same surface.
   if (u.pathname === '/i' || u.pathname === '/issue' || u.pathname === '/c' || u.pathname === '/campaign') {
