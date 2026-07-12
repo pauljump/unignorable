@@ -947,9 +947,17 @@ function renderArea(area) {
   try { memberKeys = JSON.parse(area.member_keys); } catch {}
   try { snap = area.snapshot ? JSON.parse(area.snapshot) : {}; } catch {}
 
-  // Live member issues (frozen membership, live stats). Ranked worst-first.
-  const members = memberKeys.map(k => ISSUE_BY_KEY.get(k)).filter(Boolean)
-    .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+  // Member issues, ranked worst-first. User mints freeze their set; hotspots recompute live from
+  // the bbox each render (so an auto-zone tracks the block as spots resolve/emerge).
+  let members;
+  if (area.kind === 'hotspot') {
+    members = ISSUES.filter(i =>
+      i.lat >= bbox.s && i.lat <= bbox.n && i.lng >= bbox.w && i.lng <= bbox.e &&
+      types.includes(i.type) && i.status === 'active');
+  } else {
+    members = memberKeys.map(k => ISSUE_BY_KEY.get(k)).filter(Boolean);
+  }
+  members.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
   const st = areaStats(members);
   const title = area.title || areaTitle(st);
   const shareUrl = `${PUBLIC_ORIGIN}/a/${area.id}`;
@@ -1137,6 +1145,126 @@ const SITEMAP = (() => {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
 })();
 const ROBOTS = `User-agent: *\nAllow: /\nSitemap: ${PUBLIC_ORIGIN}/sitemap.xml\n`;
+
+// ---------- AUTO HOTSPOTS: the worst active clusters get STABLE standing URLs (/a/<slug>) ----------
+// Computed at boot from ISSUES (fresh on every deploy + daily refresh). Slugs are geography-stable:
+// a curated landmark if the zone centroid is near one, else a borough+grid slug that doesn't drift
+// as membership shifts. Membership recomputes live per request (renderArea, kind==='hotspot').
+const BORO_ABBR = { Manhattan: 'mn', Brooklyn: 'bk', Queens: 'qn', Bronx: 'bx', 'Staten Island': 'si' };
+// Marquee NYC locations — a zone that CONTAINS one adopts its pretty slug + label (the nearest to the
+// zone's centre wins). Naming the GEOGRAPHY only, never the people.
+const CURATED_LANDMARKS = [
+  { slug: 'intrepid',         label: 'the Intrepid',        lat: 40.7645, lng: -73.9997 },
+  { slug: 'columbus-circle',  label: 'Columbus Circle',     lat: 40.7681, lng: -73.9819 },
+  { slug: 'port-authority',   label: 'Port Authority',      lat: 40.7570, lng: -73.9903 },
+  { slug: 'penn-station',     label: 'Penn Station',        lat: 40.7506, lng: -73.9935 },
+  { slug: 'herald-square',    label: 'Herald Square',       lat: 40.7497, lng: -73.9880 },
+  { slug: 'union-square',     label: 'Union Square',        lat: 40.7359, lng: -73.9911 },
+  { slug: 'tompkins-square',  label: 'Tompkins Square',     lat: 40.7265, lng: -73.9815 },
+  { slug: 'atlantic-barclays',label: 'Atlantic Terminal',   lat: 40.6844, lng: -73.9765 },
+  { slug: 'fordham-plaza',    label: 'Fordham Plaza',       lat: 40.8610, lng: -73.8900 },
+  { slug: 'jamaica-center',   label: 'Jamaica Center',      lat: 40.7020, lng: -73.8010 },
+  { slug: '125th-lex',        label: '125th & Lexington',   lat: 40.8046, lng: -73.9378 },
+];
+function computeHotspots() {
+  const g = 0.006; // ~500m grid
+  const active = ISSUES.filter(i => i.status === 'active' && Number.isFinite(i.lat) && Number.isFinite(i.lng));
+  const cells = new Map();
+  for (const i of active) {
+    const ci = Math.round(i.lat / g), cj = Math.round(i.lng / g), k = ci + '_' + cj;
+    let c = cells.get(k); if (!c) { c = { ci, cj, items: [], score: 0 }; cells.set(k, c); }
+    c.items.push(i); c.score += Number(i.score) || 0;
+  }
+  // PEAK-GROWTH clustering: greedily pick the densest unclaimed cell, grow a compact fixed-radius
+  // zone (±RAD cells ~ a kilometer) around it, and CLAIM those cells so zones stay separate. This
+  // deliberately avoids connected-components, which chains every dense cell in a borough into one
+  // giant blob. A zone is a block-cluster, not a borough.
+  const RAD = 1; // ±1 cell (~0.6km) each way → a compact ~1.4km zone
+  const ranked = [...cells.values()]
+    .filter(c => c.items.length >= 2)
+    .sort((a, b) => (b.items.length - a.items.length) || (b.score - a.score));
+  const claimed = new Set(), zones = [];
+  for (const peak of ranked) {
+    const pk = peak.ci + '_' + peak.cj;
+    if (claimed.has(pk)) continue;
+    const members = [], zoneCells = [];
+    for (let di = -RAD; di <= RAD; di++) for (let dj = -RAD; dj <= RAD; dj++) {
+      const nk = (peak.ci + di) + '_' + (peak.cj + dj), nc = cells.get(nk);
+      if (nc && !claimed.has(nk)) { members.push(...nc.items); zoneCells.push(nk); }
+    }
+    if (members.length < 5) continue; // a real cluster, not two lonely dots
+    zoneCells.forEach(k => claimed.add(k));
+    zones.push({ members, totalScore: members.reduce((s, m) => s + (Number(m.score) || 0), 0) });
+  }
+  const used = new Set(), out = [];
+  // Rank zones by DENSITY of distinct chronic spots (the "many bubbles clustered here" a user sees),
+  // tie-broken by total severity — so a wall of encampments isn't buried under a few mega-volume spots.
+  for (const z of zones.sort((a, b) => (b.members.length - a.members.length) || (b.totalScore - a.totalScore)).slice(0, 24)) {
+    const lats = z.members.map(m => m.lat), lngs = z.members.map(m => m.lng), pad = 0.0015;
+    const bbox = { s: Math.min(...lats) - pad, w: Math.min(...lngs) - pad, n: Math.max(...lats) + pad, e: Math.max(...lngs) + pad };
+    const clat = (bbox.s + bbox.n) / 2, clng = (bbox.w + bbox.e) / 2;
+    // Stats from the SAME bbox query renderArea uses (not the claimed-cell subset) so the page's
+    // hero/grid and this title/snapshot never disagree.
+    const zmembers = ISSUES.filter(i =>
+      i.lat >= bbox.s && i.lat <= bbox.n && i.lng >= bbox.w && i.lng <= bbox.e && i.status === 'active');
+    const st = areaStats(zmembers);
+    // A landmark INSIDE the zone bbox claims it; nearest-to-centre wins. Else an honest geo-slug.
+    let mark = null, best = Infinity;
+    for (const L of CURATED_LANDMARKS) {
+      if (L.lat < bbox.s || L.lat > bbox.n || L.lng < bbox.w || L.lng > bbox.e) continue;
+      const d = (clat - L.lat) ** 2 + (clng - L.lng) ** 2;
+      if (d < best) { best = d; mark = L; }
+    }
+    let slug = mark ? mark.slug : `${BORO_ABBR[st.boroughs[0]] || 'nyc'}-${Math.round(clat * 1000)}-${Math.abs(Math.round(clng * 1000))}`;
+    if (used.has(slug)) { let n = 2; while (used.has(slug + '-' + n)) n++; slug = slug + '-' + n; }
+    used.add(slug);
+    // Countless place-only title (live counts come from the page's hero/grid, never a stale bake).
+    // Landmark name if one claims the zone, else the worst spot's block.
+    const boro = st.boroughs[0] || 'NYC';
+    const anchor = titleCase(st.worst && st.worst.addr);
+    const place = mark ? mark.label : anchor;
+    const title = place ? `Around ${place}, ${boro}` : `A cluster in ${boro}`;
+    out.push({ slug, bbox, types: Object.keys(st.typeAgg), title,
+      snapshot: { spots: st.spots, n: st.n, closed: st.closed, activeSpots: st.activeSpots }, score: z.totalScore });
+  }
+  return out;
+}
+let HOTSPOTS = [];
+try {
+  HOTSPOTS = computeHotspots();
+  for (const h of HOTSPOTS) ugc.upsertHotspot(h);
+  console.log(`hotspots: ${HOTSPOTS.length} standing zones`);
+} catch (e) { console.error('hotspot compute failed:', e && e.message); }
+
+// The /hotspots index — a home for the standing zone URLs (worst clusters first).
+function renderHotspotsIndex() {
+  const rows = HOTSPOTS.map(h => {
+    const s = h.snapshot || {};
+    return `<a class="hrow" href="/a/${esc(h.slug)}">
+      <span class="htxt"><span class="httl">${esc(h.title)}</span>
+      <span class="hmeta">${fmtN(s.n || 0)} reports &middot; closed ${fmtN(s.closed || 0)}× &middot; ${fmtN(s.spots || 0)} spots</span></span>
+      <span class="hslug">/a/${esc(h.slug)} &#8594;</span></a>`;
+  }).join('');
+  return `<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>The worst ignored zones — unignorable</title>
+<style>
+  :root{--bg:#0b0d10;--card:#14171c;--ink:#e8eaed;--mut:#8b9098;--line:#262b32;--alarm:#ff4d4d;--amber:#ffb020}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  a{color:var(--amber);text-decoration:none}.wrap{max-width:680px;margin:0 auto;padding:20px 18px 64px}
+  .mast{display:flex;align-items:center;justify-content:space-between;padding:6px 0 18px;border-bottom:1px solid var(--line)}
+  .word{font-weight:800;letter-spacing:.06em;font-size:14px;color:var(--ink)}.word b{color:var(--alarm)}
+  h1{font-size:24px;font-weight:800;margin:22px 0 4px}.sub{color:var(--mut);font-size:14px;margin:0 0 12px}
+  .hrow{display:flex;align-items:center;gap:11px;padding:14px 4px;border-bottom:1px solid var(--line);color:var(--ink)}
+  .htxt{flex:1;min-width:0}.httl{display:block;font-weight:700;font-size:15px}.hmeta{display:block;font-size:12px;color:var(--mut);margin-top:2px}
+  .hslug{color:var(--amber);flex:none;font-size:12px}
+</style></head><body><div class="wrap">
+  <div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">UN<b>IGNOR</b>ABLE</a><span style="font-size:11px;color:var(--mut)">standing zones</span></div>
+  <h1>The worst ignored zones</h1>
+  <p class="sub">Each is a permanent link. Auto-detected from NYC's own 311 record, refreshed daily.</p>
+  ${rows || '<p class="sub">No active clusters right now.</p>'}
+</div></body></html>`;
+}
 
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
@@ -1334,9 +1462,14 @@ const server = http.createServer(async (req, res) => {
   if (u.pathname === '/robots.txt') return send(res, 200, ROBOTS, 'text/plain');
   if (u.pathname === '/sitemap.xml') return send(res, 200, SITEMAP, 'application/xml');
 
-  // The AREA (zone) page: /a/<id> — a bundle of issue-cells framed on the map, one permalink.
+  // The standing-zones index (auto hotspots, worst first).
+  if (u.pathname === '/hotspots') {
+    return send(res, 200, renderHotspotsIndex(), 'text/html; charset=utf-8');
+  }
+
+  // The AREA (zone) page: /a/<id> — a user-minted bundle (hex id) OR an auto hotspot (slug).
   if (u.pathname.startsWith('/a/')) {
-    const id = u.pathname.slice(3).replace(/[^a-f0-9]/gi, '');
+    const id = u.pathname.slice(3).replace(/[^a-z0-9-]/gi, '').toLowerCase();
     if (!id || !ugc.getArea(id)) return send(res, 404, 'No such area.', 'text/plain');
     try { ugc.bumpAreaView(id); } catch {}
     const area = ugc.getArea(id); // re-read so this view is reflected in the counter

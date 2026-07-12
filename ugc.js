@@ -83,11 +83,12 @@ db.exec(`
 db.exec(`
   CREATE TABLE IF NOT EXISTS areas(
     id          TEXT PRIMARY KEY,
+    kind        TEXT NOT NULL DEFAULT 'user',  -- 'user' (frozen mint) | 'hotspot' (auto, live membership)
     fingerprint TEXT,
     created_at  TEXT NOT NULL,
     bbox        TEXT NOT NULL,   -- JSON {s,w,n,e}
     types       TEXT NOT NULL,   -- JSON array of complaint-type names
-    member_keys TEXT NOT NULL,   -- JSON array of "type|id" (frozen zone membership)
+    member_keys TEXT NOT NULL,   -- JSON array of "type|id" (frozen zone membership; '[]' for hotspots)
     snapshot    TEXT,            -- JSON aggregate stats at mint (OG fallback / dedupe display)
     title       TEXT,
     share_count INTEGER NOT NULL DEFAULT 0,
@@ -95,6 +96,11 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_areas_fp ON areas(fingerprint);
 `);
+// Forward migration: add `kind` to older `areas` tables (Phase 1 shipped without it).
+{
+  const areaCols = db.prepare(`PRAGMA table_info(areas)`).all().map(c => c.name);
+  if (!areaCols.includes('kind')) db.exec(`ALTER TABLE areas ADD COLUMN kind TEXT NOT NULL DEFAULT 'user'`);
+}
 const qAreaInsert = db.prepare(`INSERT INTO areas(id,fingerprint,created_at,bbox,types,member_keys,snapshot,title) VALUES(?,?,?,?,?,?,?,?)`);
 const qAreaGet    = db.prepare(`SELECT * FROM areas WHERE id=?`);
 const qAreaByFp   = db.prepare(`SELECT * FROM areas WHERE fingerprint=? LIMIT 1`);
@@ -118,6 +124,18 @@ function createArea({ fingerprint, bbox, types, memberKeys, snapshot, title }) {
 function getArea(id)   { return qAreaGet.get(id) || null; }
 function bumpAreaShare(id) { qAreaShare.run(id); }
 function bumpAreaView(id)  { qAreaView.run(id); }
+
+// Hotspots — auto-detected zones with STABLE slugs. Recomputed at boot; upsert preserves counters.
+const qHotspotUpsert = db.prepare(`
+  INSERT INTO areas(id,kind,created_at,bbox,types,member_keys,snapshot,title)
+  VALUES(?, 'hotspot', ?, ?, ?, '[]', ?, ?)
+  ON CONFLICT(id) DO UPDATE SET bbox=excluded.bbox, types=excluded.types, snapshot=excluded.snapshot, title=excluded.title`);
+const qHotspotAll = db.prepare(`SELECT * FROM areas WHERE kind='hotspot'`);
+function upsertHotspot({ slug, bbox, types, snapshot, title }) {
+  qHotspotUpsert.run(slug, new Date().toISOString(), JSON.stringify(bbox), JSON.stringify(types),
+    snapshot ? JSON.stringify(snapshot) : null, title || null);
+}
+function listHotspots() { return qHotspotAll.all(); }
 
 // Campaign prepared statements.
 const qCampInsert   = db.prepare(`INSERT OR IGNORE INTO campaigns(issue_key,started_at,status) VALUES(?,?,?)`);
@@ -246,4 +264,5 @@ function firstActionTs(issueKey, actionType) {
 module.exports = { addPost, thread, countsAll, pending, pendingCount, decide,
   startCampaign, getCampaign, setCampaignStatus, allCampaigns,
   logAction, actionCounts, hasAction, firstActionTs,
-  createArea, getArea, bumpAreaShare, bumpAreaView };
+  createArea, getArea, bumpAreaShare, bumpAreaView,
+  upsertHotspot, listHotspots };
