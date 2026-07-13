@@ -53,6 +53,16 @@ db.exec(`
     won_at     TEXT
   );
   CREATE UNIQUE INDEX IF NOT EXISTS idx_campaigns_key ON campaigns(issue_key);
+
+  CREATE TABLE IF NOT EXISTS campaign_organizers(
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    issue_key  TEXT NOT NULL,
+    email      TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    ip_hash    TEXT,
+    UNIQUE(issue_key, email)
+  );
+  CREATE INDEX IF NOT EXISTS idx_campaign_organizers_issue ON campaign_organizers(issue_key);
 `);
 // Forward migration: add won_at if missing on older DBs.
 {
@@ -145,6 +155,7 @@ const qCampInsert   = db.prepare(`INSERT OR IGNORE INTO campaigns(issue_key,star
 const qCampGet      = db.prepare(`SELECT * FROM campaigns WHERE issue_key=?`);
 const qCampSetStatus = db.prepare(`UPDATE campaigns SET status=?, won_at=? WHERE issue_key=?`);
 const qCampAll      = db.prepare(`SELECT * FROM campaigns`);
+const qOrganizerInsert = db.prepare(`INSERT OR IGNORE INTO campaign_organizers(issue_key,email,created_at,ip_hash) VALUES(?,?,?,?)`);
 
 // Action prepared statements.
 const qActInsert    = db.prepare(`INSERT INTO actions(issue_key,action_type,ts,ip_hash) VALUES(?,?,?,?)`);
@@ -234,6 +245,10 @@ function allCampaigns() {
   return qCampAll.all();
 }
 
+function addCampaignOrganizer(issueKey, email, ipHash) {
+  qOrganizerInsert.run(issueKey, email.trim().toLowerCase(), new Date().toISOString(), ipHash || null);
+}
+
 // ---- Action functions ----
 
 function logAction(issueKey, actionType, ipHash) {
@@ -271,7 +286,7 @@ function firstActionTs(issueKey, actionType) {
 }
 
 module.exports = { addPost, addSeen, thread, countsAll, pending, pendingCount, decide,
-  startCampaign, getCampaign, setCampaignStatus, allCampaigns,
+  startCampaign, getCampaign, setCampaignStatus, allCampaigns, addCampaignOrganizer,
   logAction, actionCounts, hasAction, firstActionTs,
   createArea, getArea, bumpAreaShare, bumpAreaView,
   upsertHotspot, listHotspots };

@@ -68,6 +68,10 @@ const TRACKABLE_ACTIONS = new Set(
 );
 
 const PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN || 'https://unignorable.polyfeeds.dev';
+const CANARY_TYPE = 'Encampment';
+const CANARY_ID = '40.736,-73.983';
+const CANARY_URL = `/c?t=${encodeURIComponent(CANARY_TYPE)}&id=${encodeURIComponent(CANARY_ID)}`;
+const PULSE_BEACON = `<script>(function(){if(location.hostname==="localhost"||location.hostname==="127.0.0.1")return;var I="https://pulse.polyfeeds.dev/api/ingest";function s(e,x){try{var b=JSON.stringify(Object.assign({event:e,path:location.pathname,referrer:document.referrer||undefined,screen:innerWidth+"x"+innerHeight},x||{}));if(navigator.sendBeacon){navigator.sendBeacon(I,new Blob([b],{type:"text/plain"}))}else{fetch(I,{method:"POST",headers:{"Content-Type":"text/plain"},keepalive:true,body:b})}}catch(e){}}window.pulse=s;s("page_view");var t=Date.now();function d(){s("page_dwell",{dwellMs:Date.now()-t})}addEventListener("pagehide",d);document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden")d()})})();</script>`;
 
 // Photo store — the proof layer 311 open data structurally can't have. Bytes on disk, served by id.
 const PHOTO_DIR = path.join(DATA_DIR, 'photos');
@@ -849,6 +853,10 @@ function copyLink(url){
   .ladder.active{background:#1a1400;color:var(--amber)}
   .ladder.locked{background:var(--card);color:var(--mut);border-color:var(--line)}
   .ladder.done{background:#0d1a12;color:#3ddc84;border-color:#3ddc84}
+  .start-band{margin-top:30px;padding:24px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .start-band h2{margin:0 0 6px;color:var(--ink);font-size:20px;letter-spacing:0;text-transform:none}
+  .start-band p{margin:0 0 15px;color:var(--mut);font-size:14px;max-width:520px}
+  .start-link{display:inline-block;background:var(--amber);color:#000;text-decoration:none;border-radius:6px;padding:10px 15px;font-weight:800;font-size:14px}
 </style></head><body><div class="wrap">
   <div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">UN<b>IGNOR</b>ABLE</a><span class="tag">a public receipt</span></div>
 
@@ -919,7 +927,13 @@ function copyLink(url){
     ${T.posts.map(p => `<div class="q">${esc(p.text || '')}${p.photo ? ' (photo on file)' : ''}<div style="font-size:11px;color:var(--mut);margin-top:4px">${esc(p.ts ? p.ts.slice(0,10) : '')}</div></div>`).join('')}
   </div>` : ''}
 
-${actScript}
+  <section class="start-band">
+    <h2>${campaign ? 'Your block can be next.' : 'Make this a public campaign.'}</h2>
+    <p>${campaign ? 'Find an active issue near you and give neighbors one permanent place to confirm it, organize, and track what happens.' : 'Confirm this issue is still present and start organizing from the city-backed record.'}</p>
+    <a class="start-link" href="/start${campaign ? '' : `?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`}">${campaign ? 'Start a campaign' : 'Start this campaign'}</a>
+  </section>
+
+${actScript}${PULSE_BEACON}
 </div></body></html>`;
 }
 
@@ -1309,6 +1323,88 @@ function renderHotspotsIndex() {
 </div></body></html>`;
 }
 
+function distanceMeters(lat1, lng1, lat2, lng2) {
+  const p = Math.PI / 180;
+  const a = 0.5 - Math.cos((lat2 - lat1) * p) / 2
+    + Math.cos(lat1 * p) * Math.cos(lat2 * p) * (1 - Math.cos((lng2 - lng1) * p)) / 2;
+  return 12742000 * Math.asin(Math.sqrt(a));
+}
+
+function renderCampaignStart(selectedIssue) {
+  const selected = selectedIssue ? {
+    type: selectedIssue.type, id: selectedIssue.id, addr: titleCase(selectedIssue.addr),
+    borough: titleCase(selectedIssue.borough), reports: selectedIssue.n,
+    currentDays: selectedIssue.current_days || 0,
+    campaign: !!ugc.getCampaign(key(selectedIssue.type, selectedIssue.id)),
+  } : null;
+  return `<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="index,follow"><title>Start a campaign on your block — unignorable</title>
+<style>
+  :root{--bg:#0b0d10;--ink:#e8eaed;--mut:#969ba4;--line:#2b3038;--alarm:#ff4d4d;--amber:#ffb020;--field:#14171c}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  button,input{font:inherit}button{cursor:pointer}.wrap{max-width:680px;margin:0 auto;padding:20px 18px 72px}
+  .mast{display:flex;align-items:center;justify-content:space-between;padding:6px 0 18px;border-bottom:1px solid var(--line)}
+  .word{font-weight:800;letter-spacing:.06em;font-size:14px;color:var(--ink);text-decoration:none}.word b{color:var(--alarm)}
+  .map-link{color:var(--mut);font-size:13px}.hero{padding:34px 0 26px}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--alarm);font-weight:800}
+  h1{font-size:38px;line-height:1.08;margin:8px 0 12px;max-width:560px}p{margin:0;color:var(--mut)}
+  .step{padding:24px 0;border-top:1px solid var(--line)}.step h2{font-size:17px;margin:0 0 5px}.step>p{font-size:14px;margin-bottom:14px}
+  .search{display:grid;grid-template-columns:1fr auto;gap:8px}.field{width:100%;background:var(--field);border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:12px 13px;min-height:46px}
+  .field:focus{outline:2px solid var(--amber);outline-offset:1px}.btn{border:0;border-radius:6px;background:var(--amber);color:#090a0c;font-weight:800;padding:11px 16px;min-height:46px}
+  .btn:disabled{opacity:.5;cursor:not-allowed}.results{margin-top:12px;border-top:1px solid var(--line)}
+  .result{width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;text-align:left;background:transparent;color:var(--ink);border:0;border-bottom:1px solid var(--line);padding:14px 2px}
+  .result:hover,.result:focus{background:#11141a;outline:none}.result-main{min-width:0}.result-title{display:block;font-weight:750}.result-meta{display:block;color:var(--mut);font-size:12px;margin-top:2px}.arrow{color:var(--amber);font-weight:800}
+  .selected{border-left:3px solid var(--amber);padding:14px 15px;background:var(--field);margin-bottom:16px}.selected b{display:block;font-size:17px}.selected span{display:block;color:var(--mut);font-size:13px;margin-top:3px}
+  .label{display:block;font-size:13px;font-weight:700;margin:13px 0 6px}.check{display:flex;align-items:flex-start;gap:9px;margin:14px 0;color:var(--ink);font-size:14px}.check input{margin-top:4px;accent-color:var(--amber)}
+  .fine{font-size:12px;color:var(--mut);margin:10px 0 16px}.status{font-size:13px;color:var(--mut);margin-top:10px;min-height:20px}.status.error{color:#ff7b7b}
+  [hidden]{display:none!important}@media(max-width:520px){h1{font-size:32px}.search{grid-template-columns:1fr}.search .btn{width:100%}}
+</style></head><body><div class="wrap">
+  <div class="mast"><a class="word" href="${esc(CANARY_URL)}">UN<b>IGNOR</b>ABLE</a><a class="map-link" href="/map">Explore NYC</a></div>
+  <div class="hero"><div class="eyebrow">Your block can be next</div><h1>Start a public campaign from the city's own record.</h1><p>Find a recurring issue, confirm it is still present, and give the block one permanent place to organize.</p></div>
+  <section class="step"><h2>1. Find the block</h2><p>Search an address or intersection in New York City.</p>
+    <form id="search-form" class="search"><input id="address" class="field" autocomplete="street-address" placeholder="Address or intersection" required><button class="btn" type="submit">Search</button></form>
+    <div id="search-status" class="status" aria-live="polite"></div><div id="results" class="results"></div>
+  </section>
+  <section id="organize" class="step" ${selected ? '' : 'hidden'}><h2>2. Start the campaign</h2><p>Organizer contact stays private. The campaign uses only the public city record and approved neighbor evidence.</p>
+    <div id="selected" class="selected"></div>
+    <form id="campaign-form">
+      <label class="label" for="email">Email for campaign updates</label><input id="email" class="field" type="email" autocomplete="email" maxlength="254" required>
+      <label class="check"><input id="confirmed" type="checkbox" required><span>I have seen this issue at this location recently.</span></label>
+      <p class="fine">Your email is stored privately for campaign verification and updates. It is never shown on the public page or shared with city agencies.</p>
+      <button id="start-button" class="btn" type="submit">Start campaign</button><div id="campaign-status" class="status" aria-live="polite"></div>
+    </form>
+  </section>
+</div>
+<script>
+var chosen=${JSON.stringify(selected)};
+var resultsEl=document.getElementById('results'), organize=document.getElementById('organize');
+function choose(issue){
+  chosen=issue;organize.hidden=false;
+  document.getElementById('selected').innerHTML='<b>'+escapeHtml(issue.type)+' near '+escapeHtml(issue.addr||'this block')+'</b><span>'+(issue.reports||0).toLocaleString()+' reports on the city record'+(issue.currentDays?' · active '+issue.currentDays+' days':'')+(issue.campaign?' · campaign already active':'')+'</span>';
+  document.getElementById('start-button').textContent=issue.campaign?'Join campaign':'Start campaign';
+  organize.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function escapeHtml(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+if(chosen)choose(chosen);
+document.getElementById('search-form').addEventListener('submit',async function(e){
+  e.preventDefault();var q=document.getElementById('address').value.trim(), status=document.getElementById('search-status');
+  status.className='status';status.textContent='Searching…';resultsEl.innerHTML='';
+  try{
+    var places=await fetch('/api/geocode?q='+encodeURIComponent(q)).then(function(r){return r.json()});
+    if(!places.length)throw new Error('No NYC location found.');
+    var nearby=await fetch('/api/campaign/nearby?lat='+places[0].lat+'&lng='+places[0].lng).then(function(r){return r.json()});
+    if(!nearby.items||!nearby.items.length)throw new Error('No active city record found within walking distance.');
+    status.textContent=nearby.items.length+' active records nearby. Select the matching block.';
+    nearby.items.forEach(function(issue){var b=document.createElement('button');b.type='button';b.className='result';b.innerHTML='<span class="result-main"><span class="result-title">'+escapeHtml(issue.type)+' · '+escapeHtml(issue.addr||'Approximate block')+'</span><span class="result-meta">'+Math.round(issue.distance)+' m away · '+issue.reports.toLocaleString()+' reports'+(issue.campaign?' · active campaign':'')+'</span></span><span class="arrow">→</span>';b.onclick=function(){choose(issue)};resultsEl.appendChild(b)});
+  }catch(err){status.className='status error';status.textContent=err.message||'Search failed. Try again.';}
+});
+document.getElementById('campaign-form').addEventListener('submit',async function(e){
+  e.preventDefault();if(!chosen)return;var button=document.getElementById('start-button'),status=document.getElementById('campaign-status');button.disabled=true;status.className='status';status.textContent='Creating campaign…';
+  try{var response=await fetch('/api/campaign/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:chosen.type,id:chosen.id,email:document.getElementById('email').value,confirmed:document.getElementById('confirmed').checked})});var out=await response.json();if(!response.ok)throw new Error(out.error||'Could not start campaign.');if(window.pulse)window.pulse('campaign_started',{type:chosen.type,id:chosen.id});location.href=out.url;}catch(err){button.disabled=false;status.className='status error';status.textContent=err.message||'Could not start campaign.';}
+});
+</script>${PULSE_BEACON}</body></html>`;
+}
+
 async function handleRequest(req, res) {
   const u = new URL(req.url, 'http://x');
 
@@ -1345,6 +1441,44 @@ async function handleRequest(req, res) {
       if (geoCache.size > 400) geoCache.delete(geoCache.keys().next().value); // LRU evict oldest
       return send(res, 200, out, 'application/json');
     } catch { return send(res, 200, '[]', 'application/json'); }
+  }
+
+  if (u.pathname === '/api/campaign/nearby') {
+    const lat = Number(u.searchParams.get('lat')), lng = Number(u.searchParams.get('lng'));
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < 40.47 || lat > 40.93 || lng < -74.27 || lng > -73.68) {
+      return send(res, 400, '{"ok":false,"error":"location must be in New York City"}', 'application/json');
+    }
+    const items = ISSUES.filter(i => i.status === 'active')
+      .map(i => ({ issue: i, distance: distanceMeters(lat, lng, Number(i.lat), Number(i.lng)) }))
+      .filter(x => Number.isFinite(x.distance) && x.distance <= 1200)
+      .sort((a, b) => a.distance - b.distance || (Number(b.issue.score) || 0) - (Number(a.issue.score) || 0))
+      .slice(0, 12)
+      .map(({ issue: i, distance }) => ({
+        type: i.type, id: i.id, addr: titleCase(i.addr), borough: titleCase(i.borough),
+        reports: Number(i.n) || 0, currentDays: Number(i.current_days) || 0,
+        distance: Math.round(distance), campaign: !!ugc.getCampaign(key(i.type, i.id)),
+      }));
+    return send(res, 200, JSON.stringify({ ok: true, items }), 'application/json');
+  }
+
+  if (u.pathname === '/api/campaign/start' && req.method === 'POST') {
+    if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
+    const { type, id, email, confirmed } = await readBody(req);
+    const issueKey = key(type, id), issue = ISSUE_BY_KEY.get(issueKey);
+    if (!issue || issue.status !== 'active') return send(res, 400, '{"ok":false,"error":"choose an active city record"}', 'application/json');
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (cleanEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return send(res, 400, '{"ok":false,"error":"enter a valid email"}', 'application/json');
+    }
+    if (confirmed !== true) return send(res, 400, '{"ok":false,"error":"recent firsthand confirmation is required"}', 'application/json');
+    const ipHash = crypto.createHash('sha256').update(clientIp(req)).digest('hex').slice(0, 16);
+    const existed = !!ugc.getCampaign(issueKey);
+    ugc.startCampaign(issueKey);
+    ugc.addCampaignOrganizer(issueKey, cleanEmail, ipHash);
+    ugc.addSeen(issueKey, ipHash);
+    ISSUES_CACHE = null;
+    const url = `${PUBLIC_ORIGIN}/c?t=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}`;
+    return send(res, 200, JSON.stringify({ ok: true, existed, url }), 'application/json');
   }
 
   // Citizen-submitted proof photo, served by id. Filenames are random hex; path-traversal can't escape.
@@ -1543,6 +1677,13 @@ async function handleRequest(req, res) {
     return send(res, 200, renderArea(area), 'text/html; charset=utf-8');
   }
 
+  if (u.pathname === '/start') {
+    const t = u.searchParams.get('t') || u.searchParams.get('type');
+    const id = u.searchParams.get('id');
+    const selected = t && id ? ISSUE_BY_KEY.get(key(t, id)) : null;
+    return send(res, 200, renderCampaignStart(selected), 'text/html; charset=utf-8', { 'Cache-Control': 'no-store' });
+  }
+
   // The CAMPAIGN PAGE: /i, /issue, /c, /campaign all render the same surface.
   if (u.pathname === '/i' || u.pathname === '/issue' || u.pathname === '/c' || u.pathname === '/campaign') {
     const t = u.searchParams.get('t') || u.searchParams.get('type');
@@ -1552,10 +1693,13 @@ async function handleRequest(req, res) {
     return send(res, 200, renderCampaign(issue), 'text/html; charset=utf-8');
   }
 
-  // The landing ("The Record") and the live map are ONE document: index.html decides what to
-  // render from location (hash / query). /map is the map-first entry (deep-links target it);
-  // / is the shame-board landing. Same file -> one /api/issues fetch, every map fn reused.
-  if (u.pathname === '/' || u.pathname === '/index.html' || u.pathname === '/map') {
+  // Launch front door: Campaign 001 proves the playbook. The citywide map remains the discovery
+  // surface, and every campaign carries a self-service path for another resident to start one.
+  if (u.pathname === '/' || u.pathname === '/index.html') {
+    res.writeHead(302, { ...SECURITY_HEADERS, Location: CANARY_URL, 'Cache-Control': 'no-store' });
+    return res.end();
+  }
+  if (u.pathname === '/map') {
     return send(res, 200, fs.readFileSync(path.join(DIR, 'index.html')), 'text/html; charset=utf-8');
   }
 

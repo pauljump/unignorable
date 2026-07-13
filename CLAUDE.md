@@ -60,11 +60,11 @@ pm2 restart unignorable
 
 ## Current State
 
-**Status:** LIVE from the monorepo at https://unignorable.polyfeeds.dev; production hardening and cutover complete.
+**Status:** LIVE from the monorepo at https://unignorable.polyfeeds.dev; Campaign 001 is the launch front door.
 **Last updated:** 2026-07-13
-**What just shipped:** canonical source moved into the monorepo; runtime paths made configurable; PM2, launchd, dashboard, and port registry wired; daily ingest restored; dossier card + first-class deduplicated confirmation + conservative cost model shipped; unknown-issue validation, request-size limits, security headers, health check, graceful shutdown, self-hosted Leaflet, error states, deep-link fix, and smoke tests added.
-**What's next:** Paul performs the visual/on-device pass; keep the standalone checkout for a short rollback window, then remove it once production has stayed healthy.
-**What's blocking:** browser screenshot QA is unavailable in this Codex session; code and HTTP verification are available.
+**What just shipped:** the root now opens Campaign 001 at 335 2nd Ave while `/map` remains the citywide discovery surface. Every campaign has a "Your block can be next" section linking to `/start`; residents can search an NYC address, select a nearby active city-backed issue, provide a private organizer email, confirm firsthand observation, and immediately create or join its permanent campaign. Organizer contacts live only in `campaign_organizers`; the same request records a deduplicated confirmation. Campaign and start pages now emit Pulse analytics. The six-test suite covers redirect, discovery, validation, idempotent creation, analytics, and contact privacy.
+**What's next:** run Campaign 001 by hand and add organizer follow-up delivery plus completed-action confirmation; these are the remaining retention and outcome-measurement loops.
+**What's blocking:** in-app browser control is unavailable in this Codex session, so visual screenshot QA remains a manual device pass; rendered HTML and HTTP interaction verification pass.
 
 **Shipped 2026-07-12 — AREA (ZONE) SHARE — the sharable bundle of many bubbles under one permalink (Phase 1 of 2) — LIVE:**
 - **Why:** every map bubble is one ~1-block cell with its own `/c` permalink + share counter, but a real-world story (e.g. the NY Post "12-block encampment near the Intrepid") is a *zone*. The app knew cells, not zones. This adds the zone object.

@@ -45,15 +45,59 @@ test('health and public assets are available with security headers', async () =>
   assert.equal((await health.json()).ok, true);
   assert.equal(health.headers.get('x-content-type-options'), 'nosniff');
 
-  const root = await fetch(origin);
-  assert.equal(root.status, 200);
-  const html = await root.text();
+  const root = await fetch(origin, { redirect: 'manual' });
+  assert.equal(root.status, 302);
+  assert.match(root.headers.get('location'), /^\/c\?t=Encampment/);
+
+  const map = await fetch(`${origin}/map`);
+  assert.equal(map.status, 200);
+  const html = await map.text();
   assert.match(html, /\/vendor\/leaflet\.js/);
   assert.doesNotMatch(html, /name="robots" content="noindex"/);
 
   const vendor = await fetch(`${origin}/vendor/leaflet.js`);
   assert.equal(vendor.status, 200);
   assert.match(vendor.headers.get('cache-control'), /immutable/);
+});
+
+test('residents can start or join a city-backed campaign', async () => {
+  const issues = await (await fetch(`${origin}/api/issues`)).json();
+  const issue = issues.find(item => item.status === 'active');
+  assert.ok(issue);
+
+  const startPage = await fetch(`${origin}/start?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`);
+  assert.equal(startPage.status, 200);
+  const startHtml = await startPage.text();
+  assert.match(startHtml, /Start the campaign/);
+  assert.match(startHtml, /pulse\.polyfeeds\.dev\/api\/ingest/);
+
+  const nearby = await fetch(`${origin}/api/campaign/nearby?lat=${issue.lat}&lng=${issue.lng}`);
+  assert.equal(nearby.status, 200);
+  const nearbyJson = await nearby.json();
+  assert.ok(nearbyJson.items.some(item => item.type === issue.type && item.id === issue.id));
+
+  const headers = { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.44' };
+  const invalid = await fetch(`${origin}/api/campaign/start`, {
+    method: 'POST', headers,
+    body: JSON.stringify({ type: issue.type, id: issue.id, email: 'not-an-email', confirmed: true }),
+  });
+  assert.equal(invalid.status, 400);
+
+  const body = JSON.stringify({ type: issue.type, id: issue.id, email: 'organizer@example.com', confirmed: true });
+  const first = await fetch(`${origin}/api/campaign/start`, { method: 'POST', headers, body });
+  assert.equal(first.status, 200);
+  const firstJson = await first.json();
+  assert.match(firstJson.url, /\/c\?t=/);
+
+  const second = await fetch(`${origin}/api/campaign/start`, { method: 'POST', headers, body });
+  assert.equal(second.status, 200);
+  assert.equal((await second.json()).existed, true);
+
+  const campaign = await fetch(firstJson.url);
+  const campaignHtml = await campaign.text();
+  assert.match(campaignHtml, /Your block can be next/);
+  assert.match(campaignHtml, /pulse\.polyfeeds\.dev\/api\/ingest/);
+  assert.doesNotMatch(campaignHtml, /organizer@example\.com/);
 });
 
 test('issues include production card fields', async () => {
