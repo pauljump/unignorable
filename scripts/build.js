@@ -369,9 +369,129 @@ function atomicWrite(file, obj) {
 // reporting record, without pretending either proves one physical object persisted throughout.
 const normalizeAddress = value => String(value || '')
   .toUpperCase().replace(/\b(\d+)(ST|ND|RD|TH)\b/g, '$1').replace(/\s+/g, ' ').trim();
+const classifyCampaignResolution = value => {
+  const text = String(value || '').toLowerCase();
+  if (text.includes('observed an encampment')) return 'positive';
+  if (text.includes('attempted to engage the individuals')
+      || text.includes('offered services to the individual')) return 'outreach';
+  if (text.includes('observed no encampment')
+      || text.includes('no encampment was found')
+      || text.includes('could not find')
+      || text.includes('could not locate')
+      || text.includes('did not observe')) return 'negative';
+  return 'unclassified';
+};
+
+// Address-state model v1. Agency observations and outreach contacts anchor supported occupation;
+// ordinary reports determine local cadence; negative inspections are retained as counterevidence.
+// A long evidence gap can identify a possible interruption, but never a cleanup: 311 resolutions
+// do not consistently record removals. The 0-100 result is a transparent index, not a probability.
+function inferAddressState(rows) {
+  const byDay = new Map();
+  for (const row of rows) {
+    const d = byDay.get(row.day) || { day: row.day, reports: 0, positive: 0, outreach: 0, negative: 0, unclassified: 0 };
+    d.reports++;
+    d[classifyCampaignResolution(row.resolution_description)]++;
+    byDay.set(row.day, d);
+  }
+  const daily = [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day));
+  const support = daily.filter(d => d.positive + d.outreach > 0);
+  if (!support.length) return null;
+
+  const activeEraDays = daily.filter(d => d.day >= support[0].day);
+  const reportGaps = [];
+  for (let i = 1; i < activeEraDays.length; i++) reportGaps.push(ord(activeEraDays[i].day) - ord(activeEraDays[i - 1].day));
+  const medianReportGap = reportGaps.length ? median(reportGaps) : MAX_GAP;
+  const cadence = Math.round(Math.min(60, Math.max(30, 4 * medianReportGap)));
+
+  const segments = [];
+  let segment = [support[0]];
+  for (let i = 1; i < support.length; i++) {
+    if (ord(support[i].day) - ord(support[i - 1].day) > cadence) {
+      segments.push(segment);
+      segment = [];
+    }
+    segment.push(support[i]);
+  }
+  segments.push(segment);
+
+  const segmentSummary = (items, index) => {
+    const start = items[0].day, end = items[items.length - 1].day;
+    const within = daily.filter(d => d.day >= start && d.day <= end);
+    let maxGap = 0;
+    for (let i = 1; i < items.length; i++) maxGap = Math.max(maxGap, ord(items[i].day) - ord(items[i - 1].day));
+    return {
+      index: index + 1,
+      supported_from: start,
+      supported_through: end,
+      span_days: ord(end) - ord(start),
+      support_days: items.length,
+      report_days: within.length,
+      reports: within.reduce((n, d) => n + d.reports, 0),
+      positive_observations: within.reduce((n, d) => n + d.positive, 0),
+      outreach_contacts: within.reduce((n, d) => n + d.outreach, 0),
+      negative_inspections: within.reduce((n, d) => n + d.negative, 0),
+      conflicted_days: within.filter(d => d.negative > 0 && d.positive + d.outreach > 0).length,
+      max_support_gap_days: maxGap,
+    };
+  };
+  const summaries = segments.map(segmentSummary);
+  const interruptions = [];
+  for (let i = 1; i < segments.length; i++) {
+    const before = segments[i - 1][segments[i - 1].length - 1];
+    const after = segments[i][0];
+    const between = daily.filter(d => d.day > before.day && d.day < after.day);
+    const negativeOnlyDays = between.filter(d => d.negative > 0 && d.positive + d.outreach === 0).length;
+    const gapDays = ord(after.day) - ord(before.day);
+    interruptions.push({
+      last_support_before: before.day,
+      next_support: after.day,
+      support_gap_days: gapDays,
+      report_days_during_gap: between.length,
+      negative_only_days: negativeOnlyDays,
+      inference: gapDays >= 2 * cadence || (gapDays >= 1.5 * cadence && negativeOnlyDays >= 1)
+        ? 'likely_interruption' : 'possible_interruption',
+      return_supported_on: after.day,
+    });
+  }
+
+  const current = summaries[summaries.length - 1];
+  const latestSupportSilence = DATA_ORD - ord(current.supported_through);
+  const frequencyFactor = Math.min(1, current.report_days / Math.max(4, (current.span_days / cadence) * 4));
+  const spanFactor = Math.min(1, current.span_days / 90);
+  const recencyFactor = Math.max(0, 1 - latestSupportSilence / cadence);
+  const consistencyFactor = Math.max(0, 1 - Math.min(0.5,
+    (current.negative_inspections - current.conflicted_days) / Math.max(1, current.support_days)));
+  const confidence = Math.round(100 * (
+    0.35 * frequencyFactor + 0.25 * spanFactor + 0.30 * recencyFactor + 0.10 * consistencyFactor
+  ));
+
+  return {
+    version: 'address-state-v1',
+    label: confidence >= 75 && latestSupportSilence <= cadence ? 'continuously_supported' : 'uncertain',
+    continuity_confidence_score: confidence,
+    confidence_is_probability: false,
+    cadence_window_days: cadence,
+    median_report_gap_days: +medianReportGap.toFixed(1),
+    latest_support_silence_days: latestSupportSilence,
+    current: current,
+    prior_segments: summaries.slice(0, -1),
+    interruptions,
+    totals: {
+      reports: rows.length,
+      report_days: daily.length,
+      positive_observations: daily.reduce((n, d) => n + d.positive, 0),
+      outreach_contacts: daily.reduce((n, d) => n + d.outreach, 0),
+      negative_inspections: daily.reduce((n, d) => n + d.negative, 0),
+      unclassified_reports: daily.reduce((n, d) => n + d.unclassified, 0),
+      conflicted_days: daily.filter(d => d.negative > 0 && d.positive + d.outreach > 0).length,
+    },
+    method: 'Support is anchored by positive agency observations or outreach contact. The continuity window is four times the median gap between all address report days after support begins, bounded to 30-60 days. Longer gaps between support days create interruption candidates. An interruption is likely only when the gap is at least twice the window, or at least 1.5 times the window with a negative-only inspection. Same-day conflicts remain visible. The confidence score weights report frequency (35%), supported span (25%), recency (30%), and consistency (10%). It is an evidence index, not a probability or proof of one unchanged tent.',
+  };
+}
 const campaignEvidence = {};
 const addressRows = db.prepare(`
-  SELECT date(created_date) AS day, incident_address AS address
+  SELECT date(created_date) AS day, incident_address AS address, resolution_description
   FROM sr311
   WHERE complaint_type=? AND round(latitude,3)||','||round(longitude,3)=?
     AND incident_address IS NOT NULL
@@ -403,6 +523,7 @@ for (const [issueKey, context] of Object.entries(campaignContext)) {
     address_current_episode_report_days: currentDays.length,
     address_current_episode_first_report: currentDays[0] || null,
     address_current_episode_latest_report: currentDays[currentDays.length - 1] || null,
+    state_model: inferAddressState(rows),
   };
 }
 atomicWrite(path.join(dataDir, 'issues.json'), issues);

@@ -13,6 +13,10 @@ for (const name of fs.readdirSync(sourceData)) {
     fs.copyFileSync(path.join(sourceData, name), path.join(dataDir, name));
   }
 }
+fs.copyFileSync(
+  path.join(project, 'tests', 'fixtures', 'campaign_evidence.json'),
+  path.join(dataDir, 'campaign_evidence.json')
+);
 
 const port = 18080 + Math.floor(Math.random() * 1000);
 const origin = `http://127.0.0.1:${port}`;
@@ -106,8 +110,12 @@ test('Campaign 001 separates reporting evidence from observation and issues perm
   assert.equal(campaign.status, 200);
   const html = await campaign.text();
   assert.match(html, /near 246 East 20th Street/i);
-  assert.match(html, /continuous[\s\S]*reporting activity/);
-  assert.match(html, /not proof that one tent/i);
+  assert.match(html, /supports[\s\S]*continuous occupation/i);
+  assert.match(html, /continuity confidence/i);
+  assert.match(html, /March 18, 2026/);
+  assert.match(html, /Likely interruption; return supported/i);
+  assert.match(html, /does not document a cleanup/i);
+  assert.match(html, /evidence index, not a probability/i);
   assert.match(html, /Dated neighbor observation/);
   assert.match(html, /Pain and impact/);
   assert.match(html, /LearningSpring School/);

@@ -422,6 +422,8 @@ function buildEmailOfficialUrl(issue, campaign, trackedReceiptUrl) {
 
   const receiptUrl = trackedReceiptUrl || `${PUBLIC_ORIGIN}/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`;
   const evidence = evidenceFor(issue);
+  const state = evidence && evidence.state_model;
+  const currentState = state && state.current;
   const askLines = askForType(issue.type);
 
   const subject = `[Constituent Request] Repeated ${issue.type} reports ${addr}`;
@@ -429,11 +431,15 @@ function buildEmailOfficialUrl(issue, campaign, trackedReceiptUrl) {
   const body = [
     `Dear ${toName},`,
     '',
-    `I am writing as a constituent about repeated ${issue.type.toLowerCase()} reports ${addr}. NYC 311 reporting activity for this approximate block has continued in the current reporting episode since ${epStartFmt}. This does not establish that one physical tent was continuously present for that entire period.`,
+    `I am writing as a constituent about repeated ${issue.type.toLowerCase()} reports ${addr}. ${currentState
+      ? `The address-specific evidence model supports continuous occupation since ${fmtDate(currentState.supported_from)} with a ${state.continuity_confidence_score}/100 evidence-confidence score.`
+      : `NYC 311 reporting activity for this approximate block has continued in the current reporting episode since ${epStartFmt}.`} This is an inference from report frequency and agency observations, not proof that one unchanged tent was present throughout.`,
     '',
     `The city\'s own 311 record shows:`,
     `- ${n} service requests in the approximate-block record`,
     evidence ? `- ${evidence.address_current_episode_requests} requests in the current reporting episode specifically naming 246 East 20th Street, across ${evidence.address_current_episode_report_days} distinct reporting days` : '',
+    currentState ? `- ${currentState.positive_observations} positive agency observations and ${currentState.outreach_contacts} outreach contacts in the current supported interval` : '',
+    state && state.interruptions.length ? `- The record shows a ${state.interruptions.at(-1).support_gap_days}-day support-evidence gap before ${fmtDate(state.interruptions.at(-1).return_supported_on)}, ${state.interruptions.at(-1).inference === 'likely_interruption' ? 'supporting a likely inactive interval and later return' : 'consistent with a possible interruption and return'}, but not a documented cleanup` : '',
     `- ${cn} times the city marked the case "resolved"`,
     nf ? `- ${nf} of those closures stated "nothing found"` : '',
     '',
@@ -535,11 +541,15 @@ function buildShareUrl(issue, trackedShareUrl) {
   const episodeReports = curEp ? Number(curEp[2]) || 0 : Number(issue.n) || 0;
   const cn = Number(issue.closed_n) || 0;
   const n = Number(issue.n) || 0;
+  const evidence = evidenceFor(issue);
+  const state = evidence && evidence.state_model;
+  const currentState = state && state.current;
 
   const shareUrl = trackedShareUrl || `${PUBLIC_ORIGIN}/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`;
   const tweet = `${tag}`
     + `${addr}: NYC 311 logged ${fmtN(n)} service requests for the approximate block`
-    + (active ? `, including ${fmtN(episodeReports)} in the current reporting episode. ` : '. ')
+    + (currentState ? `. Address-level evidence supports continuous occupation since ${fmtDate(currentState.supported_from)} (${state.continuity_confidence_score}/100 confidence index). `
+      : active ? `, including ${fmtN(episodeReports)} in the current reporting episode. ` : '. ')
     + `The city closed ${fmtN(cn)} requests. `
     + `Clear the sidewalk AND connect these neighbors to services. The record:`;
   const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}&url=${encodeURIComponent(shareUrl)}`;
@@ -553,6 +563,10 @@ function renderCampaign(issue) {
   const issueKey = key(issue.type, issue.id);
   const context = contextFor(issue);
   const evidence = evidenceFor(issue);
+  const state = evidence && evidence.state_model;
+  const currentState = state && state.current;
+  const latestInterruption = state && state.interruptions && state.interruptions.length
+    ? state.interruptions[state.interruptions.length - 1] : null;
   const addr = displayLocation(issue);
   const boro = titleCase(issue.borough);
   const area = boro ? `${addr}, ${boro}` : addr;
@@ -611,7 +625,9 @@ function renderCampaign(issue) {
   }
 
   // Title/OG leads with literal request volume. Reporting continuity is not physical continuity.
-  const ogTitle = active
+  const ogTitle = currentState
+    ? `Occupation supported since ${fmtDate(currentState.supported_from)} ${addr}.`
+    : active
     ? `${fmtN(instReports)} NYC service requests in the current reporting episode ${addr}.`
     : `${area}: ${fmtN(issue.n)} reports on the city's own record.`;
   const ogDesc = `${fmtN(issue.n)} NYC 311 service requests ${yrsTxt}; the city closed ${fmtN(cn)} requests`
@@ -793,7 +809,9 @@ async function prepareOfficialAction(button,actionType){
 
   const stat = (big, label, alarm) =>
     `<div class="stat"><div class="big ${alarm ? 'alarm' : ''}">${big}</div><div class="lbl">${label}</div></div>`;
-  const publicHeadline = issue.headline_kind === 'persistence'
+  const publicHeadline = currentState
+    ? `Address-level evidence supports continuous occupation since ${fmtDate(currentState.supported_from)}.`
+    : issue.headline_kind === 'persistence'
     ? `311 reporting activity has continued in this episode since ${fmtDate(episodeStart)}.`
     : issue.headline_kind === 'recurrence'
       ? `${fmtN(issue.episode_count)} reporting episodes are separated by material quiet intervals.`
@@ -802,8 +820,15 @@ async function prepareOfficialAction(button,actionType){
     ? `<div class="observation"><b>Dated neighbor observation:</b> the ${esc(observation.attribution || 'campaign organizer')} reports seeing the current tent for at least ${fmtN(observation.minimum_months)} months as of ${esc(fmtDate(observation.as_of))}. This is a firsthand minimum, not a claim that it is the same object as earlier 311 records.</div>`
     : '';
   const evidenceHtml = evidence
-    ? `<div class="evidence"><b>Address-specific record:</b> ${fmtN(evidence.address_current_episode_requests)} NYC 311 service requests specifically name 246 East 20th Street across ${fmtN(evidence.address_current_episode_report_days)} distinct reporting days in the current episode. Across the full record, ${fmtN(evidence.address_requests)} requests name that address from ${esc(fmtDate(evidence.address_first_report))} through ${esc(fmtDate(evidence.address_latest_report))}. The wider approximate-block cell contains ${fmtN(evidence.approximate_block_requests)} requests.</div>`
+    ? `<div class="evidence"><b>Address-specific record:</b> ${fmtN(evidence.address_requests)} requests specifically name 246 East 20th Street across ${fmtN(evidence.address_report_days)} reporting days from ${esc(fmtDate(evidence.address_first_report))} through ${esc(fmtDate(evidence.address_latest_report))}. The wider approximate-block cell contains ${fmtN(evidence.approximate_block_requests)} requests.</div>`
     : '';
+  const stateHtml = currentState
+    ? `<section class="state"><h2>Occupation evidence</h2>
+      <div class="state-verdict"><div><b>${state.continuity_confidence_score}/100</b><span>continuity confidence</span></div><p>Agency observations, outreach contacts, and report frequency support continuous occupation from <b>${esc(fmtDate(currentState.supported_from))}</b> through the latest supporting city record on <b>${esc(fmtDate(currentState.supported_through))}</b>.</p></div>
+      <div class="state-facts"><span><b>${fmtN(currentState.support_days)}</b> support days</span><span><b>${fmtN(currentState.positive_observations)}</b> positive observations</span><span><b>${fmtN(currentState.outreach_contacts)}</b> outreach contacts</span><span><b>${fmtN(state.cadence_window_days)}d</b> continuity window</span></div>
+      ${latestInterruption ? `<div class="interruption"><b>${latestInterruption.inference === 'likely_interruption' ? 'Likely interruption; return supported' : 'Possible interruption and return'}:</b> supporting evidence stops after ${esc(fmtDate(latestInterruption.last_support_before))} and resumes ${esc(fmtDate(latestInterruption.next_support))}, a ${fmtN(latestInterruption.support_gap_days)}-day gap${latestInterruption.negative_only_days ? ` containing ${fmtN(latestInterruption.negative_only_days)} negative-only inspection${latestInterruption.negative_only_days === 1 ? '' : 's'}` : ''}. This supports a period of likely inactivity followed by renewed occupation, but does not document a cleanup.</div>` : ''}
+      <p class="fine">This score is an evidence index, not a probability. It does not prove one unchanged tent or a documented cleanup.</p>
+    </section>` : '';
   const impactHtml = nearbyPlaces.length
     ? `<section class="impact"><h2>Pain and impact</h2>
       <div class="scoreline"><div><b>${reportPressure}</b><span>report pressure percentile</span></div><div><b>${proximityImpact}</b><span>proximity impact</span></div><div><b>${priorityIndex}</b><span>priority index</span></div></div>
@@ -899,6 +924,7 @@ async function prepareOfficialAction(button,actionType){
   .act-btn-group{display:flex;gap:6px;flex:none}
   .action-receipt{padding-top:10px;font-size:12px}
   .observation,.evidence{margin:12px 0;padding:12px 14px;border-left:3px solid var(--amber);background:var(--card);font-size:14px}
+  .state{margin:22px 0}.state h2{margin-top:0}.state-verdict{display:grid;grid-template-columns:120px 1fr;gap:16px;align-items:center;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:14px 0}.state-verdict>div{text-align:center}.state-verdict>div b{display:block;color:var(--amber);font-size:28px}.state-verdict>div span{display:block;color:var(--mut);font-size:11px}.state-verdict p{margin:0;font-size:14px}.state-facts{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);margin-top:1px}.state-facts span{background:var(--bg);padding:10px 6px;text-align:center;color:var(--mut);font-size:11px}.state-facts b{display:block;color:var(--ink);font-size:17px}.interruption{margin-top:14px;padding:12px 14px;border-left:3px solid var(--mut);background:var(--card);font-size:13px;color:var(--mut)}.interruption b{color:var(--ink)}
   .scoreline{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
   .scoreline>div{padding:14px 8px;text-align:center;border-right:1px solid var(--line)}
   .scoreline>div:last-child{border-right:0}.scoreline b{display:block;font-size:25px;color:var(--amber)}.scoreline span{font-size:11px;color:var(--mut)}
@@ -915,12 +941,17 @@ async function prepareOfficialAction(button,actionType){
   .start-band h2{margin:0 0 6px;color:var(--ink);font-size:20px;letter-spacing:0;text-transform:none}
   .start-band p{margin:0 0 15px;color:var(--mut);font-size:14px;max-width:520px}
   .start-link{display:inline-block;background:var(--amber);color:#000;text-decoration:none;border-radius:6px;padding:10px 15px;font-weight:800;font-size:14px}
+  @media(max-width:520px){.state-verdict{grid-template-columns:1fr}.state-verdict>div{text-align:left}.state-facts{grid-template-columns:repeat(2,1fr)}}
 </style></head><body><div class="wrap">
   <div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">UN<b>IGNOR</b>ABLE</a><span class="tag">a public receipt</span></div>
 
   <div class="hero">
     <div class="kicker">${esc(issue.type)} &middot; ${esc(area)}</div>
-    ${active
+    ${currentState
+      ? `<div class="day-hero">${fmtN(currentState.reports)}</div>
+    <div class="day-sub">address-specific reports in the supported interval since ${esc(fmtDate(currentState.supported_from))}</div>
+    <p class="lead">The address-level record supports <b>continuous occupation</b>. Confidence: ${fmtN(state.continuity_confidence_score)}/100, based on observations, outreach, and reporting cadence.</p>`
+      : active
       ? `<div class="day-hero">${fmtN(instReports)}</div>
     <div class="day-sub">service requests in the current reporting episode since ${esc(fmtDate(episodeStart))}</div>
     <p class="lead">This is continuous <b>reporting activity</b>, not proof that one tent remained for ${fmtN(dayN)} days.</p>`
@@ -931,6 +962,7 @@ async function prepareOfficialAction(button,actionType){
 
     ${observationHtml}
     ${evidenceHtml}
+    ${stateHtml}
 
     <div class="indict">${esc(yrsTxt.charAt(0).toUpperCase() + yrsTxt.slice(1))}, NYC 311 logged <b>${fmtN(issue.n)} service requests</b> in this approximate-block record and the city closed <b>${fmtN(cn)}</b>${nf ? `, including <b>${fmtN(nf)}</b> with a "nothing found" response` : ''}. ${active ? 'The reporting record remains active.' : 'The same block kept being reported again.'} Knowing is not fixing.</div>
 
@@ -979,7 +1011,7 @@ async function prepareOfficialAction(button,actionType){
     </div>` : ''}
 
     <h2>How we define this spot</h2>
-    <div class="card disclose">A report is one NYC 311 service-request record. A reporting day is a calendar date with at least one matching request. A reporting episode joins request dates while each gap remains within an adaptive 21-to-90-day threshold based on that location's normal cadence; it measures continuity of reporting, not continuity of one object or person. A resurgence is a new reporting episode after a gap longer than that threshold. The map cell is an approximate block, so the address-specific count is shown separately where available.</div>
+    <div class="card disclose">A report is one NYC 311 service-request record. For configured campaign addresses, positive agency observations and outreach contacts anchor occupation support. The continuity window is four times that address's median gap between all report days after support begins, bounded to 30-60 days; a longer gap between supporting observations creates an interruption candidate. A gap becomes a likely interruption only when it is at least twice the window, or at least 1.5 times the window and contains a negative-only inspection. Same-day positive and negative inspections remain visible as conflicts. The 0-100 confidence result weights report frequency, supported span, recency, and consistency. It is an evidence index, not a probability, proof of one unchanged object, or proof of cleanup. Other map locations still use the broader reporting-episode method.</div>
 
     <div class="stamp">${stamp}<br>This page documents a <b>government's</b> response to a public-safety obstruction. It is not about, and does not identify, any individual experiencing homelessness. They are failed by this inaction, not the cause of it.</div>
   </details>

@@ -1,0 +1,34 @@
+{
+  "Encampment|40.736,-73.983": {
+    "approximate_block_requests": 195,
+    "address_requests": 77,
+    "address_report_days": 39,
+    "address_first_report": "2023-09-24",
+    "address_latest_report": "2026-07-02",
+    "address_current_episode_requests": 71,
+    "address_current_episode_report_days": 34,
+    "state_model": {
+      "version": "address-state-v1",
+      "label": "continuously_supported",
+      "continuity_confidence_score": 90,
+      "confidence_is_probability": false,
+      "cadence_window_days": 30,
+      "current": {
+        "supported_from": "2026-03-18",
+        "supported_through": "2026-07-02",
+        "reports": 40,
+        "support_days": 18,
+        "positive_observations": 19,
+        "outreach_contacts": 8
+      },
+      "interruptions": [{
+        "last_support_before": "2026-01-25",
+        "next_support": "2026-03-18",
+        "support_gap_days": 52,
+        "negative_only_days": 1,
+        "inference": "likely_interruption",
+        "return_supported_on": "2026-03-18"
+      }]
+    }
+  }
+}
