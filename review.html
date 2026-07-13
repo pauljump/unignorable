@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>unignorable — review queue</title>
+<style>
+  :root{--bg:#080b11;--panel:#0e1420;--line:#1d2737;--ink:#eaf0fb;--dim:#7e8aa0;--red:#ff5a47;--amber:#ffc24b;--green:#36c98a}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  header{padding:16px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;
+    background:linear-gradient(180deg,#0c111b,#080b11);z-index:5}
+  h1{margin:0;font-size:19px;font-weight:800;letter-spacing:-.4px}
+  h1 b{color:var(--red)}
+  .sub{font-size:12.5px;color:var(--dim);margin-top:4px}
+  .count{font-variant-numeric:tabular-nums;color:var(--amber);font-weight:800}
+  .wrap{max-width:560px;margin:0 auto;padding:16px 14px 60px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:16px}
+  .card img.proof{display:block;width:100%;max-height:360px;object-fit:cover;background:#0a0f17;cursor:pointer}
+  .body{padding:14px 15px}
+  .ptag{display:inline-block;font-size:10.5px;font-weight:800;padding:3px 8px;border-radius:5px;
+    margin-bottom:9px;text-transform:uppercase;letter-spacing:.4px}
+  .ptag.still_here{background:#3a1d1d;color:#ff8b7a}
+  .ptag.worse{background:#3a2a16;color:var(--amber)}
+  .ptag.cleaned,.ptag.gone{background:#163a2a;color:var(--green)}
+  .text{font-size:14.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+  .text.empty{color:var(--dim);font-style:italic}
+  .meta{margin-top:12px;padding-top:11px;border-top:1px solid var(--line);font-size:12px;color:var(--dim);line-height:1.5}
+  .meta b{color:var(--ink);font-weight:700}
+  .acts{display:flex;gap:10px;margin-top:14px}
+  .acts button{flex:1;padding:13px;border-radius:11px;font-size:14px;font-weight:800;cursor:pointer;border:1px solid var(--line)}
+  .ok{background:var(--green);color:#04130c;border-color:var(--green)!important}
+  .no{background:#16202f;color:#ff8b7a}
+  button:disabled{opacity:.5}
+  .empty-state{text-align:center;color:var(--dim);padding:60px 20px;font-size:14px;line-height:1.6}
+  .note{font-size:11.5px;color:var(--dim);margin-top:9px;line-height:1.4}
+  .err{color:var(--red);text-align:center;padding:40px 20px}
+</style>
+</head>
+<body>
+<header>
+  <h1>un<b>ignor</b>able — review</h1>
+  <div class="sub"><span class="count" id="count">—</span> pending · approve = publish + queue for 311 · reject = discard</div>
+</header>
+<div class="wrap" id="wrap"><div class="empty-state">Loading…</div></div>
+<script>
+const STATUS_LABEL = {still_here:'Still here',worse:'Got worse',cleaned:'Cleaned up',gone:'Gone now'};
+const esc = s => (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function ago(ts){const s=(Date.now()-new Date(ts).getTime())/1000;
+  if(s<60)return'just now';if(s<3600)return Math.floor(s/60)+'m ago';
+  if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago';}
+
+async function load(){
+  let data;
+  try{ const r = await fetch('/api/review');
+       if(r.status===401){document.getElementById('wrap').innerHTML='<div class="err">Not authorized.</div>';return;}
+       data = await r.json(); }
+  catch(e){ document.getElementById('wrap').innerHTML='<div class="err">Could not load.</div>'; return; }
+  render(data.items||[]);
+}
+function render(items){
+  document.getElementById('count').textContent = items.length;
+  const w = document.getElementById('wrap');
+  if(!items.length){ w.innerHTML='<div class="empty-state">✓ All clear.<br>Nothing waiting for review.</div>'; return; }
+  w.innerHTML = items.map(p=>{
+    const i = p.issue||{};
+    const loc = [i.type, i.addr, i.borough, i.council!=null?('Council '+i.council):null].filter(Boolean).map(esc).join(' · ');
+    return `<div class="card" id="card-${p.id}">
+      ${p.photo?`<img class="proof" src="/photos/${esc(p.photo)}" alt="" onclick="window.open('/photos/${esc(p.photo)}','_blank')">`:''}
+      <div class="body">
+        ${p.status?`<span class="ptag ${esc(p.status)}">${STATUS_LABEL[p.status]||esc(p.status)}</span>`:''}
+        <div class="text ${p.text?'':'empty'}">${p.text?esc(p.text):'(photo only — no description)'}</div>
+        <div class="meta"><b>${loc||esc(i.type||'Unknown')}</b><br>submitted ${ago(p.ts)} · anon</div>
+        <div class="acts">
+          <button class="ok" onclick="decide(${p.id},'approve',this)">Approve</button>
+          <button class="no" onclick="decide(${p.id},'reject',this)">Reject</button>
+        </div>
+        <div class="note">Approve publishes this to the public board and queues it for filing to 311. Reject discards it and deletes the photo.</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function decide(id, action, btn){
+  const card = document.getElementById('card-'+id);
+  [...card.querySelectorAll('button')].forEach(b=>b.disabled=true);
+  btn.textContent = action==='approve'?'Approving…':'Rejecting…';
+  try{
+    const r = await fetch('/api/review/decide',{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action})});
+    const t = await r.json();
+    if(t.ok){ card.style.transition='opacity .2s'; card.style.opacity='0';
+      setTimeout(()=>{ card.remove(); document.getElementById('count').textContent=t.count;
+        if(!document.querySelector('.card')) render([]); },200); }
+    else { [...card.querySelectorAll('button')].forEach(b=>b.disabled=false); btn.textContent=action==='approve'?'Approve':'Reject'; }
+  }catch(e){ [...card.querySelectorAll('button')].forEach(b=>b.disabled=false); }
+}
+load();
+</script>
+</body>
+</html>

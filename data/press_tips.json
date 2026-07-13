@@ -1,0 +1,20 @@
+{
+  "_note": "Local press tip lines. Primary = the neighborhood paper closest to the block. secondary = citywide investigative outlets.",
+  "primary": {
+    "name": "Town and Village",
+    "email": "news@townandvillage.com",
+    "area": "Stuyvesant Town / Peter Cooper Village / Gramercy"
+  },
+  "secondary": [
+    {
+      "name": "THE CITY",
+      "email": "tips@thecity.nyc",
+      "area": "Citywide investigative"
+    },
+    {
+      "name": "Gothamist",
+      "email": "tips@gothamist.com",
+      "area": "Citywide news"
+    }
+  ]
+}

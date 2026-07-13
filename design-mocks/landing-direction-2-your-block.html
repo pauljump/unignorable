@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="robots" content="noindex">
+<title>unignorable — your block's record of what the city ignores</title>
+<style>
+  :root{
+    --bg:#080b11; --panel:#0e1420; --line:#1d2737; --ink:#eaf0fb; --dim:#7e8aa0;
+    --red:#ff5a47; --amber:#ffc24b;
+    --enc:#ff6b4a; --drug:#c77dff; --assist:#4ad6c8; --pan:#ffd166;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  body{overflow-x:hidden}
+  a{color:inherit}
+
+  /* ---------- shell ---------- */
+  .wrap{max-width:430px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;
+    position:relative;border-left:1px solid #0e141d;border-right:1px solid #0e141d}
+
+  /* faint city-grid texture behind the hero, calm not busy */
+  .grid-bg{position:absolute;inset:0;pointer-events:none;opacity:.5;
+    background-image:
+      linear-gradient(#0d141e 1px,transparent 1px),
+      linear-gradient(90deg,#0d141e 1px,transparent 1px);
+    background-size:46px 46px;
+    -webkit-mask-image:radial-gradient(120% 70% at 50% 0%,#000 35%,transparent 78%);
+    mask-image:radial-gradient(120% 70% at 50% 0%,#000 35%,transparent 78%)}
+
+  /* ---------- top bar ---------- */
+  .bar{display:flex;align-items:center;justify-content:space-between;
+    padding:16px 20px 0;position:relative;z-index:2}
+  .brand{font-size:16px;font-weight:800;letter-spacing:-.4px}
+  .brand b{color:var(--red)}
+  .barlink{font-size:12px;color:var(--dim);font-weight:600}
+
+  /* ---------- hero ---------- */
+  .hero{padding:34px 22px 4px;position:relative;z-index:2}
+  .kicker{font-size:11px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;
+    color:var(--dim);display:flex;align-items:center;gap:8px;margin-bottom:18px}
+  .kicker .ld{flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+  h1{font-size:33px;line-height:1.06;font-weight:800;letter-spacing:-1.1px;margin:0 0 14px}
+  h1 .hl{color:var(--ink);position:relative;white-space:nowrap}
+  h1 .hl:after{content:"";position:absolute;left:-2px;right:-2px;bottom:2px;height:9px;
+    background:rgba(255,90,71,.22);z-index:-1;border-radius:2px}
+  .lede{font-size:15px;line-height:1.55;color:#aeb9cc;margin:0 0 24px;max-width:33ch}
+
+  /* ---------- the search (the hero) ---------- */
+  .search{position:relative;z-index:3}
+  .searchbox{display:flex;align-items:center;gap:11px;background:var(--panel);
+    border:1px solid #28344a;border-radius:15px;padding:15px 15px;
+    box-shadow:0 0 0 4px rgba(40,52,74,.18), 0 18px 40px -20px rgba(0,0,0,.9)}
+  .searchbox:focus-within{border-color:#3a4a68}
+  .pin{flex:none;width:18px;height:18px;color:var(--red)}
+  .searchbox input{flex:1;background:transparent;border:0;outline:0;color:var(--ink);
+    font:inherit;font-size:15px;font-weight:600}
+  .searchbox input::placeholder{color:#5e6a80;font-weight:500}
+  .geo{flex:none;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;
+    color:var(--ink);background:#16202f;border:1px solid var(--line);border-radius:999px;
+    padding:7px 11px;cursor:pointer;white-space:nowrap}
+  .geo svg{width:13px;height:13px;color:var(--red)}
+
+  /* autocomplete preview rows under the box */
+  .ac{margin-top:8px;background:var(--panel);border:1px solid var(--line);border-radius:13px;
+    overflow:hidden}
+  .acrow{display:flex;align-items:center;gap:11px;padding:12px 15px;border-top:1px solid #131b27}
+  .acrow:first-child{border-top:0}
+  .acrow .ai{flex:none;width:7px;height:7px;border-radius:50%;box-shadow:0 0 0 3px rgba(255,255,255,.04)}
+  .acrow .at{flex:1;font-size:13.5px;font-weight:600}
+  .acrow .at small{display:block;font-size:11px;color:var(--dim);font-weight:500;margin-top:2px}
+  .acrow .an{font-size:11.5px;font-weight:800;color:var(--amber);font-variant-numeric:tabular-nums}
+  .acrow .an small{color:var(--dim);font-weight:600}
+
+  .examples{display:flex;gap:7px;flex-wrap:wrap;margin-top:16px}
+  .ex{font-size:11.5px;color:var(--dim);background:#0b111c;border:1px solid var(--line);
+    border-radius:999px;padding:6px 12px;font-weight:600}
+  .ex b{color:#aeb9cc;font-weight:700}
+
+  /* ---------- live ticker / proof of memory ---------- */
+  .strip{margin:30px 22px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    padding:16px 0;display:flex;justify-content:space-between;gap:8px;position:relative;z-index:2}
+  .strip .cell{flex:1;text-align:center}
+  .strip .v{font-size:20px;font-weight:800;letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+  .strip .v.warn{color:var(--amber)}
+  .strip .l{font-size:9.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;
+    margin-top:4px;line-height:1.3}
+  .strip .div{width:1px;background:var(--line);flex:none}
+
+  /* ---------- "your block, contextual" preview card ---------- */
+  .section{padding:30px 22px 0;position:relative;z-index:2}
+  .seclabel{font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;
+    color:var(--dim);margin-bottom:13px;display:flex;align-items:center;gap:8px}
+  .seclabel .ld{flex:1;height:1px;background:var(--line)}
+
+  .blockcard{background:linear-gradient(180deg,#0f1622,#0c1018);border:1px solid var(--line);
+    border-radius:17px;overflow:hidden;box-shadow:0 24px 50px -30px rgba(0,0,0,.9)}
+  /* mini map strip — a static stand-in for the Leaflet handoff target */
+  .minimap{position:relative;height:148px;background:
+      radial-gradient(140% 120% at 30% 20%,#101826,#0a0f17 70%)}
+  .minimap .streets{position:absolute;inset:0;opacity:.6}
+  .minimap .streets:before,.minimap .streets:after{content:"";position:absolute;background:#16202f}
+  .mdot{position:absolute;border-radius:50%;transform:translate(-50%,-50%)}
+  .mdot.lg{box-shadow:0 0 0 6px rgba(255,107,74,.10)}
+  .youpin{position:absolute;transform:translate(-50%,-100%);z-index:3}
+  .youpin .p{width:16px;height:16px;border-radius:50% 50% 50% 0;background:var(--ink);
+    transform:rotate(-45deg);box-shadow:0 4px 10px rgba(0,0,0,.6);border:2px solid #fff}
+  .youpin .lab{position:absolute;top:-22px;left:50%;transform:translateX(-50%);
+    font-size:9.5px;font-weight:800;letter-spacing:.4px;color:#0b0e14;background:var(--ink);
+    padding:2px 7px;border-radius:5px;white-space:nowrap}
+  .maptag{position:absolute;left:11px;bottom:10px;font-size:10.5px;color:var(--dim);
+    background:rgba(8,11,17,.72);border:1px solid var(--line);border-radius:7px;padding:4px 9px}
+  .maptag b{color:var(--ink)}
+
+  .bcbody{padding:16px 16px 18px}
+  .bchead{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  .bchead .where{font-size:14px;font-weight:800;letter-spacing:-.2px}
+  .bchead .within{font-size:11px;color:var(--dim);font-weight:600}
+  .verdict-line{margin:13px 0 4px;font-size:15px;font-weight:800;line-height:1.4;letter-spacing:-.2px}
+  .verdict-line .amb{color:var(--amber)}
+  .verdict-line .rd{color:var(--red)}
+
+  /* the three worst issues on your block (contextual board) */
+  .ilist{margin-top:14px;display:flex;flex-direction:column;gap:9px}
+  .irow{display:flex;align-items:center;gap:12px;background:#0b111c;border:1px solid var(--line);
+    border-radius:11px;padding:11px 12px}
+  .irow .tag{flex:none;width:9px;height:9px;border-radius:50%}
+  .irow .mid{flex:1;min-width:0}
+  .irow .ty{font-size:13px;font-weight:800;letter-spacing:-.1px}
+  .irow .ad{font-size:11.5px;color:var(--dim);font-weight:500;margin-top:2px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .irow .stat{flex:none;text-align:right}
+  .irow .stat .nn{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
+  .irow .stat .ss{font-size:9.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;margin-top:1px}
+  .pers{display:inline-block;font-size:8.5px;font-weight:800;letter-spacing:.4px;color:var(--red);
+    background:#1d0f0f;border:1px solid #3a1d1d;border-radius:4px;padding:1px 5px;margin-left:7px;
+    vertical-align:middle;text-transform:uppercase}
+
+  .cta{display:block;width:100%;margin-top:16px;padding:15px;border-radius:13px;border:0;
+    background:var(--red);color:#fff;font:inherit;font-size:14.5px;font-weight:800;
+    letter-spacing:-.2px;cursor:pointer;text-align:center}
+  .cta .arr{opacity:.7;font-weight:700}
+  .ctasub{text-align:center;font-size:11px;color:var(--dim);margin-top:10px;line-height:1.5}
+
+  /* ---------- the why (editorial, calm) ---------- */
+  .why{padding:38px 22px 8px;position:relative;z-index:2}
+  .pull{font-size:21px;line-height:1.4;font-weight:700;letter-spacing:-.4px;color:var(--ink);
+    margin:0 0 8px}
+  .pull .dim{color:var(--dim)}
+  .pull .rd{color:var(--red)}
+  .receipt{font-size:12.5px;color:var(--dim);line-height:1.6;margin:18px 0 0;
+    border-left:2px solid var(--line);padding-left:14px}
+  .receipt b{color:#aeb9cc;font-weight:700}
+
+  /* the loop, three calm steps */
+  .loop{padding:30px 22px 0;position:relative;z-index:2}
+  .step{display:flex;gap:14px;padding:15px 0;border-top:1px solid var(--line)}
+  .step:last-child{border-bottom:1px solid var(--line)}
+  .step .no{flex:none;font-size:12px;font-weight:800;color:var(--dim);width:22px;
+    font-variant-numeric:tabular-nums;padding-top:1px}
+  .step .h{font-size:14px;font-weight:800;letter-spacing:-.2px}
+  .step .b{font-size:12.5px;color:var(--dim);line-height:1.55;margin-top:3px}
+  .step .b b{color:#aeb9cc;font-weight:600}
+
+  /* ---------- footer ---------- */
+  .foot{padding:32px 22px 40px;position:relative;z-index:2}
+  .fcta{display:flex;align-items:center;gap:11px;background:var(--panel);border:1px solid #28344a;
+    border-radius:14px;padding:14px 15px;cursor:pointer}
+  .fcta .pin{color:var(--red)}
+  .fcta .ft{flex:1;font-size:14px;font-weight:700}
+  .fcta .fa{font-size:18px;color:var(--dim)}
+  .fmeta{margin-top:22px;display:flex;align-items:center;justify-content:space-between;
+    font-size:10.5px;color:#5e6a80}
+  .fmeta .ok{display:inline-flex;align-items:center;gap:6px}
+  .fmeta .dotok{width:6px;height:6px;border-radius:50%;background:#36c98a;display:inline-block}
+  .legal{margin-top:14px;font-size:10.5px;color:#4a5568;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="grid-bg"></div>
+
+  <!-- top bar -->
+  <div class="bar">
+    <div class="brand">un<b>ignor</b>able</div>
+    <div class="barlink">NYC · 311 open data</div>
+  </div>
+
+  <!-- HERO: the address search is the hero -->
+  <header class="hero">
+    <div class="kicker">Your block's record<span class="ld"></span></div>
+    <h1>What does the city keep <span class="hl">closing</span> on your block?</h1>
+    <p class="lede">311 forgets every report the moment it's closed. This doesn't. Drop your address — see the city's own record of what it keeps ignoring near you.</p>
+
+    <div class="search">
+      <div class="searchbox">
+        <svg class="pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+        <input value="3 Peter Cooper Rd" aria-label="Your address">
+        <button class="geo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3.4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+          Use my location
+        </button>
+      </div>
+
+      <!-- live autocomplete preview: lands you local before you even commit -->
+      <div class="ac">
+        <div class="acrow">
+          <span class="ai" style="background:var(--enc)"></span>
+          <span class="at">3 Peter Cooper Rd, Manhattan<small>Peter Cooper Village · CB 06 · District 04</small></span>
+          <span class="an">9 <small>nearby</small></span>
+        </div>
+        <div class="acrow">
+          <span class="ai" style="background:var(--drug)"></span>
+          <span class="at">300 E 20th St, Manhattan<small>Gramercy · CB 06 · District 02</small></span>
+          <span class="an">14 <small>nearby</small></span>
+        </div>
+        <div class="acrow">
+          <span class="ai" style="background:var(--assist)"></span>
+          <span class="at">First Ave Loop, Manhattan<small>Stuyvesant Town · CB 06</small></span>
+          <span class="an">6 <small>nearby</small></span>
+        </div>
+      </div>
+
+      <div class="examples">
+        <span class="ex">Try <b>your home</b></span>
+        <span class="ex">Try <b>your kid's school</b></span>
+        <span class="ex">Try <b>the subway you take</b></span>
+      </div>
+    </div>
+  </header>
+
+  <!-- proof-of-memory ticker: the thing 311 structurally can't do -->
+  <div class="strip">
+    <div class="cell"><div class="v">4,103</div><div class="l">spots active<br>right now</div></div>
+    <div class="div"></div>
+    <div class="cell"><div class="v warn">67%</div><div class="l">closures,<br>came back</div></div>
+    <div class="div"></div>
+    <div class="cell"><div class="v">2,433×</div><div class="l">worst block,<br>still here</div></div>
+  </div>
+
+  <!-- YOUR BLOCK, CONTEXTUAL — the preview of what the search hands you -->
+  <section class="section">
+    <div class="seclabel">What's on this block<span class="ld"></span></div>
+
+    <div class="blockcard">
+      <!-- mini-map: a static stand-in for the Leaflet view the search drops you into -->
+      <div class="minimap">
+        <div class="streets" style="background:
+          repeating-linear-gradient(90deg,transparent 0 52px,#141d2b 52px 53px),
+          repeating-linear-gradient(0deg,transparent 0 40px,#141d2b 40px 41px)"></div>
+        <span class="mdot lg" style="left:38%;top:42%;width:30px;height:30px;background:rgba(255,107,74,.55);border:1.5px solid var(--enc)"></span>
+        <span class="mdot" style="left:62%;top:35%;width:18px;height:18px;background:rgba(199,125,255,.5);border:1px solid var(--drug)"></span>
+        <span class="mdot" style="left:55%;top:64%;width:14px;height:14px;background:rgba(74,214,200,.5);border:1px solid var(--assist)"></span>
+        <span class="mdot" style="left:30%;top:70%;width:11px;height:11px;background:rgba(255,209,102,.5);border:1px solid var(--pan)"></span>
+        <span class="mdot" style="left:74%;top:58%;width:13px;height:13px;background:rgba(255,107,74,.4);border:1px solid var(--enc)"></span>
+        <span class="youpin" style="left:50%;top:50%"><span class="lab">YOU</span><span class="p"></span></span>
+        <span class="maptag"><b>9 issues</b> within a 5-min walk</span>
+      </div>
+
+      <div class="bcbody">
+        <div class="bchead">
+          <span class="where">Peter Cooper Village</span>
+          <span class="within">Manhattan · CB 06</span>
+        </div>
+        <div class="verdict-line">The city closed reports here <span class="rd">147×</span>. <span class="amb">Half came back.</span></div>
+
+        <!-- contextual board: the worst issues on THIS block -->
+        <div class="ilist">
+          <div class="irow">
+            <span class="tag" style="background:var(--enc)"></span>
+            <div class="mid">
+              <div class="ty">Encampment<span class="pers">Persistent</span></div>
+              <div class="ad">First Ave &amp; E 20th — active 1.8 yrs straight</div>
+            </div>
+            <div class="stat"><div class="nn">312</div><div class="ss">reports</div></div>
+          </div>
+          <div class="irow">
+            <span class="tag" style="background:var(--drug)"></span>
+            <div class="mid">
+              <div class="ty">Drug Activity</div>
+              <div class="ad">E 20th St &amp; Ave C — closed 41×, came back 38×</div>
+            </div>
+            <div class="stat"><div class="nn">88</div><div class="ss">reports</div></div>
+          </div>
+          <div class="irow">
+            <span class="tag" style="background:var(--assist)"></span>
+            <div class="mid">
+              <div class="ty">Homeless Assist</div>
+              <div class="ad">Stuyvesant Oval path — flared up 5×</div>
+            </div>
+            <div class="stat"><div class="nn">54</div><div class="ss">reports</div></div>
+          </div>
+        </div>
+
+        <button class="cta">See my block's full record <span class="arr">→</span></button>
+        <div class="ctasub">Opens the live map, centered on you.<br>Tap any spot to read what neighbors actually see.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- THE WHY — editorial, confident, one breath -->
+  <section class="why">
+    <p class="pull"><span class="dim">One spot near you was reported</span> 2,433 times <span class="dim">over five years.</span> <span class="dim">The city's #1 response:</span> <span class="rd">"no encampment was found."</span></p>
+    <div class="receipt">That's not a record of a problem solved. It's a record of a problem <b>closed</b>. unignorable keeps the receipt 311 throws away — and puts it on the block where it happened.</div>
+  </section>
+
+  <!-- THE LOOP -->
+  <section class="loop">
+    <div class="seclabel">How your block gets its record<span class="ld"></span></div>
+    <div class="step">
+      <span class="no">1</span>
+      <div><div class="h">Find your block</div><div class="b">Address or one tap. We center the map on you and surface every chronic issue the city has on record nearby — <b>not the whole city, just yours.</b></div></div>
+    </div>
+    <div class="step">
+      <span class="no">2</span>
+      <div><div class="h">Read the contradiction</div><div class="b">Each spot shows the city's story (<b>reported N×, "resolved" M×, came back</b>) against what neighbors actually see — photo proof the city's data structurally can't have.</div></div>
+    </div>
+    <div class="step">
+      <span class="no">3</span>
+      <div><div class="h">Make it unignorable</div><div class="b">Tap <b>"I see this often."</b> Add what's there. A real person reviews every report before we file it to the city on your behalf.</div></div>
+    </div>
+  </section>
+
+  <!-- FOOTER CTA -->
+  <footer class="foot">
+    <div class="fcta">
+      <svg class="pin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+      <span class="ft">Start with your address</span>
+      <span class="fa">→</span>
+    </div>
+    <div class="fmeta">
+      <span class="ok"><span class="dotok"></span>NYC 311 open data · current through Jun 21, 2026</span>
+      <span>refreshed daily</span>
+    </div>
+    <div class="legal">unignorable assembles the public record. It does not represent the City of New York. Quality-of-life issues only.</div>
+  </footer>
+</div>
+</body>
+</html>

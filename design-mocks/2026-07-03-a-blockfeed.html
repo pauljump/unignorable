@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="robots" content="noindex">
+<title>unignorable -- your block</title>
+<style>
+  :root{
+    --bg:#0b0d10;
+    --card:#13161b;
+    --card2:#161a20;
+    --line:#1f242c;
+    --ink:#e8eaed;
+    --dim:#8b9098;
+    --dimmer:#555c65;
+    --alarm:#ff4d4d;
+    --amber:#ffb020;
+    --green:#3ddc84;
+    --blue:#4a9eff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+  a{color:inherit;text-decoration:none}
+  button{font-family:inherit;cursor:pointer;border:none;background:none}
+
+  .wrap{
+    max-width:430px;
+    margin:0 auto;
+    padding-bottom:80px;
+    position:relative;
+  }
+
+  /* ---- TOP BAR ---- */
+  .topbar{
+    position:sticky;
+    top:0;
+    z-index:100;
+    background:var(--bg);
+    border-bottom:1px solid var(--line);
+    padding:14px 18px 12px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .brand{
+    font-size:15px;
+    font-weight:800;
+    letter-spacing:.04em;
+    color:var(--ink);
+  }
+  .brand b{color:var(--alarm)}
+  .topbar-map{
+    font-size:12px;
+    font-weight:600;
+    color:var(--dim);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:5px 11px;
+  }
+
+  /* ---- LOCATION STRIP ---- */
+  .loc-strip{
+    padding:12px 18px 0;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .loc-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    font-size:13px;
+    font-weight:600;
+    color:var(--ink);
+  }
+  .loc-dot{
+    width:8px;height:8px;
+    border-radius:50%;
+    background:var(--alarm);
+    box-shadow:0 0 0 3px rgba(255,77,77,.2);
+    flex:none;
+  }
+  .loc-change{
+    font-size:12px;
+    color:var(--dim);
+    font-weight:500;
+  }
+
+  /* ---- HEADLINE STAT ---- */
+  .headline-stat{
+    padding:20px 18px 14px;
+    border-bottom:1px solid var(--line);
+  }
+  .hs-num{
+    font-size:42px;
+    font-weight:800;
+    letter-spacing:-1.5px;
+    line-height:1;
+    color:var(--alarm);
+  }
+  .hs-label{
+    font-size:15px;
+    color:var(--dim);
+    margin-top:4px;
+    line-height:1.4;
+  }
+  .hs-label b{color:var(--ink)}
+
+  /* ---- RESPONSIBLE PARTY SPINE ---- */
+  .official-bar{
+    margin:0 18px;
+    margin-top:14px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-left:3px solid var(--amber);
+    border-radius:10px;
+    padding:12px 14px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .official-left{flex:1;min-width:0}
+  .official-label{
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--amber);
+    margin-bottom:4px;
+  }
+  .official-name{
+    font-size:15px;
+    font-weight:800;
+    color:var(--ink);
+  }
+  .official-role{
+    font-size:12px;
+    color:var(--dim);
+    margin-top:1px;
+  }
+  .official-status{
+    flex:none;
+    text-align:right;
+  }
+  .status-badge{
+    font-size:11px;
+    font-weight:700;
+    color:var(--alarm);
+    background:rgba(255,77,77,.1);
+    border:1px solid rgba(255,77,77,.25);
+    border-radius:6px;
+    padding:4px 8px;
+    white-space:nowrap;
+  }
+  .status-sub{
+    font-size:10px;
+    color:var(--dimmer);
+    margin-top:3px;
+    text-align:right;
+  }
+
+  /* ---- SECTION HEADER ---- */
+  .section-header{
+    padding:20px 18px 12px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .section-header .sh-label{
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--dimmer);
+    white-space:nowrap;
+  }
+  .section-header .sh-line{
+    flex:1;
+    height:1px;
+    background:var(--line);
+  }
+
+  /* ---- ISSUE CARD ---- */
+  .issue-card{
+    margin:0 18px 10px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    overflow:hidden;
+    transition:border-color .15s;
+  }
+  .issue-card:active{border-color:#2e3540}
+
+  /* canary card gets amber accent */
+  .issue-card.canary{
+    border-left:3px solid var(--amber);
+  }
+
+  .card-top{
+    padding:14px 14px 12px;
+  }
+  .card-meta-row{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:8px;
+    margin-bottom:8px;
+  }
+  .issue-type{
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--dim);
+    flex:none;
+  }
+  .issue-type.enc{color:var(--amber)}
+  .card-day-badge{
+    font-size:11px;
+    font-weight:800;
+    color:var(--alarm);
+    background:rgba(255,77,77,.1);
+    border:1px solid rgba(255,77,77,.2);
+    border-radius:6px;
+    padding:3px 7px;
+    white-space:nowrap;
+  }
+  .card-day-badge.mild{
+    color:var(--amber);
+    background:rgba(255,176,32,.08);
+    border-color:rgba(255,176,32,.2);
+  }
+
+  .issue-addr{
+    font-size:17px;
+    font-weight:800;
+    color:var(--ink);
+    line-height:1.2;
+    margin-bottom:2px;
+  }
+  .issue-dist{
+    font-size:12px;
+    color:var(--dim);
+  }
+
+  /* receipt line */
+  .receipt-line{
+    margin-top:10px;
+    font-size:12px;
+    color:var(--dim);
+    line-height:1.5;
+    padding-top:10px;
+    border-top:1px solid var(--line);
+  }
+  .receipt-line b{color:var(--ink)}
+  .receipt-line .alarm{color:var(--alarm)}
+
+  /* photo placeholder */
+  .photo-strip{
+    display:flex;
+    gap:6px;
+    padding:0 14px 12px;
+    overflow:hidden;
+  }
+  .photo-block{
+    flex:none;
+    width:74px;
+    height:60px;
+    border-radius:8px;
+    background:var(--card2);
+    border:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:18px;
+    color:var(--dimmer);
+  }
+  .photo-block.has-photo{
+    background:#1a1f26;
+    border-color:transparent;
+    position:relative;
+    overflow:hidden;
+  }
+  .photo-count{
+    width:74px;
+    height:60px;
+    border-radius:8px;
+    background:rgba(255,176,32,.06);
+    border:1px dashed rgba(255,176,32,.25);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:11px;
+    font-weight:600;
+    color:var(--amber);
+    flex:none;
+  }
+
+  /* card bottom action */
+  .card-action-row{
+    border-top:1px solid var(--line);
+    padding:10px 14px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
+  .receipts-link{
+    font-size:12px;
+    color:var(--dim);
+    font-weight:600;
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+  }
+  .receipts-link:active{color:var(--ink)}
+  .action-btn{
+    font-size:13px;
+    font-weight:700;
+    border-radius:8px;
+    padding:8px 14px;
+    white-space:nowrap;
+  }
+  .action-btn.primary{
+    background:var(--amber);
+    color:#000;
+  }
+  .action-btn.ghost{
+    background:transparent;
+    border:1px solid var(--line);
+    color:var(--ink);
+  }
+  .action-btn.campaign-join{
+    background:transparent;
+    border:1px solid var(--amber);
+    color:var(--amber);
+  }
+
+  /* campaign badge on card */
+  .campaign-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    font-size:11px;
+    font-weight:700;
+    color:var(--amber);
+    margin-top:8px;
+  }
+  .campaign-badge .cb-dot{
+    width:6px;height:6px;
+    border-radius:50%;
+    background:var(--amber);
+    flex:none;
+  }
+
+  /* receipts expand area */
+  .receipts-body{
+    display:none;
+    background:#0e1115;
+    border-top:1px solid var(--line);
+    padding:14px;
+  }
+  .receipts-body.open{display:block}
+  .receipt-stat-row{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px;
+    margin-bottom:10px;
+  }
+  .receipt-stat{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:10px 8px;
+    text-align:center;
+  }
+  .receipt-stat .rn{
+    font-size:20px;
+    font-weight:800;
+    color:var(--ink);
+    line-height:1;
+  }
+  .receipt-stat .rn.alarm{color:var(--alarm)}
+  .receipt-stat .rl{
+    font-size:10px;
+    color:var(--dim);
+    margin-top:3px;
+    line-height:1.3;
+  }
+  .receipt-stat .rn.alarm-sm{color:var(--alarm);font-size:18px}
+  .receipt-full-link{
+    font-size:12px;
+    color:var(--amber);
+    font-weight:600;
+    display:block;
+    text-align:center;
+    margin-top:8px;
+  }
+
+  /* ---- FUTURE ACTIONS SHELF ---- */
+  .actions-shelf{
+    margin:0 18px;
+  }
+  .shelf-row{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:13px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .shelf-row:last-child{border-bottom:none}
+  .shelf-icon{
+    font-size:18px;
+    flex:none;
+    width:36px;
+    height:36px;
+    border-radius:9px;
+    background:var(--card);
+    border:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .shelf-icon.active-icon{
+    background:rgba(255,176,32,.1);
+    border-color:rgba(255,176,32,.25);
+  }
+  .shelf-text{flex:1;min-width:0}
+  .shelf-title{
+    font-size:13px;
+    font-weight:700;
+    color:var(--ink);
+    line-height:1.2;
+  }
+  .shelf-desc{
+    font-size:11px;
+    color:var(--dim);
+    margin-top:2px;
+    line-height:1.35;
+  }
+  .shelf-cta{
+    flex:none;
+  }
+  .shelf-cta .action-btn{
+    font-size:12px;
+    padding:7px 12px;
+  }
+  .shelf-row.coming{opacity:.4}
+  .shelf-coming-tag{
+    flex:none;
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--dimmer);
+    border:1px solid var(--line);
+    border-radius:5px;
+    padding:3px 7px;
+  }
+
+  /* ---- DATA STAMP ---- */
+  .data-stamp{
+    margin:24px 18px 0;
+    padding:14px 0 0;
+    border-top:1px solid var(--line);
+    font-size:11px;
+    color:var(--dimmer);
+    line-height:1.6;
+  }
+  .data-stamp a{color:var(--dim);font-weight:600}
+
+  /* ---- MAP TAB TOGGLE ---- */
+  .view-toggle{
+    display:flex;
+    gap:0;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+    margin-left:auto;
+  }
+  .vt-btn{
+    font-size:12px;
+    font-weight:700;
+    padding:5px 12px;
+    color:var(--dim);
+    background:transparent;
+    transition:background .1s,color .1s;
+  }
+  .vt-btn.active{
+    background:var(--card2);
+    color:var(--ink);
+  }
+
+  /* ---- MAP PANEL (demoted) ---- */
+  .map-panel{
+    display:none;
+    margin:0 18px 10px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    overflow:hidden;
+    height:200px;
+    align-items:center;
+    justify-content:center;
+    font-size:13px;
+    color:var(--dim);
+    text-align:center;
+  }
+  .map-panel.open{display:flex;flex-direction:column;gap:6px}
+
+  /* ---- FEED TABS ---- */
+  .feed-tabs{
+    padding:4px 18px 0;
+    display:flex;
+    gap:0;
+    border-bottom:1px solid var(--line);
+  }
+  .ftab{
+    font-size:13px;
+    font-weight:600;
+    color:var(--dim);
+    padding:10px 14px 10px 0;
+    border-bottom:2px solid transparent;
+    margin-bottom:-1px;
+  }
+  .ftab.active{
+    color:var(--ink);
+    border-color:var(--amber);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="brand">UN<b>IGNOR</b>ABLE</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="view-toggle">
+        <button class="vt-btn active" onclick="showFeed()" id="btn-feed">Feed</button>
+        <button class="vt-btn" onclick="showMap()" id="btn-map">Map</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOCATION STRIP -->
+  <div class="loc-strip">
+    <div class="loc-pill">
+      <div class="loc-dot"></div>
+      Near E 20th &amp; 2nd Ave
+    </div>
+    <a href="#" class="loc-change">change</a>
+  </div>
+
+  <!-- HEADLINE STAT -->
+  <div class="headline-stat">
+    <div class="hs-num">79</div>
+    <div class="hs-label"><b>open problems</b> within a 5-minute walk</div>
+  </div>
+
+  <!-- RESPONSIBLE OFFICIAL -->
+  <div class="official-bar">
+    <div class="official-left">
+      <div class="official-label">Accountable official</div>
+      <div class="official-name">Harvey Epstein</div>
+      <div class="official-role">NYC Council Member, District 2</div>
+    </div>
+    <div class="official-status">
+      <div class="status-badge">No action on record</div>
+      <div class="status-sub">contacted 3x</div>
+    </div>
+  </div>
+
+  <!-- MAP PANEL (hidden by default) -->
+  <div id="map-panel" class="map-panel">
+    <div style="font-size:30px">🗺</div>
+    <div>Map view coming soon</div>
+    <div style="font-size:11px;color:var(--dimmer)">79 active locations near you</div>
+  </div>
+
+  <!-- FEED -->
+  <div id="feed-panel">
+
+    <!-- FEED TABS -->
+    <div class="feed-tabs">
+      <div class="ftab active">Worst first</div>
+      <div class="ftab" style="margin-left:4px">Nearest</div>
+      <div class="ftab" style="margin-left:4px">Longest ignored</div>
+    </div>
+
+    <!-- SECTION HEADER -->
+    <div class="section-header">
+      <span class="sh-label">Your block's record</span>
+      <div class="sh-line"></div>
+    </div>
+
+    <!-- CARD 1: CANARY CAMPAIGN - 335 2nd Ave Encampment -->
+    <div class="issue-card canary" id="card-canary">
+      <div class="card-top">
+        <div class="card-meta-row">
+          <span class="issue-type enc">Encampment</span>
+          <span class="card-day-badge">Day 297 ignored</span>
+        </div>
+        <div class="issue-addr">335 2nd Avenue</div>
+        <div class="issue-dist">230 ft away</div>
+        <div class="campaign-badge">
+          <div class="cb-dot"></div>
+          Active campaign on this block
+        </div>
+        <div class="receipt-line">
+          Reported <b>189x</b> to 311. Closed <b>169x</b> by the city.
+          <span class="alarm"><b>44x</b> "nothing found."</span> Still here.
+        </div>
+      </div>
+      <div class="photo-strip">
+        <div class="photo-block has-photo" title="Neighbor photo">
+          <div style="font-size:22px">📸</div>
+        </div>
+        <div class="photo-block has-photo" title="Neighbor photo">
+          <div style="font-size:22px">📸</div>
+        </div>
+        <div class="photo-count">+2 photos<br>from neighbors</div>
+      </div>
+      <div class="card-action-row">
+        <button class="receipts-link" onclick="toggleReceipts('canary')">
+          <span id="receipts-label-canary">See full record</span> &#8594;
+        </button>
+        <a href="/c?t=Encampment&amp;id=40.736,-73.983" class="action-btn primary">Email Epstein</a>
+      </div>
+      <div class="receipts-body" id="receipts-canary">
+        <div class="receipt-stat-row">
+          <div class="receipt-stat">
+            <div class="rn alarm">189</div>
+            <div class="rl">times reported to 311</div>
+          </div>
+          <div class="receipt-stat">
+            <div class="rn">169</div>
+            <div class="rl">closed by the city</div>
+          </div>
+          <div class="receipt-stat">
+            <div class="rn alarm">44</div>
+            <div class="rl">"nothing found" closures</div>
+          </div>
+        </div>
+        <div class="receipt-stat-row">
+          <div class="receipt-stat">
+            <div class="rn alarm">9</div>
+            <div class="rl">separate episodes</div>
+          </div>
+          <div class="receipt-stat">
+            <div class="rn">83</div>
+            <div class="rl">came back after closing</div>
+          </div>
+          <div class="receipt-stat">
+            <div class="rn">2021</div>
+            <div class="rl">city first knew</div>
+          </div>
+        </div>
+        <a href="/c?t=Encampment&amp;id=40.736,-73.983" class="receipt-full-link">View full campaign record &#8594;</a>
+      </div>
+    </div>
+
+    <!-- CARD 2 -->
+    <div class="issue-card" id="card-2">
+      <div class="card-top">
+        <div class="card-meta-row">
+          <span class="issue-type">Outreach Request</span>
+          <span class="card-day-badge">Day 75 ignored</span>
+        </div>
+        <div class="issue-addr">Third Avenue</div>
+        <div class="issue-dist">0.2 mi away</div>
+        <div class="receipt-line">
+          Reported <b>104x</b> since 2021. Closed <b>69x</b>.
+          <span class="alarm"><b>52x</b> "nothing found."</span>
+          Returned <b>61x</b> after closure. This is episode 20.
+        </div>
+      </div>
+      <div class="card-action-row">
+        <button class="receipts-link" onclick="toggleReceipts('2')">
+          <span id="receipts-label-2">See full record</span> &#8594;
+        </button>
+        <button class="action-btn ghost">Confirm still here</button>
+      </div>
+      <div class="receipts-body" id="receipts-2">
+        <div class="receipt-stat-row">
+          <div class="receipt-stat"><div class="rn alarm">104</div><div class="rl">reports filed</div></div>
+          <div class="receipt-stat"><div class="rn">69</div><div class="rl">closed by city</div></div>
+          <div class="receipt-stat"><div class="rn alarm">52</div><div class="rl">"nothing found"</div></div>
+        </div>
+        <div class="receipt-stat-row">
+          <div class="receipt-stat"><div class="rn alarm">20</div><div class="rl">episodes since 2021</div></div>
+          <div class="receipt-stat"><div class="rn">61</div><div class="rl">returned after close</div></div>
+          <div class="receipt-stat"><div class="rn">2021</div><div class="rl">first report</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD 3 -->
+    <div class="issue-card" id="card-3">
+      <div class="card-top">
+        <div class="card-meta-row">
+          <span class="issue-type">Outreach Request</span>
+          <span class="card-day-badge">Day 441 ignored</span>
+        </div>
+        <div class="issue-addr">Second Avenue</div>
+        <div class="issue-dist">0.3 mi away</div>
+        <div class="receipt-line">
+          Reported <b>52x</b> since 2021. Closed <b>44x</b>.
+          <span class="alarm"><b>31x</b> "nothing found."</span>
+          Returned <b>42x</b>. Current episode: 441 days and counting.
+        </div>
+      </div>
+      <div class="card-action-row">
+        <button class="receipts-link" onclick="toggleReceipts('3')">
+          <span id="receipts-label-3">See full record</span> &#8594;
+        </button>
+        <button class="action-btn ghost">Confirm still here</button>
+      </div>
+      <div class="receipts-body" id="receipts-3">
+        <div class="receipt-stat-row">
+          <div class="receipt-stat"><div class="rn alarm">52</div><div class="rl">reports filed</div></div>
+          <div class="receipt-stat"><div class="rn">44</div><div class="rl">closed by city</div></div>
+          <div class="receipt-stat"><div class="rn alarm">31</div><div class="rl">"nothing found"</div></div>
+        </div>
+        <div class="receipt-stat-row">
+          <div class="receipt-stat"><div class="rn alarm">6</div><div class="rl">separate episodes</div></div>
+          <div class="receipt-stat"><div class="rn">42</div><div class="rl">returned after close</div></div>
+          <div class="receipt-stat"><div class="rn">2021</div><div class="rl">first report</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD 4 -->
+    <div class="issue-card" id="card-4">
+      <div class="card-top">
+        <div class="card-meta-row">
+          <span class="issue-type">Outreach Request</span>
+          <span class="card-day-badge">Day 73 ignored</span>
+        </div>
+        <div class="issue-addr">Third Avenue</div>
+        <div class="issue-dist">587 ft away</div>
+        <div class="receipt-line">
+          Reported <b>59x</b> since 2021.
+          <span class="alarm"><b>41x</b> "nothing found."</span>
+          Returned <b>39x</b>. Episode 10 of an ongoing pattern.
+        </div>
+      </div>
+      <div class="card-action-row">
+        <button class="receipts-link" onclick="toggleReceipts('4')">
+          <span id="receipts-label-4">See full record</span> &#8594;
+        </button>
+        <button class="action-btn ghost">Confirm still here</button>
+      </div>
+      <div class="receipts-body" id="receipts-4">
+        <div class="receipt-stat-row">
+          <div class="receipt-stat"><div class="rn alarm">59</div><div class="rl">reports filed</div></div>
+          <div class="receipt-stat"><div class="rn">40</div><div class="rl">closed by city</div></div>
+          <div class="receipt-stat"><div class="rn alarm">41</div><div class="rl">"nothing found"</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD 5: Irving Place Encampment -->
+    <div class="issue-card" id="card-5">
+      <div class="card-top">
+        <div class="card-meta-row">
+          <span class="issue-type enc">Encampment</span>
+          <span class="card-day-badge">Day 119 ignored</span>
+        </div>
+        <div class="issue-addr">Irving Place</div>
+        <div class="issue-dist">0.3 mi away</div>
+        <div class="receipt-line">
+          Reported <b>379x</b> since 2021. Closed <b>370x</b>.
+          <span class="alarm"><b>181x</b> "nothing found."</span>
+          Returned <b>236x</b>. This is episode 21.
+        </div>
+      </div>
+      <div class="card-action-row">
+        <button class="receipts-link" onclick="toggleReceipts('5')">
+          <span id="receipts-label-5">See full record</span> &#8594;
+        </button>
+        <button class="action-btn ghost">Confirm still here</button>
+      </div>
+      <div class="receipts-body" id="receipts-5">
+        <div class="receipt-stat-row">
+          <div class="receipt-stat"><div class="rn alarm">379</div><div class="rl">reports filed</div></div>
+          <div class="receipt-stat"><div class="rn">370</div><div class="rl">closed by city</div></div>
+          <div class="receipt-stat"><div class="rn alarm">181</div><div class="rl">"nothing found"</div></div>
+        </div>
+        <div class="receipt-stat-row">
+          <div class="receipt-stat"><div class="rn alarm">21</div><div class="rl">separate episodes</div></div>
+          <div class="receipt-stat"><div class="rn">236</div><div class="rl">returned after close</div></div>
+          <div class="receipt-stat"><div class="rn">2021</div><div class="rl">first report</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD 6 -->
+    <div class="issue-card" id="card-6">
+      <div class="card-top">
+        <div class="card-meta-row">
+          <span class="issue-type">Outreach Request</span>
+          <span class="card-day-badge mild">Day 4 ignored</span>
+        </div>
+        <div class="issue-addr">First Avenue</div>
+        <div class="issue-dist">0.3 mi away</div>
+        <div class="receipt-line">
+          Reported <b>128x</b> since 2021. Closed <b>91x</b>.
+          <span class="alarm"><b>66x</b> "nothing found."</span>
+          This is episode 18. Pattern: persistent.
+        </div>
+      </div>
+      <div class="card-action-row">
+        <button class="receipts-link" onclick="toggleReceipts('6')">
+          <span id="receipts-label-6">See full record</span> &#8594;
+        </button>
+        <button class="action-btn ghost">Confirm still here</button>
+      </div>
+      <div class="receipts-body" id="receipts-6">
+        <div class="receipt-stat-row">
+          <div class="receipt-stat"><div class="rn alarm">128</div><div class="rl">reports filed</div></div>
+          <div class="receipt-stat"><div class="rn">91</div><div class="rl">closed by city</div></div>
+          <div class="receipt-stat"><div class="rn alarm">66</div><div class="rl">"nothing found"</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD 7 -->
+    <div class="issue-card" id="card-7">
+      <div class="card-top">
+        <div class="card-meta-row">
+          <span class="issue-type">Outreach Request</span>
+          <span class="card-day-badge">Day 163 ignored</span>
+        </div>
+        <div class="issue-addr">Irving Place</div>
+        <div class="issue-dist">0.3 mi away</div>
+        <div class="receipt-line">
+          Reported <b>105x</b> since 2022. Closed <b>85x</b>.
+          <span class="alarm"><b>43x</b> "nothing found."</span>
+          Returned <b>75x</b>.
+        </div>
+      </div>
+      <div class="card-action-row">
+        <button class="receipts-link" onclick="toggleReceipts('7')">
+          <span id="receipts-label-7">See full record</span> &#8594;
+        </button>
+        <button class="action-btn ghost">Confirm still here</button>
+      </div>
+      <div class="receipts-body" id="receipts-7">
+        <div class="receipt-stat-row">
+          <div class="receipt-stat"><div class="rn alarm">105</div><div class="rl">reports filed</div></div>
+          <div class="receipt-stat"><div class="rn">85</div><div class="rl">closed by city</div></div>
+          <div class="receipt-stat"><div class="rn alarm">43</div><div class="rl">"nothing found"</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD 8 -->
+    <div class="issue-card" id="card-8">
+      <div class="card-top">
+        <div class="card-meta-row">
+          <span class="issue-type">Outreach Request</span>
+          <span class="card-day-badge">Day 202 ignored</span>
+        </div>
+        <div class="issue-addr">Third Avenue</div>
+        <div class="issue-dist">0.3 mi away</div>
+        <div class="receipt-line">
+          Reported <b>61x</b> since 2021. Closed <b>44x</b>.
+          <span class="alarm"><b>35x</b> "nothing found."</span>
+          Returned <b>42x</b>. Episode 9.
+        </div>
+      </div>
+      <div class="card-action-row">
+        <button class="receipts-link" onclick="toggleReceipts('8')">
+          <span id="receipts-label-8">See full record</span> &#8594;
+        </button>
+        <button class="action-btn ghost">Confirm still here</button>
+      </div>
+      <div class="receipts-body" id="receipts-8">
+        <div class="receipt-stat-row">
+          <div class="receipt-stat"><div class="rn alarm">61</div><div class="rl">reports filed</div></div>
+          <div class="receipt-stat"><div class="rn">44</div><div class="rl">closed by city</div></div>
+          <div class="receipt-stat"><div class="rn alarm">35</div><div class="rl">"nothing found"</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD 9 -->
+    <div class="issue-card" id="card-9">
+      <div class="card-top">
+        <div class="card-meta-row">
+          <span class="issue-type">Outreach Request</span>
+          <span class="card-day-badge mild">Day 15 ignored</span>
+        </div>
+        <div class="issue-addr">360 East 15th Street</div>
+        <div class="issue-dist">0.3 mi away</div>
+        <div class="receipt-line">
+          Reported <b>84x</b> since 2021. Closed <b>59x</b>.
+          <span class="alarm"><b>47x</b> "nothing found."</span>
+          Returned <b>54x</b>. This is episode 16.
+        </div>
+      </div>
+      <div class="card-action-row">
+        <button class="receipts-link" onclick="toggleReceipts('9')">
+          <span id="receipts-label-9">See full record</span> &#8594;
+        </button>
+        <button class="action-btn ghost">Confirm still here</button>
+      </div>
+      <div class="receipts-body" id="receipts-9">
+        <div class="receipt-stat-row">
+          <div class="receipt-stat"><div class="rn alarm">84</div><div class="rl">reports filed</div></div>
+          <div class="receipt-stat"><div class="rn">59</div><div class="rl">closed by city</div></div>
+          <div class="receipt-stat"><div class="rn alarm">47</div><div class="rl">"nothing found"</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD 10 -->
+    <div class="issue-card" id="card-10">
+      <div class="card-top">
+        <div class="card-meta-row">
+          <span class="issue-type">Outreach Request</span>
+          <span class="card-day-badge mild">Day 20 ignored</span>
+        </div>
+        <div class="issue-addr">355 East 23rd Street</div>
+        <div class="issue-dist">994 ft away</div>
+        <div class="receipt-line">
+          Reported <b>92x</b> since 2021. Closed <b>77x</b>.
+          <span class="alarm"><b>33x</b> "nothing found."</span>
+          Returned <b>71x</b>. Episode 19.
+        </div>
+      </div>
+      <div class="card-action-row">
+        <button class="receipts-link" onclick="toggleReceipts('10')">
+          <span id="receipts-label-10">See full record</span> &#8594;
+        </button>
+        <button class="action-btn ghost">Confirm still here</button>
+      </div>
+      <div class="receipts-body" id="receipts-10">
+        <div class="receipt-stat-row">
+          <div class="receipt-stat"><div class="rn alarm">92</div><div class="rl">reports filed</div></div>
+          <div class="receipt-stat"><div class="rn">77</div><div class="rl">closed by city</div></div>
+          <div class="receipt-stat"><div class="rn alarm">33</div><div class="rl">"nothing found"</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD 11 -->
+    <div class="issue-card" id="card-11">
+      <div class="card-top">
+        <div class="card-meta-row">
+          <span class="issue-type">Outreach Request</span>
+          <span class="card-day-badge">Day 86 ignored</span>
+        </div>
+        <div class="issue-addr">East 19th Street</div>
+        <div class="issue-dist">0.2 mi away</div>
+        <div class="receipt-line">
+          Reported <b>18x</b> since 2022. Closed <b>10x</b>.
+          <span class="alarm"><b>12x</b> "nothing found."</span>
+          Episode 10 of a recurring pattern.
+        </div>
+      </div>
+      <div class="card-action-row">
+        <button class="receipts-link" onclick="toggleReceipts('11')">
+          <span id="receipts-label-11">See full record</span> &#8594;
+        </button>
+        <button class="action-btn ghost">Confirm still here</button>
+      </div>
+      <div class="receipts-body" id="receipts-11">
+        <div class="receipt-stat-row">
+          <div class="receipt-stat"><div class="rn alarm">18</div><div class="rl">reports filed</div></div>
+          <div class="receipt-stat"><div class="rn">10</div><div class="rl">closed by city</div></div>
+          <div class="receipt-stat"><div class="rn alarm">12</div><div class="rl">"nothing found"</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARD 12 -->
+    <div class="issue-card" id="card-12">
+      <div class="card-top">
+        <div class="card-meta-row">
+          <span class="issue-type">Outreach Request</span>
+          <span class="card-day-badge">Day 51 ignored</span>
+        </div>
+        <div class="issue-addr">Third Avenue</div>
+        <div class="issue-dist">915 ft away</div>
+        <div class="receipt-line">
+          Reported <b>61x</b> since 2021. Closed <b>48x</b>.
+          <span class="alarm"><b>37x</b> "nothing found."</span>
+          Returned <b>45x</b>. Episode 15.
+        </div>
+      </div>
+      <div class="card-action-row">
+        <button class="receipts-link" onclick="toggleReceipts('12')">
+          <span id="receipts-label-12">See full record</span> &#8594;
+        </button>
+        <button class="action-btn ghost">Confirm still here</button>
+      </div>
+      <div class="receipts-body" id="receipts-12">
+        <div class="receipt-stat-row">
+          <div class="receipt-stat"><div class="rn alarm">61</div><div class="rl">reports filed</div></div>
+          <div class="receipt-stat"><div class="rn">48</div><div class="rl">closed by city</div></div>
+          <div class="receipt-stat"><div class="rn alarm">37</div><div class="rl">"nothing found"</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOAD MORE -->
+    <div style="padding:4px 18px 0;text-align:center">
+      <button style="font-size:13px;font-weight:600;color:var(--dim);padding:12px;width:100%">
+        67 more issues nearby
+      </button>
+    </div>
+
+    <!-- FUTURE ACTIONS SHELF -->
+    <div class="section-header" style="padding-top:28px">
+      <span class="sh-label">Apply more pressure</span>
+      <div class="sh-line"></div>
+    </div>
+
+    <div class="actions-shelf">
+
+      <!-- ACTIVE: Email Epstein -->
+      <div class="shelf-row">
+        <div class="shelf-icon active-icon">&#9993;&#65039;</div>
+        <div class="shelf-text">
+          <div class="shelf-title">Email Harvey Epstein with the record</div>
+          <div class="shelf-desc">Pre-filled with the city's own 311 data. Contacted 3x, no reply on record.</div>
+        </div>
+        <div class="shelf-cta">
+          <a href="mailto:District2@council.nyc.gov" class="action-btn primary action-btn" style="font-size:12px;padding:7px 12px">Send</a>
+        </div>
+      </div>
+
+      <!-- COMING: File to 311 for you -->
+      <div class="shelf-row coming">
+        <div class="shelf-icon">&#128221;</div>
+        <div class="shelf-text">
+          <div class="shelf-title">File to 311 for you</div>
+          <div class="shelf-desc">Pre-filled, one tap, timestamped to your location.</div>
+        </div>
+        <div class="shelf-coming-tag">Coming</div>
+      </div>
+
+      <!-- COMING: Fund a challenger -->
+      <div class="shelf-row coming">
+        <div class="shelf-icon">&#127381;</div>
+        <div class="shelf-text">
+          <div class="shelf-title">Fund a challenger</div>
+          <div class="shelf-desc">Support a candidate running on this district's record.</div>
+        </div>
+        <div class="shelf-coming-tag">Coming</div>
+      </div>
+
+      <!-- COMING: Watch kit -->
+      <div class="shelf-row coming">
+        <div class="shelf-icon">&#128065;</div>
+        <div class="shelf-text">
+          <div class="shelf-title">Watch kit</div>
+          <div class="shelf-desc">Get notified when this spot closes, reopens, or gets press.</div>
+        </div>
+        <div class="shelf-coming-tag">Coming</div>
+      </div>
+
+    </div>
+
+    <!-- DATA STAMP -->
+    <div class="data-stamp">
+      Built from NYC's own 311 open data (dataset erm2-nwe9), current through July 1, 2026.
+      161 service requests within 500m of your location; 79 currently active.
+      Every count is the city's record, not ours.
+      This page documents the city's response history. It does not identify any individual.
+      <br><br>
+      <a href="https://unignorable.polyfeeds.dev/map">View full map</a> &middot;
+      <a href="#">About this data</a>
+    </div>
+
+  </div><!-- /feed-panel -->
+
+</div><!-- /wrap -->
+
+<script>
+  function toggleReceipts(id) {
+    var body = document.getElementById('receipts-' + id);
+    var label = document.getElementById('receipts-label-' + id);
+    if (!body) return;
+    var isOpen = body.classList.contains('open');
+    body.classList.toggle('open', !isOpen);
+    if (label) label.textContent = isOpen ? 'See full record' : 'Hide record';
+  }
+
+  function showFeed() {
+    document.getElementById('feed-panel').style.display = '';
+    document.getElementById('map-panel').classList.remove('open');
+    document.getElementById('btn-feed').classList.add('active');
+    document.getElementById('btn-map').classList.remove('active');
+  }
+
+  function showMap() {
+    document.getElementById('feed-panel').style.display = 'none';
+    document.getElementById('map-panel').classList.add('open');
+    document.getElementById('btn-map').classList.add('active');
+    document.getElementById('btn-feed').classList.remove('active');
+  }
+</script>
+</body>
+</html>

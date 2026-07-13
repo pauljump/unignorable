@@ -1,0 +1,16 @@
+{
+  "_note": "Community board district managers. Key = community board code as it appears in 311 data (e.g. '06 MANHATTAN'). Falls back to CAU if district manager email absent.",
+  "06 MANHATTAN": {
+    "board": "Manhattan Community Board 6",
+    "district_manager": "Marisol Alcantara",
+    "email": "mcb6@cb.nyc.gov",
+    "phone": "(212) 679-0907",
+    "area": "Murray Hill, Gramercy, Kips Bay"
+  },
+  "01 MANHATTAN": { "board": "Manhattan Community Board 1", "email": "bk01@cb.nyc.gov" },
+  "02 MANHATTAN": { "board": "Manhattan Community Board 2", "email": "man02@cb.nyc.gov" },
+  "03 MANHATTAN": { "board": "Manhattan Community Board 3", "email": "man03@cb.nyc.gov" },
+  "04 MANHATTAN": { "board": "Manhattan Community Board 4", "email": "man04@cb.nyc.gov" },
+  "05 MANHATTAN": { "board": "Manhattan Community Board 5", "email": "man05@cb.nyc.gov" },
+  "07 MANHATTAN": { "board": "Manhattan Community Board 7", "email": "man07@cb.nyc.gov" }
+}

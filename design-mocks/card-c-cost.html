@@ -1,0 +1,66 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Card C — Cost</title>
+<style>
+  :root{--bg:#080b11;--panel:#0e1420;--line:#1d2737;--ink:#eaf0fb;--dim:#9aa6bd;--red:#ff5a47;--amber:#ffc24b;--enc:#ff6b4a;--green:#3ddc84}
+  *{box-sizing:border-box}
+  body{margin:0;background:#05070b;color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex;flex-direction:column;align-items:center;gap:14px;padding:26px 14px 60px}
+  .lbl{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  .card{width:100%;max-width:390px;background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+  .pad{padding:18px 17px}
+  .kick{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+  .kick .type{color:var(--enc)}
+  .kick .live{display:flex;align-items:center;gap:5px;color:var(--red)}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--red);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,90,71,.55)}70%{box-shadow:0 0 0 7px rgba(255,90,71,0)}100%{box-shadow:0 0 0 0 rgba(255,90,71,0)}}
+  /* cost hero */
+  .cost{font-size:52px;line-height:1;font-weight:800;letter-spacing:-.03em;color:var(--red);margin:16px 0 2px;font-variant-numeric:tabular-nums}
+  .cost .est{font-size:15px;color:#6b7688;font-weight:700;vertical-align:super}
+  .costsub{font-size:16px;color:var(--ink);font-weight:600;margin-bottom:2px}
+  .costnote{font-size:11px;color:#5b6678}
+  /* severity meter */
+  .meter{margin:16px 0 4px}
+  .meter .track{height:8px;border-radius:5px;background:#0a1017;border:1px solid var(--line);overflow:hidden}
+  .meter .fill{height:100%;width:78%;background:linear-gradient(90deg,var(--amber),var(--red))}
+  .meter .cap{display:flex;justify-content:space-between;font-size:10.5px;color:var(--dim);margin-top:5px;text-transform:uppercase;letter-spacing:.08em}
+  /* narrative */
+  .gut{font-size:17px;line-height:1.35;font-weight:700;margin:16px 0 0}
+  .gut b{color:var(--enc)}
+  .rec{font-size:13px;line-height:1.5;color:var(--dim);margin:8px 0 0}
+  .rec b{color:var(--ink)}
+  .tags{display:flex;flex-wrap:wrap;gap:7px;margin:13px 0 0}
+  .tag{font-size:11.5px;font-weight:700;color:var(--dim);background:#0a1017;border:1px solid var(--line);border-radius:999px;padding:5px 11px}
+  .tag.law{color:var(--amber)}
+  .foot{display:flex;align-items:center;gap:12px;padding:15px 17px;border-top:1px solid var(--line);background:#0b111a}
+  .vote{display:flex;align-items:center;gap:9px;background:var(--enc);color:#1a0d07;border:none;border-radius:12px;padding:11px 15px;font-weight:800;font-size:14px;cursor:pointer;flex:none}
+  .vote .up{font-size:17px}
+  .who{font-size:12px;color:var(--dim);line-height:1.35}
+  .who b{color:var(--ink)}
+  .more{display:block;text-align:center;padding:12px;font-size:13px;font-weight:700;color:var(--dim);text-decoration:none;border-top:1px solid var(--line)}
+</style></head><body>
+  <div class="lbl">Direction C · “The Meter” — cost is the gut-punch</div>
+  <div class="card">
+    <div class="pad">
+      <div class="kick"><span class="type">Encampment</span><span class="live"><span class="dot"></span>Still here · day 296</span></div>
+      <div class="cost">~$18,000<span class="est">*</span></div>
+      <div class="costsub">of city money spent here. Still not fixed.</div>
+      <div class="costnote">*conservative estimate · 311 + response + cleanup, NYC’s own record</div>
+
+      <div class="meter">
+        <div class="track"><div class="fill"></div></div>
+        <div class="cap"><span>severity</span><span>#3 in the district</span></div>
+      </div>
+
+      <div class="gut">An encampment on <b>2nd Ave &amp; E 20th</b> the city has been told about 193 times.</div>
+      <div class="rec">Closed <b>171×</b>, “nothing found” <b>44×</b>, back every ~20 days, unbroken for <b>296 days</b>. First reported Sept 2021.</div>
+      <div class="tags"><span class="tag law">§16-122 · sidewalk obstruction</span><span class="tag">9 flare-ups</span></div>
+    </div>
+    <div class="foot">
+      <button class="vote"><span class="up">▲</span>47</button>
+      <div class="who">On <b>CM Harvey Epstein</b>’s block. Tap ▲ if you see it too.</div>
+    </div>
+    <a class="more" href="#">See the full record &amp; act →</a>
+  </div>
+</body></html>

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="robots" content="noindex">
+<title>unignorable — the receipt the city keeps closing</title>
+<style>
+  :root{
+    --bg:#080b11; --panel:#0e1420; --line:#1d2737; --ink:#eaf0fb; --dim:#7e8aa0;
+    --red:#ff5a47; --amber:#ffc24b; --green:#36c98a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:480px;margin:0 auto;min-height:100%}
+
+  /* ── thin top bar ─────────────────────────────── */
+  .bar{position:sticky;top:0;z-index:50;display:flex;justify-content:space-between;align-items:center;
+    padding:13px 20px;background:rgba(8,11,17,.82);backdrop-filter:saturate(140%) blur(12px);
+    border-bottom:1px solid var(--line)}
+  .bar .logo{font-size:16px;font-weight:800;letter-spacing:-.4px}
+  .bar .logo b{color:var(--red)}
+  .bar .live{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);
+    text-transform:uppercase;letter-spacing:.5px;font-weight:700}
+  .bar .live i{width:6px;height:6px;border-radius:50%;background:var(--green);
+    box-shadow:0 0 0 0 rgba(54,201,138,.6);animation:beat 2.4s infinite}
+  @keyframes beat{0%{box-shadow:0 0 0 0 rgba(54,201,138,.55)}70%{box-shadow:0 0 0 7px rgba(54,201,138,0)}100%{box-shadow:0 0 0 0 rgba(54,201,138,0)}}
+
+  /* ── hero ─────────────────────────────────────── */
+  .hero{padding:40px 22px 26px}
+  .kicker{font-size:11.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);
+    margin:0 0 18px;display:flex;align-items:center;gap:9px}
+  .kicker .ln{flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+  h1{margin:0;font-size:38px;line-height:1.02;font-weight:800;letter-spacing:-1.4px}
+  h1 .hl{color:var(--red)}
+  .lede{margin:18px 0 0;font-size:15.5px;line-height:1.55;color:#c4cee0;max-width:38ch}
+  .lede b{color:var(--ink);font-weight:700}
+  .proof{margin-top:18px;font-size:12.5px;line-height:1.6;color:var(--dim);
+    border-left:2px solid var(--amber);padding:2px 0 2px 13px}
+  .proof b{color:var(--amber);font-weight:700;font-variant-numeric:tabular-nums}
+
+  /* ── receipt header ───────────────────────────── */
+  .receipt-head{display:flex;justify-content:space-between;align-items:flex-end;
+    padding:8px 22px 0;margin-top:14px}
+  .receipt-head .t{font-size:13px;font-weight:800;letter-spacing:.3px}
+  .receipt-head .t span{color:var(--dim);font-weight:600}
+  .where{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--ink);
+    background:#0b111c;border:1px solid var(--line);border-radius:999px;padding:5px 11px;cursor:pointer}
+  .where svg{width:11px;height:11px;fill:var(--red)}
+  .where .car{color:var(--dim);font-weight:600;margin-left:1px}
+
+  /* ── the leaderboard / receipt ────────────────── */
+  .board{padding:10px 14px 0}
+  .rule{height:1px;background:repeating-linear-gradient(90deg,var(--line) 0 6px,transparent 6px 11px);
+    margin:10px 8px}
+  .row{position:relative;display:block;padding:15px 10px 16px;border-radius:14px}
+  .row:active{background:#0b111c}
+  .row + .row{border-top:1px solid #131b29}
+  .rtop{display:flex;align-items:baseline;gap:11px}
+  .rank{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--dim);
+    width:24px;flex:none;text-align:right;letter-spacing:-.5px}
+  .row.r1 .rank,.row.r2 .rank,.row.r3 .rank{color:var(--red)}
+  .rmain{flex:1;min-width:0}
+  .rwhere{font-size:16.5px;font-weight:800;letter-spacing:-.4px;line-height:1.2}
+  .rmeta{font-size:11.5px;color:var(--dim);margin-top:3px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .tdot{display:inline-flex;align-items:center;gap:5px;font-weight:600}
+  .tdot i{width:7px;height:7px;border-radius:50%;flex:none}
+  .rcount{flex:none;text-align:right;align-self:center}
+  .rcount .n{font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-1px;line-height:1}
+  .rcount .u{font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim);margin-top:2px}
+  .verdict{margin:11px 0 0 35px;font-size:13px;line-height:1.45;color:#d6deec}
+  .verdict b{color:var(--ink)}
+  .verdict.still{color:#ffb3a8}
+  .verdict.still b{color:var(--red)}
+  .chev{margin-top:9px;margin-left:35px;font-size:11px;font-weight:700;letter-spacing:.4px;
+    text-transform:uppercase;color:var(--dim);display:inline-flex;align-items:center;gap:5px}
+  .chev .sh{color:var(--red)}
+  /* status flags */
+  .flag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;
+    padding:2px 7px;border-radius:5px;vertical-align:middle}
+  .flag.persist{background:#1d0f0f;color:#ff6b5a;border:1px solid #3a1d1d}
+  .flag.years{background:#0c1118;color:#9fb0c8;border:1px solid var(--line)}
+
+  /* ── handoff to map ───────────────────────────── */
+  .tomap{margin:6px 14px 0;padding:18px 18px;border:1px solid var(--line);border-radius:16px;
+    background:radial-gradient(120% 140% at 80% 0%,#101a2a 0%,#0b111c 60%);display:flex;align-items:center;gap:14px}
+  .tomap .mini{width:64px;height:64px;border-radius:12px;flex:none;border:1px solid var(--line);overflow:hidden;
+    background:#0a0f17;position:relative}
+  .tomap .mini b{position:absolute;border-radius:50%;background:var(--red);opacity:.85}
+  .tomap .txt{flex:1;min-width:0}
+  .tomap .txt .h{font-size:14.5px;font-weight:800;letter-spacing:-.2px}
+  .tomap .txt .s{font-size:12px;color:var(--dim);margin-top:3px;line-height:1.4}
+  .tomap .go{font-size:20px;color:var(--dim);flex:none}
+
+  /* ── how it works ─────────────────────────────── */
+  .how{padding:30px 22px 6px}
+  .how h2{font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin:0 0 16px}
+  .step{display:flex;gap:13px;padding:13px 0}
+  .step + .step{border-top:1px solid #131b29}
+  .step .ic{width:30px;height:30px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;
+    background:#0b111c;border:1px solid var(--line);font-size:15px}
+  .step .b .h{font-size:14.5px;font-weight:700}
+  .step .b .p{font-size:12.5px;color:var(--dim);line-height:1.5;margin-top:2px}
+
+  /* ── CTA strip ────────────────────────────────── */
+  .cta{margin:24px 18px 0;padding:22px 20px;border-radius:18px;text-align:center;
+    background:linear-gradient(180deg,#11091a 0%,#0c0d16 100%);border:1px solid #2a1c2c}
+  .cta .h{font-size:20px;font-weight:800;letter-spacing:-.5px}
+  .cta .p{font-size:13px;color:#c4cee0;margin:8px auto 0;max-width:30ch;line-height:1.5}
+  .cta .btns{display:flex;gap:10px;margin-top:18px}
+  .cta a.primary{flex:1;padding:14px;border-radius:12px;background:var(--red);color:#fff;font-weight:800;font-size:14px}
+  .cta a.ghost{flex:1;padding:14px;border-radius:12px;background:#0b111c;border:1px solid var(--line);
+    color:var(--ink);font-weight:700;font-size:14px}
+
+  /* ── footer ───────────────────────────────────── */
+  footer{padding:26px 22px 40px;text-align:center}
+  footer .note{font-size:11.5px;color:#5e6a80;line-height:1.6}
+  footer .note b{color:var(--dim)}
+  footer .fresh{margin-top:12px;font-size:10.5px;color:#4d586b;letter-spacing:.3px;
+    display:inline-flex;align-items:center;gap:6px}
+  footer .fresh i{width:5px;height:5px;border-radius:50%;background:var(--green)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="bar">
+    <div class="logo">un<b>ignor</b>able</div>
+    <div class="live"><i></i> tracking 4,103 active</div>
+  </div>
+
+  <!-- HERO -->
+  <section class="hero">
+    <p class="kicker">Name &amp; Shame <span class="ln"></span> NYC</p>
+    <h1>The city has a record.<br><span class="hl">You were never meant<br>to see it.</span></h1>
+    <p class="lede">311 is private. One report, one closed ticket, no memory, no public. So the same encampment gets reported a thousand times and <b>closed</b> a thousand times — invisibly. We put the city's own receipt on one wall.</p>
+    <p class="proof">NYC's #1 answer to <b>199,865</b> encampment reports: <i>"police visited, no encampment found."</i> One block was filed <b>2,433×</b> since 2021. <b>Still there.</b></p>
+  </section>
+
+  <!-- RECEIPT HEADER -->
+  <div class="receipt-head">
+    <div class="t">THE WORST-IGNORED SPOTS <span>· this week</span></div>
+    <div class="where" title="set your block">
+      <svg viewBox="0 0 24 24"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1112 6.5a2.5 2.5 0 010 5z"/></svg>
+      Manhattan <span class="car">▾</span>
+    </div>
+  </div>
+
+  <!-- THE LEADERBOARD / RECEIPT -->
+  <main class="board">
+
+    <a class="row r1" href="#issue=Encampment:wav-mp">
+      <div class="rtop">
+        <div class="rank">01</div>
+        <div class="rmain">
+          <div class="rwhere">Waverly Pl &amp; 6th Ave</div>
+          <div class="rmeta">
+            <span class="tdot"><i style="background:#ff6b4a"></i>Encampment</span>
+            <span>· Greenwich Village</span>
+            <span class="flag persist">Chronic</span>
+          </div>
+        </div>
+        <div class="rcount"><div class="n">2,433</div><div class="u">reports</div></div>
+      </div>
+      <div class="verdict still">Closed <b>2,433×</b> as "resolved." First filed in 2021. <b>Still there.</b></div>
+      <div class="chev">Open on the map <span class="sh">→</span></div>
+    </a>
+
+    <a class="row r2" href="#issue=Drug Activity:phh-mp">
+      <div class="rtop">
+        <div class="rank">02</div>
+        <div class="rmain">
+          <div class="rwhere">E 125th St &amp; Lexington</div>
+          <div class="rmeta">
+            <span class="tdot"><i style="background:#c77dff"></i>Drug Activity</span>
+            <span>· East Harlem</span>
+            <span class="flag persist">Chronic</span>
+          </div>
+        </div>
+        <div class="rcount"><div class="n">1,887</div><div class="u">reports</div></div>
+      </div>
+      <div class="verdict still">Came back <b>71%</b> of the times they closed it — avg <b>9 days</b> after. NYPD.</div>
+      <div class="chev">Open on the map <span class="sh">→</span></div>
+    </a>
+
+    <a class="row r3" href="#issue=Homeless Person Assistance:ptauth-mp">
+      <div class="rtop">
+        <div class="rank">03</div>
+        <div class="rmain">
+          <div class="rwhere">Port Authority — 8th Ave side</div>
+          <div class="rmeta">
+            <span class="tdot"><i style="background:#4ad6c8"></i>Homeless Assist</span>
+            <span>· Midtown</span>
+            <span class="flag persist">Chronic</span>
+          </div>
+        </div>
+        <div class="rcount"><div class="n">1,402</div><div class="u">reports</div></div>
+      </div>
+      <div class="verdict still">DHS dispatched <b>1,402×</b>. Closed every time. The block says nothing changed.</div>
+      <div class="chev">Open on the map <span class="sh">→</span></div>
+    </a>
+
+    <div class="rule"></div>
+
+    <a class="row" href="#issue=Encampment:tomsq-mp">
+      <div class="rtop">
+        <div class="rank">04</div>
+        <div class="rmain">
+          <div class="rwhere">Tompkins Square Park, NE corner</div>
+          <div class="rmeta">
+            <span class="tdot"><i style="background:#ff6b4a"></i>Encampment</span>
+            <span>· East Village</span>
+            <span class="flag years">5 yrs</span>
+          </div>
+        </div>
+        <div class="rcount"><div class="n">1,109</div><div class="u">reports</div></div>
+      </div>
+      <div class="verdict">Closed <b>"gone on arrival" 318×</b> — then re-reported within the week, 318 times.</div>
+      <div class="chev">Open on the map <span class="sh">→</span></div>
+    </a>
+
+    <a class="row" href="#issue=Panhandling:34herald-mp">
+      <div class="rtop">
+        <div class="rank">05</div>
+        <div class="rmain">
+          <div class="rwhere">Herald Square, 34th &amp; Broadway</div>
+          <div class="rmeta">
+            <span class="tdot"><i style="background:#ffd166"></i>Panhandling</span>
+            <span>· Midtown</span>
+          </div>
+        </div>
+        <div class="rcount"><div class="n">964</div><div class="u">reports</div></div>
+      </div>
+      <div class="verdict">964 reports, 0 lasting change. The receipt just gets longer.</div>
+      <div class="chev">Open on the map <span class="sh">→</span></div>
+    </a>
+
+    <a class="row" href="#issue=Drug Activity:wpark-mp">
+      <div class="rtop">
+        <div class="rank">06</div>
+        <div class="rmain">
+          <div class="rwhere">Washington Square Park, SE</div>
+          <div class="rmeta">
+            <span class="tdot"><i style="background:#c77dff"></i>Drug Activity</span>
+            <span>· Greenwich Village</span>
+          </div>
+        </div>
+        <div class="rcount"><div class="n">851</div><div class="u">reports</div></div>
+      </div>
+      <div class="verdict">Up <b>23% year-over-year</b>. Still climbing.</div>
+      <div class="chev">Open on the map <span class="sh">→</span></div>
+    </a>
+
+  </main>
+
+  <!-- HANDOFF TO MAP -->
+  <a class="tomap" href="#map">
+    <div class="mini">
+      <b style="width:14px;height:14px;left:10px;top:8px"></b>
+      <b style="width:9px;height:9px;left:34px;top:14px;background:#c77dff"></b>
+      <b style="width:7px;height:7px;left:22px;top:30px;background:#4ad6c8"></b>
+      <b style="width:11px;height:11px;left:40px;top:38px"></b>
+      <b style="width:6px;height:6px;left:14px;top:44px;background:#ffd166"></b>
+    </div>
+    <div class="txt">
+      <div class="h">See all 4,103 on the map</div>
+      <div class="s">Every active spot, by block. Bigger dot = reported more. The receipt above is just the top.</div>
+    </div>
+    <div class="go">→</div>
+  </a>
+
+  <!-- HOW IT WORKS -->
+  <section class="how">
+    <h2>How it works</h2>
+    <div class="step">
+      <div class="ic">🏛</div>
+      <div class="b"><div class="h">The city's own data</div><div class="p">We pull every 311 report — encampment, drug activity, homeless-assist, panhandling — and cluster the thousands of duplicate tickets at one spot into a single Issue with its full history.</div></div>
+    </div>
+    <div class="step">
+      <div class="ic">🔁</div>
+      <div class="b"><div class="h">Closed ≠ fixed</div><div class="p">We count how often a "resolved" ticket was followed by a new report at the same block. That gap — closed vs. actually fixed — is the story 311 was built to hide.</div></div>
+    </div>
+    <div class="step">
+      <div class="ic">👁</div>
+      <div class="b"><div class="h">You make it true</div><div class="p">Tap "I see this often" to corroborate. Add a photo. Your verdict — still here, worse, cleaned, gone — overrides the city's "closed." Refreshed from open data daily.</div></div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <div class="cta">
+    <div class="h">Find your block.</div>
+    <div class="p">See what the city keeps closing on your corner — and make it impossible to ignore.</div>
+    <div class="btns">
+      <a class="primary" href="#map">Open the map</a>
+      <a class="ghost" href="#report">Report a spot</a>
+    </div>
+  </div>
+
+  <footer>
+    <p class="note"><b>Not a petition. Not a complaint box.</b><br>Just the city's own record, assembled — and the block's verdict on top of it.</p>
+    <span class="fresh"><i></i> Current through Jun 21, 2026 · refreshed daily from NYC Open Data</span>
+  </footer>
+
+</div>
+</body>
+</html>

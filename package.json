@@ -1,29 +1,15 @@
 {
   "name": "unignorable",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "description": "NYC 311 accountability map and public issue record",
+  "engines": {
+    "node": ">=22.5"
+  },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
-  },
-  "dependencies": {
-    "@radix-ui/react-slot": "^1.1.1",
-    "better-sqlite3": "^11.8.1",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "lucide-react": "^0.468.0",
-    "next": "^16.1.6",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "tailwind-merge": "^3.0.2"
-  },
-  "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
-    "@types/node": "^22.0.0",
-    "@types/react": "^19.0.0",
-    "tailwindcss": "^4.1.0",
-    "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5.9.3"
+    "start": "node server.js",
+    "check": "node --check server.js && node --check ugc.js && node --check scripts/build.js && node tests/check-client.js",
+    "test": "node --test tests/smoke.test.js",
+    "verify": "npm run check && npm test"
   }
 }

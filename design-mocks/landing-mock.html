@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>unignorable — the city marked it resolved. it came back.</title>
+<style>
+  :root{
+    --bg:#080b11; --panel:#0e1420; --line:#1d2737; --ink:#eaf0fb; --dim:#7e8aa0;
+    --red:#ff5a47; --amber:#ffc24b; --faint:#5e6a80;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html{scroll-behavior:smooth}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  body{overflow-x:hidden;width:100%;max-width:100vw}
+
+  /* faint masthead that rides along the top — calm, never shouting */
+  .mast{position:fixed;top:0;left:0;right:0;z-index:50;
+    display:flex;justify-content:space-between;align-items:center;
+    padding:14px 20px;padding-top:max(14px,env(safe-area-inset-top));
+    font-size:13px;letter-spacing:.2px;
+    background:linear-gradient(180deg,rgba(8,11,17,.92),rgba(8,11,17,0));
+    pointer-events:none}
+  .mast .brand{font-weight:800;letter-spacing:-.3px;font-size:15px}
+  .mast .brand b{color:var(--red)}
+  .mast .where{color:var(--dim);font-variant-numeric:tabular-nums}
+
+  .scene{min-height:100svh;display:flex;flex-direction:column;justify-content:center;
+    padding:88px 22px 110px;position:relative;border-bottom:1px solid transparent}
+  .scene .inner{max-width:560px;width:100%;margin:0 auto}
+
+  /* kicker / eyebrow */
+  .kick{font-size:11px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;
+    color:var(--dim);display:flex;align-items:center;gap:9px;margin-bottom:22px}
+  .kick .ln{height:1px;flex:1;background:var(--line)}
+
+  /* ── SCENE 1 — the single devastating hero stat ── */
+  .hero .lead{font-size:18px;line-height:1.5;color:#cdd6e6;font-weight:500;margin:0 0 6px}
+  .hero .lead b{color:var(--ink);font-weight:700}
+  .megastat{margin:18px 0 10px;line-height:.92}
+  .megastat .num{font-size:clamp(76px,23vw,128px);font-weight:800;letter-spacing:-4px;
+    font-variant-numeric:tabular-nums;color:var(--red);display:block}
+  .megastat .unit{font-size:clamp(28px,8vw,40px);font-weight:800;letter-spacing:-1px;color:var(--amber)}
+  .hero .says{font-size:20px;line-height:1.45;font-weight:700;margin:14px 0 0;letter-spacing:-.2px}
+  .hero .says .dim{color:var(--dim);font-weight:500}
+  .hero .src{margin-top:26px;font-size:11.5px;color:var(--faint);font-style:italic;line-height:1.5}
+
+  .scrollcue{position:absolute;left:0;right:0;bottom:30px;bottom:max(30px,env(safe-area-inset-bottom));
+    text-align:center;color:var(--dim);font-size:11px;letter-spacing:1.2px;text-transform:uppercase;
+    animation:bob 2.4s ease-in-out infinite}
+  .scrollcue .arr{display:block;margin:8px auto 0;width:18px;height:18px;
+    border-right:2px solid var(--dim);border-bottom:2px solid var(--dim);
+    transform:rotate(45deg)}
+  @keyframes bob{0%,100%{transform:translateY(0);opacity:.85}50%{transform:translateY(7px);opacity:.4}}
+
+  /* ── SCENE 2 — the mechanism (why it's invisible) ── */
+  .mech h2{font-size:27px;line-height:1.25;font-weight:800;letter-spacing:-.6px;margin:0 0 22px}
+  .mech h2 b{color:var(--amber)}
+  .flow{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+  .flowrow{display:flex;align-items:center;gap:14px;padding:15px 16px;border:1px solid var(--line);
+    border-radius:14px;background:var(--panel)}
+  .flowrow .ic{width:34px;height:34px;flex:none;border-radius:9px;background:#0a0f18;border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;font-size:16px}
+  .flowrow .t{font-size:14.5px;line-height:1.4}
+  .flowrow .t b{font-weight:700}
+  .flowrow .t span{color:var(--dim)}
+  .flowx{text-align:center;color:var(--faint);font-size:20px;line-height:0;margin:-4px 0}
+  .punch{margin-top:24px;font-size:17px;line-height:1.5;font-weight:600;color:#cdd6e6}
+  .punch b{color:var(--ink)}
+
+  /* ── SCENE 3 — the proof line, one chronic spot ── */
+  .spot .addr{font-size:30px;font-weight:800;letter-spacing:-.6px;margin:0 0 2px}
+  .spot .geo{font-size:13px;color:var(--dim);margin:0 0 22px}
+  .spot .countline{font-size:20px;line-height:1.5;font-weight:600}
+  .spot .countline .big{color:var(--red);font-weight:800;font-variant-numeric:tabular-nums}
+  .ledger{margin-top:20px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--panel)}
+  .ledger .lrow{display:flex;justify-content:space-between;align-items:baseline;
+    padding:13px 16px;border-top:1px solid var(--line);font-size:13.5px}
+  .ledger .lrow:first-child{border-top:none}
+  .ledger .lrow .k{color:var(--dim)}
+  .ledger .lrow .v{font-weight:800;font-variant-numeric:tabular-nums}
+  .ledger .lrow .v.warn{color:var(--amber)}
+  .ledger .lrow .v.red{color:var(--red)}
+  .spot .verdict{margin-top:18px;padding:14px 16px;border-radius:12px;background:#1d0f0f;
+    border:1px solid #3a1d1d;color:#ff8b7a;font-weight:800;font-size:15px;line-height:1.45}
+  .spot .verdict span{display:block;color:var(--amber);font-weight:700;font-size:12.5px;margin-top:5px}
+
+  /* ── SCENE 4 — scale: it's not one spot ── */
+  .scale h2{font-size:27px;line-height:1.25;font-weight:800;letter-spacing:-.6px;margin:0 0 6px}
+  .scale .sub{font-size:14px;color:var(--dim);margin:0 0 22px;line-height:1.5}
+  .boros{display:flex;flex-direction:column;gap:9px}
+  .boro{border:1px solid var(--line);border-radius:13px;background:var(--panel);padding:14px 16px}
+  .boro .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
+  .boro .nm{font-size:15px;font-weight:700}
+  .boro .ct{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .boro .ct b{color:var(--ink);font-weight:800}
+  .bar{height:7px;border-radius:99px;background:#0a0f18;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:99px;
+    background:linear-gradient(90deg,var(--amber),var(--red))}
+
+  /* ── SCENE 5 — handoff to the live map ── */
+  .end{align-items:center;text-align:center}
+  .end .inner{max-width:480px}
+  .end h2{font-size:30px;line-height:1.2;font-weight:800;letter-spacing:-.7px;margin:0 0 14px}
+  .end h2 b{color:var(--red)}
+  .end p{font-size:15px;line-height:1.55;color:#cdd6e6;margin:0 0 30px}
+  .cta{display:block;width:100%;padding:17px;border-radius:14px;border:none;cursor:pointer;
+    background:var(--red);color:#fff;font:inherit;font-size:16px;font-weight:800;letter-spacing:.2px;
+    box-shadow:0 8px 30px rgba(255,90,71,.22)}
+  .cta:active{transform:translateY(1px)}
+  .cta2{display:block;width:100%;margin-top:11px;padding:15px;border-radius:14px;cursor:pointer;
+    background:transparent;border:1px solid var(--line);color:var(--ink);font:inherit;font-size:14.5px;font-weight:700}
+  .end .fine{margin-top:22px;font-size:11.5px;color:var(--faint);line-height:1.6}
+  .end .fresh{margin-top:14px;font-size:11px;color:var(--faint);display:inline-flex;align-items:center;gap:7px}
+  .end .fresh .ok{width:6px;height:6px;border-radius:50%;background:#36c98a;display:inline-block}
+
+  /* subtle entrance — content settles, never bounces */
+  .scene .inner>*{opacity:0;transform:translateY(14px);
+    animation:rise .7s cubic-bezier(.22,.7,.25,1) forwards}
+  .scene.live .inner>*{opacity:1;transform:none;animation:none}
+  @keyframes rise{to{opacity:1;transform:none}}
+  /* stagger via nth-child for the screenshot-static feel */
+  .inner>*:nth-child(1){animation-delay:.02s}
+  .inner>*:nth-child(2){animation-delay:.09s}
+  .inner>*:nth-child(3){animation-delay:.16s}
+  .inner>*:nth-child(4){animation-delay:.23s}
+  .inner>*:nth-child(5){animation-delay:.30s}
+  .inner>*:nth-child(6){animation-delay:.37s}
+  @media (prefers-reduced-motion:reduce){
+    .scene .inner>*{opacity:1;transform:none;animation:none}
+    .scrollcue{animation:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="mast">
+  <div class="brand">un<b>ignor</b>able</div>
+  <div class="where">New York City</div>
+</div>
+
+<!-- ░░ SCENE 1 — the single hero stat fills the first screen ░░ -->
+<section class="scene hero">
+  <div class="inner">
+    <div class="kick"><span>NYC 311 · 2021—2026</span><span class="ln"></span></div>
+    <p class="lead">The city closed encampment reports as <b>resolved</b>. Then the same blocks were reported again.</p>
+    <div class="megastat">
+      <span class="num">67%</span>
+      <span class="unit">came back.</span>
+    </div>
+    <p class="says">273,841 closed tickets<span class="dim"> reopened by a new report at the very same spot.</span></p>
+    <p class="src">Source: NYC 311 open data, the city's own record. 406,858 quality-of-life closures, 2021–2026.</p>
+  </div>
+  <div class="scrollcue">scroll<span class="arr"></span></div>
+</section>
+
+<!-- ░░ SCENE 2 — why it stays invisible ░░ -->
+<section class="scene mech">
+  <div class="inner">
+    <div class="kick"><span>Why no one sees it</span><span class="ln"></span></div>
+    <h2>311 is a private line. It has <b>no memory</b> and <b>no public.</b></h2>
+    <div class="flow">
+      <div class="flowrow"><div class="ic">📞</div><div class="t"><b>You report it.</b> <span>One ticket. Just you and the city.</span></div></div>
+      <div class="flowx">↓</div>
+      <div class="flowrow"><div class="ic">🏛</div><div class="t"><b>They close it.</b> <span>“Visited, nothing found.” Ticket gone.</span></div></div>
+      <div class="flowx">↓</div>
+      <div class="flowrow"><div class="ic">🔁</div><div class="t"><b>It comes back.</b> <span>A new neighbor files a new ticket. The count resets to one.</span></div></div>
+    </div>
+    <p class="punch">Reported thousands of times, closed thousands of times — and <b>no one ever sees the pattern.</b> unignorable assembles the city's own tickets back into one record that doesn't forget.</p>
+  </div>
+</section>
+
+<!-- ░░ SCENE 3 — one chronic spot, made concrete ░░ -->
+<section class="scene spot">
+  <div class="inner">
+    <div class="kick"><span>The most-reported spot in NYC</span><span class="ln"></span></div>
+    <h3 class="addr">Waverly Place</h3>
+    <p class="geo">Greenwich Village · Council District 3 · Encampment</p>
+    <p class="countline">Filed <span class="big">2,433×</span> across five years. Still active this week.</p>
+    <div class="ledger">
+      <div class="lrow"><span class="k">First reported</span><span class="v">Mar 2021</span></div>
+      <div class="lrow"><span class="k">Most recent report</span><span class="v">Jun 2026</span></div>
+      <div class="lrow"><span class="k">Times the city closed it</span><span class="v warn">1,902</span></div>
+      <div class="lrow"><span class="k">“Visited — nothing found”</span><span class="v warn">1,107</span></div>
+      <div class="lrow"><span class="k">Came back after closing</span><span class="v red">1,640×</span></div>
+    </div>
+    <div class="verdict">🚩 The city calls this resolved. The block has said otherwise 2,433 times.
+      <span>Closing the ticket was never the same as fixing the problem.</span></div>
+  </div>
+</section>
+
+<!-- ░░ SCENE 4 — it's everywhere ░░ -->
+<section class="scene scale">
+  <div class="inner">
+    <div class="kick"><span>And it's not one spot</span><span class="ln"></span></div>
+    <h2>4,108 spots are active right now.</h2>
+    <p class="sub">360 have run continuously for months — chronic, never resolved. Here's where they cluster.</p>
+    <div class="boros">
+      <div class="boro"><div class="top"><span class="nm">Manhattan</span><span class="ct"><b>1,544</b> active · 168 chronic</span></div><div class="bar"><i style="width:100%"></i></div></div>
+      <div class="boro"><div class="top"><span class="nm">Brooklyn</span><span class="ct"><b>1,012</b> active · 89 chronic</span></div><div class="bar"><i style="width:66%"></i></div></div>
+      <div class="boro"><div class="top"><span class="nm">Queens</span><span class="ct"><b>704</b> active · 51 chronic</span></div><div class="bar"><i style="width:46%"></i></div></div>
+      <div class="boro"><div class="top"><span class="nm">The Bronx</span><span class="ct"><b>611</b> active · 39 chronic</span></div><div class="bar"><i style="width:40%"></i></div></div>
+      <div class="boro"><div class="top"><span class="nm">Staten Island</span><span class="ct"><b>237</b> active · 13 chronic</span></div><div class="bar"><i style="width:16%"></i></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ░░ SCENE 5 — handoff to the live Leaflet map ░░ -->
+<section class="scene end">
+  <div class="inner">
+    <div class="kick" style="justify-content:center"><span class="ln"></span><span>Now find yours</span><span class="ln"></span></div>
+    <h2>See what's <b>chronic</b> on your block.</h2>
+    <p>The full map is live — every active spot, the city's record beside what neighbors actually see. Add a photo. Say “I see this often.”</p>
+    <button class="cta" onclick="enterMap()">Open the map →</button>
+    <button class="cta2" onclick="enterMap(true)">Jump to my location</button>
+    <div class="fresh"><span class="ok"></span>NYC 311 open data · current through Jun 20, 2026 · refreshed daily</div>
+    <p class="fine">unignorable shows only static, public quality-of-life conditions from the city's own 311 record. Never people. Never private data.</p>
+  </div>
+</section>
+
+<script>
+  // ── HANDOFF (mock) ───────────────────────────────────────────────
+  // In production this lives in index.html alongside the existing map.
+  // enterMap() fades the prelude out and reveals the live #app/#map that
+  // is already mounted underneath. `geo=true` asks the browser for a
+  // location and calls map.setView() before reveal.
+  function enterMap(geo){
+    document.body.style.transition='opacity .45s ease';
+    document.body.style.opacity='0';
+    setTimeout(()=>{ alert(geo
+      ? 'MOCK: request geolocation → map.setView([lat,lng], 15) → reveal live map'
+      : 'MOCK: reveal the live Leaflet map (the existing #app in index.html)');
+      document.body.style.opacity='1';
+    },450);
+  }
+
+  // Mark each scene "live" as it crosses center, so the hero animates in
+  // on load and the rest settle as you arrive — calm, not scroll-jacked.
+  const io = new IntersectionObserver((es)=>{
+    es.forEach(e=>{ if(e.isIntersecting) e.target.classList.add('live'); });
+  },{threshold:.35});
+  document.querySelectorAll('.scene').forEach((s,i)=>{ if(i>0) io.observe(s); });
+</script>
+</body>
+</html>
