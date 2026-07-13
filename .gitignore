@@ -2,6 +2,7 @@
 data/*.json
 !data/action_types.json
 !data/community_boards.json
+!data/campaign_context.json
 !data/officials.json
 !data/press_tips.json
 data/*.db

@@ -4,7 +4,7 @@
   "cau": { "name": "Mayor's Community Affairs Unit", "phone": "(212) 788-7418", "email": "constituentservices@cau.nyc.gov" },
   "council": {
     "1": { "member": "Christopher Marte", "borough": "Manhattan", "email": "District1@council.nyc.gov", "phone": "(212) 587-3159" },
-    "2": { "member": "Harvey Epstein", "borough": "Manhattan", "email": "District2@council.nyc.gov", "phone": "(212) 677-1077", "verified": true },
+    "2": { "member": "Harvey Epstein", "borough": "Manhattan", "email": "District2@council.nyc.gov", "phone": "(212) 677-1077", "x": "Harvey4council", "verified": true },
     "3": { "member": "Carl Wilson", "borough": "Manhattan", "email": "District3@council.nyc.gov", "phone": "(212) 564-7757" },
     "4": { "member": "Virginia Maloney", "borough": "Manhattan", "email": "District4@council.nyc.gov", "phone": "(212) 818-0580" },
     "5": { "member": "Julie Menin", "borough": "Manhattan", "email": "District5@council.nyc.gov", "phone": "(212) 860-1950" },

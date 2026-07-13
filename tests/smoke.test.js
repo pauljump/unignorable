@@ -100,6 +100,56 @@ test('residents can start or join a city-backed campaign', async () => {
   assert.doesNotMatch(campaignHtml, /organizer@example\.com/);
 });
 
+test('Campaign 001 separates reporting evidence from observation and issues permanent action receipts', async () => {
+  const type = 'Encampment', id = '40.736,-73.983';
+  const campaign = await fetch(`${origin}/c?t=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}`);
+  assert.equal(campaign.status, 200);
+  const html = await campaign.text();
+  assert.match(html, /near 246 East 20th Street/i);
+  assert.match(html, /continuous[\s\S]*reporting activity/);
+  assert.match(html, /not proof that one tent/i);
+  assert.match(html, /Dated neighbor observation/);
+  assert.match(html, /Pain and impact/);
+  assert.match(html, /LearningSpring School/);
+  assert.doesNotMatch(html, /A tent has been here/);
+
+  const prepared = await fetch(`${origin}/api/action/prepare`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.71' },
+    body: JSON.stringify({ action_type: 'email_official', type, id }),
+  });
+  assert.equal(prepared.status, 200);
+  const action = await prepared.json();
+  assert.match(action.href, /^mailto:District2@council\.nyc\.gov/i);
+  assert.match(decodeURIComponent(action.href), new RegExp(`/r/${action.receipt}`));
+
+  const before = await fetch(action.receiptUrl);
+  assert.equal(before.status, 200);
+  const beforeHtml = await before.text();
+  assert.match(beforeHtml, /Tracked-link requests[\s\S]*?0/);
+  assert.match(beforeHtml, /Sender confirmation[\s\S]*?Not confirmed/);
+
+  const tracked = await fetch(`${origin}/r/${action.receipt}`, { redirect: 'manual' });
+  assert.equal(tracked.status, 302);
+  assert.match(tracked.headers.get('location'), /^\/c\?t=Encampment/);
+
+  const after = await fetch(action.receiptUrl);
+  const receiptHtml = await after.text();
+  assert.match(receiptHtml, /Tracked-link requests[\s\S]*?1/);
+  assert.match(receiptHtml, /does not prove[\s\S]*personally read it/i);
+
+  const confirmed = await fetch(`${origin}/api/action/confirm`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.72' },
+    body: JSON.stringify({ token: action.receipt }),
+  });
+  assert.equal(confirmed.status, 200);
+  assert.ok((await confirmed.json()).receipt.sender_confirmed_at);
+  const confirmedHtml = await (await fetch(action.receiptUrl)).text();
+  assert.doesNotMatch(confirmedHtml, />I sent this</);
+  assert.match(confirmedHtml, /Sender confirmation[\s\S]*?ET/);
+});
+
 test('issues include production card fields', async () => {
   const response = await fetch(`${origin}/api/issues`);
   assert.equal(response.status, 200);
@@ -142,7 +192,7 @@ test('malformed JSON is rejected and deep links resolve', async () => {
   const campaign = await fetch(`${origin}/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`);
   assert.equal(campaign.status, 200);
   const campaignHtml = await campaign.text();
-  assert.match(campaignHtml, /estimated city response cost/i);
+  assert.match(campaignHtml, /reporting episode/i);
   assert.match(campaignHtml, /onclick="confirmIssue\(this\)"/);
   assert.match(campaignHtml, /data-url="https?:\/\/[^"<>]+" onclick="logAct\('share_card'\);copyLink\(this\.dataset\.url\)"/);
   assert.doesNotMatch(campaignHtml, /this\.textContent='Confirmed'/);

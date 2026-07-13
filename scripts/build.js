@@ -11,6 +11,9 @@ const DB = process.env.DB || '/Users/mini-home/Desktop/Monorepo/sidewalk/data/si
 const dataDir = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data'));
 const TYPES = "('Encampment','Homeless Person Assistance','Drug Activity','Panhandling')";
 
+let campaignContext = {};
+try { campaignContext = JSON.parse(fs.readFileSync(path.join(dataDir, 'campaign_context.json'), 'utf8')); } catch {}
+
 const db = new DatabaseSync(DB, { readOnly: true });
 
 const issues = db.prepare(`
@@ -359,10 +362,54 @@ function atomicWrite(file, obj) {
   fs.writeFileSync(tmp, JSON.stringify(obj));
   fs.renameSync(tmp, file);   // atomic on same filesystem
 }
+
+// Campaign evidence is narrower than the map's approximate-block cell. A campaign can name one
+// or more normalized city incident addresses and receive a daily, reproducible count for only
+// those records. This preserves both truths: the block-level history and the address-specific
+// reporting record, without pretending either proves one physical object persisted throughout.
+const normalizeAddress = value => String(value || '')
+  .toUpperCase().replace(/\b(\d+)(ST|ND|RD|TH)\b/g, '$1').replace(/\s+/g, ' ').trim();
+const campaignEvidence = {};
+const addressRows = db.prepare(`
+  SELECT date(created_date) AS day, incident_address AS address
+  FROM sr311
+  WHERE complaint_type=? AND round(latitude,3)||','||round(longitude,3)=?
+    AND incident_address IS NOT NULL
+  ORDER BY created_date
+`);
+for (const [issueKey, context] of Object.entries(campaignContext)) {
+  const splitAt = issueKey.indexOf('|');
+  if (splitAt < 1) continue;
+  const type = issueKey.slice(0, splitAt), id = issueKey.slice(splitAt + 1);
+  const wanted = new Set((context.address_matches || []).map(normalizeAddress));
+  if (!wanted.size) continue;
+  const rows = addressRows.all(type, id).filter(r => wanted.has(normalizeAddress(r.address)));
+  const issue = issues.find(r => r.type === type && r.id === id);
+  const days = [...new Set(rows.map(r => r.day))].sort();
+  const currentEpisode = issue && Array.isArray(issue.episodes) && issue.episodes.length
+    ? issue.episodes[issue.episodes.length - 1] : null;
+  const currentRows = currentEpisode ? rows.filter(r => r.day >= currentEpisode[0]) : [];
+  const currentDays = [...new Set(currentRows.map(r => r.day))].sort();
+  campaignEvidence[issueKey] = {
+    generated_through: DATA_MAX_DATE,
+    approximate_block_requests: issue ? Number(issue.n) || 0 : 0,
+    reporting_episode_start: currentEpisode ? currentEpisode[0] : null,
+    reporting_episode_requests: currentEpisode ? Number(currentEpisode[2]) || 0 : 0,
+    address_requests: rows.length,
+    address_report_days: days.length,
+    address_first_report: days[0] || null,
+    address_latest_report: days[days.length - 1] || null,
+    address_current_episode_requests: currentRows.length,
+    address_current_episode_report_days: currentDays.length,
+    address_current_episode_first_report: currentDays[0] || null,
+    address_current_episode_latest_report: currentDays[currentDays.length - 1] || null,
+  };
+}
 atomicWrite(path.join(dataDir, 'issues.json'), issues);
 atomicWrite(path.join(dataDir, 'trends.json'), trends);
 atomicWrite(path.join(dataDir, 'disparity.json'), disparity);
-console.log(`built ${issues.length} issues + ${trends.length} trend rows + ${disparity.districts.length} districts (atomic)`);
+atomicWrite(path.join(dataDir, 'campaign_evidence.json'), campaignEvidence);
+console.log(`built ${issues.length} issues + ${trends.length} trend rows + ${disparity.districts.length} districts + ${Object.keys(campaignEvidence).length} campaign evidence records (atomic)`);
 
 // ---- Win-condition pass for active campaigns ----
 // Wrapped in try/catch: if ugc.db/campaigns table is absent, the daily refresh must NOT crash.

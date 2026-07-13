@@ -81,11 +81,27 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_actions_issue ON actions(issue_key);
   CREATE INDEX IF NOT EXISTS idx_actions_ts ON actions(ts);
+
+  CREATE TABLE IF NOT EXISTS action_receipts(
+    token       TEXT PRIMARY KEY,
+    issue_key   TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    target      TEXT,
+    created_at  TEXT NOT NULL,
+    ip_hash     TEXT,
+    link_requests INTEGER NOT NULL DEFAULT 0,
+    first_link_request_at TEXT,
+    last_link_request_at TEXT,
+    sender_confirmed_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_action_receipts_issue ON action_receipts(issue_key);
 `);
 // Forward migration: add ip_hash if missing on older DBs.
 {
   const actCols = db.prepare(`PRAGMA table_info(actions)`).all().map(c => c.name);
   if (!actCols.includes('ip_hash')) db.exec(`ALTER TABLE actions ADD COLUMN ip_hash TEXT`);
+  const receiptCols = db.prepare(`PRAGMA table_info(action_receipts)`).all().map(c => c.name);
+  if (!receiptCols.includes('sender_confirmed_at')) db.exec(`ALTER TABLE action_receipts ADD COLUMN sender_confirmed_at TEXT`);
 }
 
 // ---- Areas table (shareable ZONE bundles — many issue-cells under one permalink) ----
@@ -162,6 +178,11 @@ const qActInsert    = db.prepare(`INSERT INTO actions(issue_key,action_type,ts,i
 const qActByIssue   = db.prepare(`SELECT action_type, ts FROM actions WHERE issue_key=? ORDER BY id ASC`);
 const qActHas       = db.prepare(`SELECT 1 FROM actions WHERE issue_key=? AND action_type=? LIMIT 1`);
 const qActFirst     = db.prepare(`SELECT ts FROM actions WHERE issue_key=? AND action_type=? ORDER BY id ASC LIMIT 1`);
+const qReceiptInsert = db.prepare(`INSERT INTO action_receipts(token,issue_key,action_type,target,created_at,ip_hash) VALUES(?,?,?,?,?,?)`);
+const qReceiptGet = db.prepare(`SELECT * FROM action_receipts WHERE token=?`);
+const qReceiptClick = db.prepare(`UPDATE action_receipts SET link_requests=link_requests+1,
+  first_link_request_at=COALESCE(first_link_request_at,?), last_link_request_at=? WHERE token=?`);
+const qReceiptConfirm = db.prepare(`UPDATE action_receipts SET sender_confirmed_at=? WHERE token=? AND sender_confirmed_at IS NULL`);
 
 const qInsert  = db.prepare(`INSERT INTO posts(issue_key,ts,kind,text,status,photo,mod,ip_hash) VALUES(?,?,?,?,?,?,?,?)`);
 const qSeenInsert = db.prepare(`INSERT OR IGNORE INTO posts(issue_key,ts,kind,text,status,photo,mod,ip_hash) VALUES(?,?,'seen',NULL,'still_here',NULL,'approved',?)`);
@@ -285,8 +306,30 @@ function firstActionTs(issueKey, actionType) {
   return r ? r.ts : null;
 }
 
+function createActionReceipt(issueKey, actionType, target, ipHash) {
+  const token = crypto.randomBytes(16).toString('hex');
+  qReceiptInsert.run(token, issueKey, actionType, target || null, new Date().toISOString(), ipHash || null);
+  return qReceiptGet.get(token);
+}
+
+function getActionReceipt(token) {
+  return qReceiptGet.get(token) || null;
+}
+
+function recordReceiptLinkRequest(token) {
+  const now = new Date().toISOString();
+  qReceiptClick.run(now, now, token);
+  return qReceiptGet.get(token) || null;
+}
+
+function confirmActionReceipt(token) {
+  const result = qReceiptConfirm.run(new Date().toISOString(), token);
+  return { receipt: qReceiptGet.get(token) || null, changed: Number(result.changes) === 1 };
+}
+
 module.exports = { addPost, addSeen, thread, countsAll, pending, pendingCount, decide,
   startCampaign, getCampaign, setCampaignStatus, allCampaigns, addCampaignOrganizer,
   logAction, actionCounts, hasAction, firstActionTs,
+  createActionReceipt, getActionReceipt, recordReceiptLinkRequest, confirmActionReceipt,
   createArea, getArea, bumpAreaShare, bumpAreaView,
   upsertHotspot, listHotspots };

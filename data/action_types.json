@@ -20,7 +20,7 @@
   {
     "id": "email_official",
     "title": "Email the council member",
-    "desc": "Send the city's own record to the official who represents this block.",
+    "desc": "Generate a sourced draft and permanent action receipt for this block.",
     "icon": "✉️",
     "kind": "prepared",
     "enabled": true,
@@ -38,7 +38,7 @@
   {
     "id": "share_card",
     "title": "Share the receipt",
-    "desc": "Post this record publicly so more people see it.",
+    "desc": "Address the responsible official with a sourced, tracked campaign link.",
     "icon": "🔗",
     "kind": "external",
     "enabled": true,
