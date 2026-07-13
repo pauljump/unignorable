@@ -1,0 +1,58 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Card B — Vote</title>
+<style>
+  :root{--bg:#080b11;--panel:#0e1420;--line:#1d2737;--ink:#eaf0fb;--dim:#9aa6bd;--red:#ff5a47;--amber:#ffc24b;--enc:#ff6b4a;--green:#3ddc84}
+  *{box-sizing:border-box}
+  body{margin:0;background:#05070b;color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex;flex-direction:column;align-items:center;gap:14px;padding:26px 14px 60px}
+  .lbl{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  .card{width:100%;max-width:390px;background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;display:flex}
+  /* vote rail */
+  .rail{flex:none;width:78px;background:#0b111a;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:16px 0;cursor:pointer}
+  .rail .up{font-size:26px;line-height:1;color:var(--enc)}
+  .rail .n{font-size:26px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+  .rail .c{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+  .rail .wk{margin-top:8px;font-size:10px;color:var(--amber);text-align:center;line-height:1.25}
+  /* body */
+  .body{flex:1;min-width:0;padding:15px 16px 14px}
+  .kick{display:flex;align-items:center;gap:7px;font-size:10.5px;font-weight:800;letter-spacing:.11em;text-transform:uppercase}
+  .kick .type{color:var(--enc)}
+  .kick .live{display:flex;align-items:center;gap:5px;color:var(--red)}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--red);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,90,71,.55)}70%{box-shadow:0 0 0 6px rgba(255,90,71,0)}100%{box-shadow:0 0 0 0 rgba(255,90,71,0)}}
+  .ttl{font-size:18px;line-height:1.25;font-weight:800;letter-spacing:-.01em;margin:8px 0 3px}
+  .vic{font-size:12px;color:var(--dim)}
+  .chron{font-size:13px;color:var(--ink);margin:11px 0 0;line-height:1.45}
+  .chron b{color:var(--red)}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0}
+  .chip{font-size:11px;font-weight:700;color:var(--dim);background:#0a1017;border:1px solid var(--line);border-radius:999px;padding:4px 9px;display:flex;align-items:center;gap:5px}
+  .chip.cost{color:var(--red)}
+  .chip.law{color:var(--amber)}
+  .chip .est{font-size:8.5px;color:#5b6678}
+  .more{display:block;margin:13px 0 0;font-size:12.5px;font-weight:700;color:var(--dim);text-decoration:none}
+  .more:hover{color:var(--amber)}
+</style></head><body>
+  <div class="lbl">Direction B · “The Vote” — upvote is the whole thing</div>
+  <div class="card">
+    <div class="rail">
+      <div class="up">▲</div>
+      <div class="n">47</div>
+      <div class="c">confirm</div>
+      <div class="wk">+9 this<br>week</div>
+    </div>
+    <div class="body">
+      <div class="kick"><span class="type">Encampment</span><span class="live"><span class="dot"></span>Still here · day 296</span></div>
+      <div class="ttl">Someone’s been living on this sidewalk since Sept.</div>
+      <div class="vic">2nd Ave &amp; E 20th St · Gramercy</div>
+      <div class="chron">Reported <b>193×</b>. Closed <b>171×</b>. “Nothing found” 44 times. It keeps coming back.</div>
+      <div class="chips">
+        <span class="chip cost">~$18k city cost <span class="est">*est</span></span>
+        <span class="chip law">§16-122</span>
+        <span class="chip">CM Epstein’s block</span>
+      </div>
+      <a class="more" href="#">The full record &amp; how it’s being ignored →</a>
+    </div>
+  </div>
+</body></html>

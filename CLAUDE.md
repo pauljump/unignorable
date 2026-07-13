@@ -50,6 +50,9 @@ pm2 restart unignorable        # after editing server.js / index.html / issues.j
 
 **Status:** LIVE skeleton (2026-06-18) at https://unignorable.polyfeeds.dev — pm2 `unignorable` :8000, pm2 save'd.
 
+**🚧 IN FLIGHT (2026-07-13) — MAJOR REDESIGN approved, handing off to Codex. READ [`REDESIGN.md`](REDESIGN.md) FIRST.**
+Reframe: stop rendering *what was reported*, render **what's confirmed here now, what it actually is, how long it's been ignored, what it's costing the city** — and let people **upvote** it. Full plan, audit anchors, the researched **cost model** (constants + formula, 335 2nd Ave = $18,130), prior-art patterns, and next steps all in `REDESIGN.md`. **Phase 0 is done:** 3 glanceable card mocks live at `/design/card-a-dossier`, `/design/card-b-vote`, `/design/card-c-cost` — **awaiting Paul's pick**, then map-treatment mock, then the Phase 1 build. Canonical plan file: `~/.claude/plans/okay-with-unignorable-i-sparkling-pudding.md`.
+
 **Shipped 2026-07-12 — AREA (ZONE) SHARE — the sharable bundle of many bubbles under one permalink (Phase 1 of 2) — LIVE:**
 - **Why:** every map bubble is one ~1-block cell with its own `/c` permalink + share counter, but a real-world story (e.g. the NY Post "12-block encampment near the Intrepid") is a *zone*. The app knew cells, not zones. This adds the zone object.
 - **`/a/<id>` = a frozen bundle of issue-cells under one URL.** Server-rendered like `/c` (rich OG unfurl on X), reuses `councilFor`/officials/narrative/`titleCase`. Shows: aggregate hero (spots count + "every one still active"), an inline Leaflet mini-map of just that zone, a 6-stat grid (reports / closed / nothing-found / came-back / distinct spots / flare-ups), a type breakdown, the **ranked member spots each deep-linking back to its own `/c`**, the council members whose districts the zone spans, and **"shared N times · viewed M times."**
