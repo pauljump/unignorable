@@ -97,7 +97,11 @@ test('malformed JSON is rejected and deep links resolve', async () => {
   const issue = issues[0];
   const campaign = await fetch(`${origin}/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`);
   assert.equal(campaign.status, 200);
-  assert.match(await campaign.text(), /estimated city response cost/i);
+  const campaignHtml = await campaign.text();
+  assert.match(campaignHtml, /estimated city response cost/i);
+  assert.match(campaignHtml, /onclick="confirmIssue\(this\)"/);
+  assert.match(campaignHtml, /data-url="https?:\/\/[^"<>]+" onclick="logAct\('share_card'\);copyLink\(this\.dataset\.url\)"/);
+  assert.doesNotMatch(campaignHtml, /this\.textContent='Confirmed'/);
 });
 
 test('review key bootstraps an HTTP-only cookie and leaves the URL', async () => {

@@ -628,6 +628,19 @@ function logAct(actionType){
     body:JSON.stringify({action_type:actionType,type:${JSON.stringify(issue.type)},id:${JSON.stringify(issue.id)}})
   }).catch(()=>{});
 }
+function confirmIssue(button){
+  button.disabled=true;
+  fetch('/api/seen',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type:${JSON.stringify(issue.type)},id:${JSON.stringify(issue.id)}})
+  }).then(function(response){
+    if(!response.ok) throw new Error('confirmation failed');
+    button.textContent='Confirmed';
+    logAct('corroborate');
+  }).catch(function(){
+    button.disabled=false;
+    button.textContent='Try again';
+  });
+}
 function copyLink(url){
   navigator.clipboard && navigator.clipboard.writeText(url).then(()=>{
     var el=document.getElementById('copy-link-btn');
@@ -654,11 +667,7 @@ function copyLink(url){
       // instant — logs to /api/seen (corroboration) AND /api/act (momentum). Two counters, intentional.
       actionRailHtml += `<div class="act-row">
         <div class="act-meta">${iconHtml}<div><div class="act-title">${esc(at.title)}</div><div class="act-desc">${esc(at.desc)}</div></div></div>
-        <button class="act-btn" onclick="
-          fetch('/api/seen',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:${JSON.stringify(issue.type)},id:${JSON.stringify(issue.id)}})}).catch(()=>{});
-          logAct('corroborate');
-          this.textContent='Confirmed';this.disabled=true;
-        ">Confirm</button>
+        <button class="act-btn" onclick="confirmIssue(this)">Confirm</button>
       </div>`;
       continue;
     }
@@ -698,7 +707,7 @@ function copyLink(url){
         <div class="act-meta">${iconHtml}<div><div class="act-title">${esc(at.title)}</div><div class="act-desc">${esc(at.desc)}</div></div></div>
         <div class="act-btn-group">
           <a class="act-btn" href="${esc(tUrl)}" onclick="logAct('share_card')" target="_blank" rel="noopener">Post to X</a>
-          <button class="act-btn act-btn-ghost" id="copy-link-btn" onclick="logAct('share_card');copyLink(${JSON.stringify(sUrl)})">Copy link</button>
+          <button class="act-btn act-btn-ghost" id="copy-link-btn" data-url="${esc(sUrl)}" onclick="logAct('share_card');copyLink(this.dataset.url)">Copy link</button>
         </div>
       </div>`;
       continue;
