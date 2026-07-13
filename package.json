@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check ugc.js && node --check scripts/build.js && node tests/check-client.js",
+    "check": "node --check server.js && node --check ugc.js && node --check scripts/build.js && node --check scripts/refresh-sensitive-sites.js && node tests/check-client.js",
+    "refresh:sites": "node scripts/refresh-sensitive-sites.js",
     "test": "node --test tests/smoke.test.js",
     "verify": "npm run check && npm test"
   }

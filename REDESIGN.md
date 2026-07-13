@@ -40,25 +40,15 @@
 - **The walls:** map card `openCard` = 14 stacked blocks (`index.html:734-798`, only the composer is gated); `/c` receipt `renderCampaign` = 11 blocks (`server.js:490-881`, city record already behind one `<details>`).
 - **Citizens CANNOT enrich what/where:** all UGC keyed to `(type,id)` only; `posts` table has **no descriptor and no geometry column** (`ugc.js:22-34`); the report form (`index.html` `submitPost`/`pform`) collects no pin/address/descriptor. Photo capture drops EXIF/GPS.
 
-## 4. Cost model (Pillar 4) — RESEARCHED, ready to implement in build.js
-Conservative floor constants (so we never overstate):
-- `C_311 = 3.39` — per 311 contact processed (Pew 15-city avg, via Governing).
-- `C_RESP = 50.00` — per NYPD/agency field response. **DERIVED, the only un-cited number** (~1 loaded officer-hour). Options if you want it bulletproof: drop it, or label it "estimated officer time" in the UI.
-- `C_CLEANUP = 1000.00` — per DSNY/NYPD encampment sweep. Below the cleanest sourced figure ($3.5M ÷ ~2,300 sweeps ≈ $1,522, Gothamist citing city data, 2024).
+## 4. Cost model (Pillar 4) — SHIPPED, evidence-limited
+The original episode-as-cleanup model was removed because a reporting episode does not prove a cleanup. The production model counts unique `date + response class` units for positive inspections, negative inspections, and outreach. Duplicate requests on the same date/class do not create extra units.
 
-Formula (compute per Issue in `build.js`):
+The displayed range uses NYPD's published $58,580 starting salary (`$28.16/hour`) as a transparent labor reference:
 ```
-base_cost      = closed_n * (C_311 + C_RESP)
-cleanup_events = (type === 'Encampment') ? min(episode_count, closed_n) : 0
-cleanup_cost   = cleanup_events * C_CLEANUP
-estimated_cost = base_cost + cleanup_cost
-# reporting-only (NOT additive):
-wasted    = nothing_found * (C_311 + C_RESP)   # the "paid, found nothing" headline subset
-returned_share = returned_n / closed_n         # money bought no durable result
+low      = response_units × $28.16 × 0.5 worker-hours
+planning = response_units × $28.16 × 2.0 worker-hours
 ```
-**Worked example — 335 2nd Ave** (closed_n 171, nothing_found 44, episode_count 9, Encampment): 171×53.39 + 9×1000 = **$18,130**. (The mocks show ~$18k — it's real.)
-
-**Honesty note (surface a short version in-product):** a conservative order-of-magnitude estimate of public money spent *responding to* these complaints, not an audited cost or a claim about any individual. Every constant is a floor, so the true cost is likely higher. Does NOT include courts/EMS/hospitalization/property costs and does NOT measure human impact. Anchor with the **NYC Comptroller audit (Jun 2023):** of people present at 2,154 encampment cleanups, only **5% accepted shelter**, and **31% of revisited sites had resumed activity** — the city's own proof the spend fixes nothing. (comptroller.nyc.gov audit of DHS encampment cleanups; NYS Comptroller Report 21-2026 for outreach spend.)
+The low case is one worker for 30 minutes; the planning case is two workers for one hour. It is not an audited bill and deliberately excludes 311 intake, vehicles, supervision, contractor overhead, cleanup, shelter, and medical care. Campaign 001's exact-address record currently has 59 units, or about **$831-$3,323**. The wider approximate block has 130 units, or about **$1,831-$7,323**.
 
 ## 5. Prior-art patterns (design rationale — Waze / Watch Duty / Citizen)
 The winners never render "data" — they render a few discrete things each with a **state, a clock, and a heartbeat.** Ranked transferable patterns: (1) explicit lifecycle **state** as the primary visual; (2) **recency heartbeat** "confirmed N min ago" + visual **decay** of stale items (Citizen's zoom-coupled time window); (3) **"still here? / gone"** confirm loop that resets decay + drives confidence; (4) **confidence** as a first-class visible chip; (5) 📍 **vicinity not false precision** — start fuzzy, let a person on the ground **collapse it to a point** (Waze snap-to-segment; Zenly/Snap blur); (6) 📍 **fuzz isolated points, sharpen with corroboration**; (7) live **color/state semantics** before any text; (8) **pulse/motion + "LIVE" badge + live counts**; (9) **human-verified provenance** badge (auto-311 vs confirmed-by-neighbor); (10) per-instance **update timeline**; (11) **radius-of-relevance / distance-from-you** framing. Anti-pattern (why 311/SeeClickFix feel dead): archival ticket dump, no decay, no confidence, no confirm loop.

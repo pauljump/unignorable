@@ -13,6 +13,13 @@
       "continuity_confidence_score": 90,
       "confidence_is_probability": false,
       "cadence_window_days": 30,
+      "response_labor": {
+        "response_units": 59,
+        "low": 831,
+        "planning": 3323,
+        "reference_hourly": 28.16,
+        "source": "https://www.nyc.gov/site/nypd/careers/police-officers/OLD-po-benefits.page"
+      },
       "current": {
         "supported_from": "2026-03-18",
         "supported_through": "2026-07-02",

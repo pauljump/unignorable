@@ -13,6 +13,8 @@ const TYPES = "('Encampment','Homeless Person Assistance','Drug Activity','Panha
 
 let campaignContext = {};
 try { campaignContext = JSON.parse(fs.readFileSync(path.join(dataDir, 'campaign_context.json'), 'utf8')); } catch {}
+let sensitiveSiteData = { sites: [], source: null, refreshed_at: null };
+try { sensitiveSiteData = JSON.parse(fs.readFileSync(path.join(dataDir, 'sensitive_sites.json'), 'utf8')); } catch {}
 
 const db = new DatabaseSync(DB, { readOnly: true });
 
@@ -33,6 +35,17 @@ const issues = db.prepare(`
          min(date(created_date)) AS first_seen, max(date(created_date)) AS last_seen,
          max(agency) AS agency,
          sum(CASE WHEN closed_date IS NOT NULL THEN 1 ELSE 0 END) AS closed_n,
+         count(DISTINCT CASE WHEN resolution_description LIKE '%observed an encampment%'
+              THEN date(created_date)||'|positive' END) AS positive_response_days,
+         count(DISTINCT CASE WHEN resolution_description LIKE '%attempted to engage the individuals%'
+                   OR resolution_description LIKE '%offered services to the individual%'
+              THEN date(created_date)||'|outreach' END) AS outreach_response_days,
+         count(DISTINCT CASE WHEN resolution_description LIKE '%no Encampment was found%'
+                   OR resolution_description LIKE '%observed no encampment%'
+                   OR resolution_description LIKE '%could not find%'
+                   OR resolution_description LIKE '%could not locate%'
+                   OR resolution_description LIKE '%did not observe%'
+              THEN date(created_date)||'|negative' END) AS negative_response_days,
          sum(CASE WHEN resolution_description LIKE '%no Encampment was found%'
                    OR resolution_description LIKE '%observed no encampment%'
                    OR resolution_description LIKE '%could not find%'
@@ -119,7 +132,24 @@ flush();
 // Deterministic, pure arithmetic over fields already on the row. Both are SINGLE SOURCE OF TRUTH:
 // the card and the shame-board read issue.headline / issue.score, never re-derive them.
 const num = v => Number.isFinite(v) ? v : 0;
-const COST = Object.freeze({ contact: 3.39, response: 50, encampmentCleanup: 1000 });
+// Response-labor range, not an audited cost. Each unit is one unique day + response class
+// (positive inspection, negative inspection, or outreach), which avoids pricing duplicate requests
+// as separate visits. Reference wage is NYPD's published $58,580 starting salary / 2,080 hours.
+// Low = one worker for 30 minutes. Planning = two workers for one hour. No cleanup is inferred.
+const COST = Object.freeze({ annualReferenceSalary: 58580, annualHours: 2080 });
+const RESPONSE_HOURLY = COST.annualReferenceSalary / COST.annualHours;
+function responseLaborEstimate(units) {
+  return {
+    response_units: units,
+    low: Math.round(units * RESPONSE_HOURLY * 0.5),
+    planning: Math.round(units * RESPONSE_HOURLY * 2),
+    reference_hourly: +RESPONSE_HOURLY.toFixed(2),
+    low_assumption: 'one worker for 30 minutes per unique response-day and class',
+    planning_assumption: 'two workers for one hour per unique response-day and class',
+    excludes: ['311 intake', 'vehicles', 'supervision', 'contractor overhead', 'cleanup', 'shelter', 'medical care'],
+    source: 'https://www.nyc.gov/site/nypd/careers/police-officers/OLD-po-benefits.page',
+  };
+}
 
 // Headline: pick the most damning TRUE signal in fixed precedence; cite only literal field values.
 // R1 cites the raw nothing_found count (never a %): nothing_found is matched over ALL rows while
@@ -181,16 +211,54 @@ for (const r of issues) {
   r.score = scoreFor(r);
   r.nothing_found_rate = num(r.closed_n) ? +(num(r.nothing_found) / num(r.closed_n)).toFixed(2) : 0;
   r.phantom_closure_score = phantomScore(r);
-  const cleanupEvents = r.type === 'Encampment' ? Math.min(num(r.episode_count), num(r.closed_n)) : 0;
-  r.estimated_cost = Math.round(
-    num(r.closed_n) * (COST.contact + COST.response) + cleanupEvents * COST.encampmentCleanup
-  );
-  r.estimated_cost_basis = {
-    closed_responses: num(r.closed_n),
-    cleanup_events: cleanupEvents,
-    contact_cost: COST.contact,
-    response_cost: COST.response,
-    cleanup_cost: COST.encampmentCleanup,
+  const responseUnits = num(r.positive_response_days) + num(r.outreach_response_days) + num(r.negative_response_days);
+  r.response_labor = responseLaborEstimate(responseUnits);
+  // Compatibility field for existing clients; the UI labels this as a planning estimate.
+  r.estimated_cost = r.response_labor.planning;
+  r.estimated_cost_basis = r.response_labor;
+}
+
+// ---- SENSITIVE-SITE PROXIMITY: literal distances, citywide and reusable ----
+// The daily Facilities Database snapshot supplies schools and childcare sites. We publish counts
+// and straight-line distances within 500 feet; proximity is never treated as proof of harm and is
+// not folded into an opaque score. A 0.01-degree bucket index keeps the citywide join inexpensive.
+const SENSITIVE_RADIUS_FT = 500;
+const siteBuckets = new Map();
+const bucketKey = (lat, lng) => `${Math.floor(lat * 100)},${Math.floor(lng * 100)}`;
+for (const site of sensitiveSiteData.sites || []) {
+  if (!Number.isFinite(site.lat) || !Number.isFinite(site.lng)) continue;
+  const bk = bucketKey(site.lat, site.lng);
+  if (!siteBuckets.has(bk)) siteBuckets.set(bk, []);
+  siteBuckets.get(bk).push(site);
+}
+const distanceFeet = (aLat, aLng, bLat, bLng) => {
+  const rad = Math.PI / 180;
+  const x = (bLng - aLng) * rad * Math.cos((aLat + bLat) * rad / 2);
+  const y = (bLat - aLat) * rad;
+  return Math.sqrt(x * x + y * y) * 6371000 * 3.28084;
+};
+function sensitiveSitesNear(lat, lng) {
+  const by = Math.floor(lat * 100), bx = Math.floor(lng * 100), candidates = [];
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    candidates.push(...(siteBuckets.get(`${by + dy},${bx + dx}`) || []));
+  }
+  return candidates.map(site => ({ ...site, distance_ft: Math.round(distanceFeet(lat, lng, site.lat, site.lng)) }))
+    .filter(site => site.distance_ft <= SENSITIVE_RADIUS_FT)
+    .sort((a, b) => a.distance_ft - b.distance_ft);
+}
+for (const r of issues) {
+  const nearby = sensitiveSitesNear(Number(r.lat), Number(r.lng));
+  const schools = nearby.filter(site => site.category === 'school');
+  const childcare = nearby.filter(site => site.category === 'childcare');
+  r.sensitive_sites = nearby.slice(0, 8);
+  r.sensitive_site_summary = {
+    radius_ft: SENSITIVE_RADIUS_FT,
+    school_count: schools.length,
+    childcare_count: childcare.length,
+    nearest_school_ft: schools[0]?.distance_ft ?? null,
+    nearest_childcare_ft: childcare[0]?.distance_ft ?? null,
+    source: sensitiveSiteData.source || null,
+    source_refreshed_at: sensitiveSiteData.refreshed_at || null,
   };
 }
 // Sanity log: top citywide score + per-borough #1 spread (confirms the formula discriminates).
@@ -465,6 +533,8 @@ function inferAddressState(rows) {
   const confidence = Math.round(100 * (
     0.35 * frequencyFactor + 0.25 * spanFactor + 0.30 * recencyFactor + 0.10 * consistencyFactor
   ));
+  const responseUnits = daily.reduce((n, d) => n
+    + (d.positive > 0 ? 1 : 0) + (d.outreach > 0 ? 1 : 0) + (d.negative > 0 ? 1 : 0), 0);
 
   return {
     version: 'address-state-v1',
@@ -477,6 +547,7 @@ function inferAddressState(rows) {
     current: current,
     prior_segments: summaries.slice(0, -1),
     interruptions,
+    response_labor: responseLaborEstimate(responseUnits),
     totals: {
       reports: rows.length,
       report_days: daily.length,

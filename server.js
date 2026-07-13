@@ -249,6 +249,9 @@ const formatEstimatedCost = (x) => {
   if (n >= 1000) return `~$${n >= 10000 ? Math.round(n / 1000) : (n / 1000).toFixed(1).replace('.0', '')}k`;
   return `~$${Math.round(n)}`;
 };
+const formatResponseCostRange = basis => basis
+  ? `${formatEstimatedCost(basis.low)}-${formatEstimatedCost(basis.planning).replace(/^~/, '')}`
+  : 'n/a';
 const titleCase = (s) => String(s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).trim();
 const daysSince = (iso) => {
   const t = Date.parse((iso || '') + 'T00:00:00Z');
@@ -373,13 +376,20 @@ const displayLocation = issue => (contextFor(issue) && contextFor(issue).display
   || titleCase(issue.addr) || 'this location';
 
 // THE ASK block per complaint type. Service-first, no criminal claim for non-structure types.
-function askForType(type) {
+function askForType(issueOrType) {
+  const issue = typeof issueOrType === 'string' ? null : issueOrType;
+  const type = typeof issueOrType === 'string' ? issueOrType : issueOrType.type;
   if (type === 'Encampment') {
+    const proximity = issue && issue.sensitive_site_summary;
+    const schoolAsk = proximity && proximity.school_count > 0
+      ? `Treat the school approach as urgent. The NYC Facilities Database places ${fmtN(proximity.school_count)} K-12 school${proximity.school_count === 1 ? '' : 's'} within ${fmtN(proximity.radius_ft)} feet, the nearest about ${fmtN(proximity.nearest_school_ft)} feet away. Children, families, and staff should not have to navigate a repeatedly confirmed sidewalk encampment while agencies cycle through closures.`
+      : null;
     return [
       'Clear the sidewalk obstruction. NYC Admin Code §16-122 and §19-136 give the city clear authority to act on persistent sidewalk obstructions.',
+      schoolAsk,
       'Connect these neighbors to services. File this location as an outreach request to DHS so the people here are offered shelter and help. Clearing without serving just moves the problem.',
-      'Make it durable. When the city last did this right (Sheepshead Bay), it cleared the site and prevented its return. Closing a ticket is not the same as fixing the problem.',
-    ];
+      'Require a durable, written response plan: named agency ownership, repeated outreach, a clear pedestrian route, and a dated follow-up inspection. Closing a ticket is not the same as fixing the problem.',
+    ].filter(Boolean);
   }
   if (type === 'Homeless Person Assistance') {
     return [
@@ -424,7 +434,7 @@ function buildEmailOfficialUrl(issue, campaign, trackedReceiptUrl) {
   const evidence = evidenceFor(issue);
   const state = evidence && evidence.state_model;
   const currentState = state && state.current;
-  const askLines = askForType(issue.type);
+  const askLines = askForType(issue);
 
   const subject = `[Constituent Request] Repeated ${issue.type} reports ${addr}`;
 
@@ -437,8 +447,9 @@ function buildEmailOfficialUrl(issue, campaign, trackedReceiptUrl) {
     '',
     `The city\'s own 311 record shows:`,
     `- ${n} service requests in the approximate-block record`,
-    evidence ? `- ${evidence.address_current_episode_requests} requests in the current reporting episode specifically naming 246 East 20th Street, across ${evidence.address_current_episode_report_days} distinct reporting days` : '',
+    evidence ? `- ${evidence.address_current_episode_requests} requests in the current reporting episode specifically naming the configured campaign address, across ${evidence.address_current_episode_report_days} distinct reporting days` : '',
     currentState ? `- ${currentState.positive_observations} positive agency observations and ${currentState.outreach_contacts} outreach contacts in the current supported interval` : '',
+    state && state.response_labor ? `- ${formatResponseCostRange(state.response_labor)} estimated response-labor range across ${state.response_labor.response_units} deduplicated response-days/classes; this excludes cleanup, vehicles, supervision, shelter, and medical costs` : '',
     state && state.interruptions.length ? `- The record shows a ${state.interruptions.at(-1).support_gap_days}-day support-evidence gap before ${fmtDate(state.interruptions.at(-1).return_supported_on)}, ${state.interruptions.at(-1).inference === 'likely_interruption' ? 'supporting a likely inactive interval and later return' : 'consistent with a possible interruption and return'}, but not a documented cleanup` : '',
     `- ${cn} times the city marked the case "resolved"`,
     nf ? `- ${nf} of those closures stated "nothing found"` : '',
@@ -593,14 +604,12 @@ function renderCampaign(issue) {
   const instReports = curEp ? curEp[2] : issue.n;
   const startTxt = monthYear(episodeStart);
   const observation = context && context.observation;
-  const nearbyPlaces = context && Array.isArray(context.nearby_places) ? context.nearby_places : [];
+  const sensitiveSites = Array.isArray(issue.sensitive_sites) ? issue.sensitive_sites : [];
+  const schoolSites = sensitiveSites.filter(site => site.category === 'school');
+  const childcareSites = sensitiveSites.filter(site => site.category === 'childcare');
+  const sensitiveSummary = issue.sensitive_site_summary || null;
   const pressure = REPORT_PRESSURE.get(issueKey);
   const reportPressure = pressure ? pressure.percentile : null;
-  const proximityImpact = nearbyPlaces.length
-    ? Math.min(100, nearbyPlaces.reduce((score, place) => score + (place.relationship === 'directly opposite' ? 40 : 15), 0))
-    : null;
-  const priorityIndex = reportPressure != null && proximityImpact != null
-    ? Math.round(0.8 * reportPressure + 0.2 * proximityImpact) : null;
 
   // The citizen layer, on top of the city's record.
   let T = { corrob: 0, posts: [], verdict: 'unverified' };
@@ -658,7 +667,7 @@ function renderCampaign(issue) {
     + (issue.last_seen ? `, current through ${esc(issue.last_seen)}` : '') + '.';
 
   // THE ASK lines for this issue type.
-  const askLines = askForType(issue.type);
+  const askLines = askForType(issue);
 
   // Action rail — iterate ACTION_TYPES, build controls.
   // For prepared actions: build mailto/intent href; onclick logs to /api/act then proceeds.
@@ -820,7 +829,7 @@ async function prepareOfficialAction(button,actionType){
     ? `<div class="observation"><b>Dated neighbor observation:</b> the ${esc(observation.attribution || 'campaign organizer')} reports seeing the current tent for at least ${fmtN(observation.minimum_months)} months as of ${esc(fmtDate(observation.as_of))}. This is a firsthand minimum, not a claim that it is the same object as earlier 311 records.</div>`
     : '';
   const evidenceHtml = evidence
-    ? `<div class="evidence"><b>Address-specific record:</b> ${fmtN(evidence.address_requests)} requests specifically name 246 East 20th Street across ${fmtN(evidence.address_report_days)} reporting days from ${esc(fmtDate(evidence.address_first_report))} through ${esc(fmtDate(evidence.address_latest_report))}. The wider approximate-block cell contains ${fmtN(evidence.approximate_block_requests)} requests.</div>`
+    ? `<div class="evidence"><b>Address-specific record:</b> ${fmtN(evidence.address_requests)} requests match the configured address near 246 East 20th Street across ${fmtN(evidence.address_report_days)} reporting days from ${esc(fmtDate(evidence.address_first_report))} through ${esc(fmtDate(evidence.address_latest_report))}. The wider approximate-block cell contains ${fmtN(evidence.approximate_block_requests)} requests.</div>`
     : '';
   const stateHtml = currentState
     ? `<section class="state"><h2>Occupation evidence</h2>
@@ -829,11 +838,21 @@ async function prepareOfficialAction(button,actionType){
       ${latestInterruption ? `<div class="interruption"><b>${latestInterruption.inference === 'likely_interruption' ? 'Likely interruption; return supported' : 'Possible interruption and return'}:</b> supporting evidence stops after ${esc(fmtDate(latestInterruption.last_support_before))} and resumes ${esc(fmtDate(latestInterruption.next_support))}, a ${fmtN(latestInterruption.support_gap_days)}-day gap${latestInterruption.negative_only_days ? ` containing ${fmtN(latestInterruption.negative_only_days)} negative-only inspection${latestInterruption.negative_only_days === 1 ? '' : 's'}` : ''}. This supports a period of likely inactivity followed by renewed occupation, but does not document a cleanup.</div>` : ''}
       <p class="fine">This score is an evidence index, not a probability. It does not prove one unchanged tent or a documented cleanup.</p>
     </section>` : '';
-  const impactHtml = nearbyPlaces.length
-    ? `<section class="impact"><h2>Pain and impact</h2>
-      <div class="scoreline"><div><b>${reportPressure}</b><span>report pressure percentile</span></div><div><b>${proximityImpact}</b><span>proximity impact</span></div><div><b>${priorityIndex}</b><span>priority index</span></div></div>
-      <p class="fine">The priority index weights service-request volume 80% and verified sensitive-site proximity 20%. It ranks public response urgency, not any person.</p>
-      <div class="places">${nearbyPlaces.map(place => `<div><b>${esc(place.name)}</b> &middot; ${esc(place.address)} &middot; ${esc(place.relationship)} &middot; <a href="${esc(place.source)}" target="_blank" rel="noopener">source</a></div>`).join('')}</div>
+  const costBasis = state && state.response_labor ? state.response_labor : issue.response_labor;
+  const costHtml = costBasis && costBasis.response_units > 0
+    ? `<section class="cost"><h2>What repeated response has cost</h2>
+      <div class="cost-range">${esc(formatResponseCostRange(costBasis))}</div>
+      <p class="cost-lead">Estimated response labor across ${fmtN(costBasis.response_units)} deduplicated response-days and response classes. The lower bound assumes one worker for 30 minutes; the planning estimate assumes two workers for one hour.</p>
+      <div class="cost-equation">${fmtN(costBasis.response_units)} units &times; $${costBasis.reference_hourly.toFixed(2)}/hour &times; 0.5-2 worker-hours</div>
+      <p class="fine">Not an audited bill. This deliberately excludes 311 intake, vehicles, supervision, contractor overhead, cleanup, shelter, and medical care because the location record does not support assigning those costs. Wage reference: <a href="${esc(costBasis.source)}" target="_blank" rel="noopener">NYPD published starting salary</a>.</p>
+    </section>` : '';
+  const impactHtml = sensitiveSummary && schoolSites.length
+    ? `<section class="impact"><h2>${fmtN(sensitiveSummary.school_count)} schools within ${fmtN(sensitiveSummary.radius_ft)} feet</h2>
+      <div class="impact-callout">It is unacceptable for the city to leave a repeatedly confirmed sidewalk encampment on a daily route used by children, families, and school staff, then treat ticket closure as resolution. This is a failure of both pedestrian access and human services.</div>
+      <div class="scoreline"><div><b>${fmtN(sensitiveSummary.school_count)}</b><span>K-12 schools within ${fmtN(sensitiveSummary.radius_ft)} ft</span></div><div><b>${fmtN(sensitiveSummary.nearest_school_ft)} ft</b><span>nearest recorded school</span></div><div><b>${reportPressure}</b><span>report-volume percentile</span></div></div>
+      <p class="fine">These are literal straight-line distances from the approximate issue location, not a claim that any person caused harm. Counts come from the citywide NYC Planning Facilities Database and are computed the same way for every issue.</p>
+      <div class="places">${schoolSites.map(place => `<div><b>${esc(place.name)}</b> &middot; ${esc(place.address || 'address unavailable')} &middot; ${fmtN(place.distance_ft)} ft</div>`).join('')}${childcareSites.length ? `<div><b>Also nearby:</b> ${fmtN(sensitiveSummary.childcare_count)} childcare/pre-K facilit${sensitiveSummary.childcare_count === 1 ? 'y' : 'ies'} within ${fmtN(sensitiveSummary.radius_ft)} feet.</div>` : ''}</div>
+      <p class="fine"><a href="${esc(sensitiveSummary.source)}" target="_blank" rel="noopener">NYC Planning Facilities Database source</a></p>
     </section>` : '';
 
   return `<!doctype html><html lang="en"><head>
@@ -925,6 +944,7 @@ async function prepareOfficialAction(button,actionType){
   .action-receipt{padding-top:10px;font-size:12px}
   .observation,.evidence{margin:12px 0;padding:12px 14px;border-left:3px solid var(--amber);background:var(--card);font-size:14px}
   .state{margin:22px 0}.state h2{margin-top:0}.state-verdict{display:grid;grid-template-columns:120px 1fr;gap:16px;align-items:center;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:14px 0}.state-verdict>div{text-align:center}.state-verdict>div b{display:block;color:var(--amber);font-size:28px}.state-verdict>div span{display:block;color:var(--mut);font-size:11px}.state-verdict p{margin:0;font-size:14px}.state-facts{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);margin-top:1px}.state-facts span{background:var(--bg);padding:10px 6px;text-align:center;color:var(--mut);font-size:11px}.state-facts b{display:block;color:var(--ink);font-size:17px}.interruption{margin-top:14px;padding:12px 14px;border-left:3px solid var(--mut);background:var(--card);font-size:13px;color:var(--mut)}.interruption b{color:var(--ink)}
+  .cost{padding:22px 0;border-top:1px solid var(--line)}.cost h2{margin-top:0}.cost-range{font-size:42px;line-height:1;font-weight:800;color:var(--amber)}.cost-lead{font-size:15px;max-width:600px}.cost-equation{display:inline-block;padding:7px 9px;background:var(--card);border:1px solid var(--line);font:12px ui-monospace,SFMono-Regular,Menlo,monospace}.impact-callout{font-size:18px;line-height:1.45;font-weight:700;border-left:3px solid var(--alarm);padding:4px 0 4px 14px;margin:12px 0 18px}
   .scoreline{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
   .scoreline>div{padding:14px 8px;text-align:center;border-right:1px solid var(--line)}
   .scoreline>div:last-child{border-right:0}.scoreline b{display:block;font-size:25px;color:var(--amber)}.scoreline span{font-size:11px;color:var(--mut)}
@@ -969,6 +989,7 @@ async function prepareOfficialAction(button,actionType){
     ${corrob > 0 ? `<div class="ugc"><div class="hdr">&#128065; <b>The block says it is still here.</b> ${fmtN(corrob)} ${corrob === 1 ? 'neighbor confirms' : 'neighbors confirm'}.</div>${latest && latest.text ? `<div class="q">"${esc(latest.text)}"${latest.photo ? ' (photo on file)' : ''}</div>` : ''}</div>` : ''}
   </div>
 
+  ${costHtml}
   ${impactHtml}
 
   <h2>What we are asking for</h2>

@@ -762,6 +762,10 @@ function fmtCost(n){
   if(n>=1000) return '~$'+(n>=10000?Math.round(n/1000):(n/1000).toFixed(1).replace('.0',''))+'k';
   return '~$'+Math.round(n);
 }
+function fmtCostRange(i){
+  const b=i&&i.response_labor;
+  return b ? fmtCost(b.low)+'-'+fmtCost(b.planning).replace(/^~/,'') : fmtCost(i&&i.estimated_cost);
+}
 function caseTitle(i){
   const days=Math.max(1,Number(i.current_days)||1);
   if(i.status!=='active') return `${TYPES[i.type].label} reports at this block have gone quiet.`;
@@ -786,9 +790,9 @@ function openCard(i){
     <div class="case-facts">
       <div class="case-fact"><b>${fmt(i.n)}</b><span>311 reports</span></div>
       <div class="case-fact"><b class="hot">${fmt(i.closed_n)}</b><span>city closures</span></div>
-      <div class="case-fact"><b class="hot">${fmtCost(i.estimated_cost)}</b><span>est. city response cost</span></div>
+      <div class="case-fact"><b class="hot">${fmtCostRange(i)}</b><span>response labor range</span></div>
     </div>
-    <div class="case-est">Conservative estimate from 311 contacts, field responses, and documented encampment cleanup floors. Not an audited total.</div>
+    <div class="case-est">From deduplicated response-days: one worker for 30 minutes to two workers for one hour, using NYPD published starting pay as the labor reference. Excludes cleanup, vehicles, overhead, shelter, and medical care. Not an audited bill.</div>
     <div class="case-indictment">${i.headline?esc(i.headline):`First reported ${esc(i.first_seen)}.`}${nothing?` The city marked <b>${fmt(nothing)}</b> closures “nothing found.”`:''}${i.returned_n?` The same block was reported again after <b>${fmt(i.returned_n)}</b> closures.`:''}</div>
 
     <div class="vote-row">

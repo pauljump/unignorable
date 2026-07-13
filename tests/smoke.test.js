@@ -117,8 +117,13 @@ test('Campaign 001 separates reporting evidence from observation and issues perm
   assert.match(html, /does not document a cleanup/i);
   assert.match(html, /evidence index, not a probability/i);
   assert.match(html, /Dated neighbor observation/);
-  assert.match(html, /Pain and impact/);
-  assert.match(html, /LearningSpring School/);
+  assert.match(html, /LearningSpring School/i);
+  assert.match(html, /3 schools within 500 feet/i);
+  assert.match(html, /It is unacceptable for the city/i);
+  assert.match(html, /\$831-\$3\.3k/);
+  assert.match(html, /59 deduplicated response-days/i);
+  assert.match(html, /Not an audited bill/i);
+  assert.doesNotMatch(html, /Sheepshead Bay/i);
   assert.doesNotMatch(html, /A tent has been here/);
 
   const prepared = await fetch(`${origin}/api/action/prepare`, {

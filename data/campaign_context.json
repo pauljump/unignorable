@@ -6,26 +6,6 @@
       "minimum_months": 3,
       "as_of": "2026-07-13",
       "attribution": "campaign organizer"
-    },
-    "nearby_places": [
-      {
-        "name": "LearningSpring School",
-        "address": "247 East 20th Street",
-        "relationship": "directly opposite",
-        "source": "https://learningspring.org/contact-lss/"
-      },
-      {
-        "name": "P.S. 040 Augustus Saint-Gaudens",
-        "address": "320 East 20th Street",
-        "relationship": "nearby campus",
-        "source": "https://www.schools.nyc.gov/schools/M040"
-      },
-      {
-        "name": "M.S. 255 Salk School of Science",
-        "address": "320 East 20th Street",
-        "relationship": "nearby campus",
-        "source": "https://www.schools.nyc.gov/schools/M255"
-      }
-    ]
+    }
   }
 }
