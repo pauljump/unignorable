@@ -61,9 +61,10 @@ pm2 restart unignorable
 ## Current State
 
 **Status:** LIVE from the monorepo at https://unignorable.polyfeeds.dev; Campaign 001 is the launch front door.
-**Last updated:** 2026-07-13
+**Last updated:** 2026-08-02
 **What just shipped:** Campaign 001 now identifies the location as near 246 East 20th Street and separates approximate-block requests, address-specific evidence, agency observations/outreach, and a dated organizer observation. The daily build regenerates campaign evidence and an address-state model from raw 311 rows. A citywide proximity engine refreshes 7,400 K-12/childcare sites from NYC Planning's Facilities Database and reports literal counts/distances for every issue. The cost model now prices only deduplicated response-day/classes as a transparent labor range; it never infers cleanup from an episode. Verified District 2 actions, permanent action receipts, and tracked evidence links remain.
-**What's next:** add first-party organizer follow-up delivery and sender confirmation. If Unignorable later sends email itself, record provider acceptance and tracking-pixel requests as separate weak signals; never label them proof of a human open.
+**Product direction captured 2026-08-02:** Paul likes the CityTracker.ai posture: a map-first professional operating system, not an advocacy landing page. Translate that into "CityTracker for unresolved civic failures": dense map + ranked list + location dossier + campaign mode + watchlists/alerts + methodology/freshness surfaces. The differentiator is the action loop: facts -> impact -> accountable official -> human action -> receipts -> outcome. Avoid copying real-estate filter overload or hiding the core value behind account gates.
+**What's next:** add first-party organizer follow-up delivery and sender confirmation; then redesign around the CityTracker-style workspace. If Unignorable later sends email itself, record provider acceptance and tracking-pixel requests as separate weak signals; never label them proof of a human open.
 **What's blocking:** in-app browser control is unavailable in this Codex session, so visual screenshot QA remains a manual device pass; rendered HTML and HTTP interaction verification pass.
 
 **Shipped 2026-07-12 — AREA (ZONE) SHARE — the sharable bundle of many bubbles under one permalink (Phase 1 of 2) — LIVE:**

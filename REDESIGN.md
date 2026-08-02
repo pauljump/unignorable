@@ -1,6 +1,6 @@
-# unignorable — Redesign Handoff (2026-07-13)
+# unignorable — Redesign Handoff (2026-08-02)
 
-**Status:** Phase 1 shipped to production on 2026-07-13. Dossier posture selected, confirmation promoted, conservative cost model built, map weighting updated, and the app consolidated into the monorepo. Visual/on-device QA remains.
+**Status:** Phase 1 shipped to production on 2026-07-13. Dossier posture selected, confirmation promoted, conservative cost model built, map weighting updated, and the app consolidated into the monorepo. On 2026-08-02 Paul picked CityTracker.ai as the closest product posture: a dense, map-first operating system for civic failures, with campaign/action workflow as the differentiator. Visual/on-device QA remains.
 
 > For the next agent (Codex or Claude) picking up this work cold. Read this + `CLAUDE.md` first. Everything below is so you don't have to re-derive it. The canonical plan also lives at `~/.claude/plans/okay-with-unignorable-i-sparkling-pudding.md` (Claude home — may be invisible to you; the essentials are duplicated here).
 
@@ -15,6 +15,15 @@
 
 ## 2. THE REDESIGN (approved plan — this is the work to pick up)
 **Reframe (one line):** Stop rendering *what was reported*. Render **what's confirmed here now, what it actually is, how long it's gone ignored, and what it's costing the city** — and let people **vote it up.** The platform's act is **solidifying** a vague 4-type 311 estimate into a described, ranked, living instance.
+
+**Product posture added 2026-08-02:** Build the first screen like a professional civic intelligence workspace, not a campaign landing page. CityTracker.ai is the useful reference because it feels like an operating system over public data: full map, address search, filterable/ranked records, property-style dossiers, timelines, saved lists, freshness, and report generation. For Unignorable, the equivalent is:
+- **Map + ranked issue list** as the default workspace, with active unresolved civic failures first.
+- **Location dossier drawer** for one site: evidence confidence, continuity model, persistence/return inference, school/childcare proximity, cost range, official jurisdiction, timeline, and methodology.
+- **Campaign mode inside the dossier**: generate email, X post, link, press tip, CB agenda ask, and permanent receipt trail.
+- **Watchlist/alerts** for followed places and user-created campaigns.
+- **Citywide intelligence layer**: filters for category, district, school proximity, cost range, confirmation count, continuity confidence, recurrence, and response pattern.
+
+Do not copy CityTracker's real-estate-specific filter overload, account-gated browsing posture, or AI chat as the primary interface. Unignorable's moat is the loop **facts -> impact -> accountable official -> action -> receipt -> outcome**, not just public-data search.
 
 **The "20th & 2nd test"** (Paul's north star): walking past an encampment you should know at a glance — **what it is** (richer than "Encampment") · **how chronic** (reported N× over M months) · **how long** · **what law** it breaks + **how it's ignored** · **what it's cost the city** · with a big **upvote**.
 
@@ -61,10 +70,11 @@ Three glanceable **card** directions, all rendering 335 2nd Ave (Paul's block), 
 All three: real ~$18k cost, pulsing "still here · day 296", §16-122 tag, names CM Epstein, includes the ▲ vote.
 
 ## 7. Next steps (ordered — pick up HERE)
-1. **Get Paul's card pick** (a posture, or pieces of each). Open decision.
-2. **Mock the MAP pin treatment** to match: state + vote-weight + recency **decay** (resolved falls off). Serve at `/design/map-*`.
-3. **Phase 1 build** (stage in /tmp): near-me+active default; decay resolved off the map; **▲ vote** as first-class (`/api/seen` → visible count + rank/visual weight; `ugc.js` surface the count); **cost + deterministic "what it is" narrative** computed in `build.js` and surfaced in the header; glanceable `openCard` rebuild + `/c` de-word (progressive disclosure); replace the sparkline with the simple chronic line; fix clustering.
-4. **Phase 2:** citizen **descriptor capture** in the report form (chips + text) → `posts` descriptor column (+ `ALTER` migration), moderated via the existing gate.
-5. **Phase 3 (optional):** location solidify (pin-nudge + geometry column + vicinity→point).
+1. **Mock the CityTracker-style workspace.** Default route should feel like a civic operations console: full map, left/right ranked list, search, tight filters, and a dossier drawer for Campaign 001. Serve as `/design/workspace-citytracker`.
+2. **Resolve the card posture inside that workspace.** Use the earlier A/B/C mocks as component studies, but the product direction is now a dossier-driven workspace rather than isolated cards.
+3. **Mock the MAP pin treatment** to match: state + vote-weight + recency **decay** (resolved falls off). Serve at `/design/map-*`.
+4. **Phase 1 build** (stage in /tmp): near-me+active default; decay resolved off the map; **▲ vote** as first-class (`/api/seen` → visible count + rank/visual weight; `ugc.js` surface the count); **cost + deterministic "what it is" narrative** computed in `build.js` and surfaced in the header; workspace list + dossier `openCard` rebuild + `/c` de-word (progressive disclosure); replace the sparkline with the simple chronic line; fix clustering.
+5. **Phase 2:** user-created campaigns + citizen **descriptor capture** in the report form (chips + text) → `posts`/campaign descriptor columns (+ `ALTER` migrations), moderated via the existing gate.
+6. **Phase 3 (optional):** location solidify (pin-nudge + geometry column + vicinity→point).
 
 **Files you'll touch:** `scripts/build.js` (cost + narrative), `server.js` (vote endpoint, cost/narrative in card + `/api/thread`, de-word `renderCampaign`, `/design/*`), `index.html` (`draw()` vote/decay visuals + clustering, `openCard` rebuild, report-form descriptor chips, replace `renderSparkline`), `ugc.js` (vote count surfacing, descriptor column + migration).
