@@ -10,8 +10,7 @@ Thesis proof (real data, 2026-06-18): NYC's #1 outcome for the 199,865 "Encampme
 
 ## How We Build Together
 
-Monorepo collaboration protocol. Main by default; branch + PR only when Paul asks.
-
+Portfolio policy: `/Users/mini-home/Desktop/Monorepo/control-plane/AGENT-CORE.md`.
 ## Architecture (v0 skeleton — "feel it" build)
 
 ```
@@ -153,5 +152,5 @@ launchctl list | grep unignorable          # confirm the schedule is loaded
 4. The repo housekeeping batch above (ecosystem/registry/dash/sidewalk-CLAUDE) — all live stuff works without it; it's about boot-canonical + visibility.
 5. Maybe-later: share card per Issue (populus OG-card pattern → travels to X/press/council); fold in muster as the voice report path; bounties marketplace (the old `snitch` idea).
 
-**Backup:** this dir is git-backed at the `unignorable` GitHub repo (pushed 2026-06-19). Re-push after changes: `cd ~/unignorable && git add -A && git commit -m '…' && git push`.
+**Backup:** this dir is git-backed at the `unignorable` GitHub repo (last recorded push 2026-06-19). Commit intentionally scoped changes locally; push only when the current task authorizes publication.
 ```
