@@ -210,13 +210,9 @@ const readBody = (req) => new Promise((resolve, reject) => {
   req.on('error', reject);
 });
 
-// Review key — Paul's personal gate. Stable secret in data/admin-key (gitignored), generated once.
-const KEY_FILE = path.join(DATA_DIR, 'admin-key');
-let REVIEW_KEY = process.env.REVIEW_KEY || '';
-if (!REVIEW_KEY) {
-  try { REVIEW_KEY = fs.readFileSync(KEY_FILE, 'utf8').trim(); } catch {}
-  if (!REVIEW_KEY) { REVIEW_KEY = crypto.randomBytes(16).toString('hex'); fs.writeFileSync(KEY_FILE, REVIEW_KEY); }
-}
+// Review key — Paul's personal gate. Production injects it from the central secret store.
+const REVIEW_KEY = process.env.REVIEW_KEY || '';
+if (!REVIEW_KEY) throw new Error('REVIEW_KEY is required');
 function reviewToken(req, u) {
   const query = u.searchParams.get('k');
   if (query) return query;

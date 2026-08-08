@@ -7,7 +7,8 @@ const { DatabaseSync } = require('node:sqlite');
 const fs = require('fs');
 const path = require('path');
 
-const DB = process.env.DB || '/Users/mini-home/Desktop/Monorepo/sidewalk/data/sidewalk.db';
+const sidewalkDir = process.env.SIDEWALK_DIR || '/Users/mini-home/Desktop/Monorepo/sidewalk';
+const DB = process.env.DB || path.join(sidewalkDir, 'data', 'sidewalk.db');
 const dataDir = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data'));
 const TYPES = "('Encampment','Homeless Person Assistance','Drug Activity','Panhandling')";
 

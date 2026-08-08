@@ -7,9 +7,9 @@ const { spawn } = require('child_process');
 
 const project = path.resolve(__dirname, '..');
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unignorable-test-'));
-const sourceData = path.join(project, 'data');
+const sourceData = process.env.DATA_DIR || path.join(project, 'data');
 for (const name of fs.readdirSync(sourceData)) {
-  if (name.endsWith('.json') || name === 'ugc.db' || name === 'admin-key') {
+  if (name.endsWith('.json') || name === 'ugc.db') {
     fs.copyFileSync(path.join(sourceData, name), path.join(dataDir, name));
   }
 }
@@ -20,9 +20,10 @@ fs.copyFileSync(
 
 const port = 18080 + Math.floor(Math.random() * 1000);
 const origin = `http://127.0.0.1:${port}`;
+const reviewKey = 'test-only-review-key';
 const child = spawn(process.execPath, ['server.js'], {
   cwd: project,
-  env: { ...process.env, PORT: String(port), DATA_DIR: dataDir, PUBLIC_ORIGIN: origin },
+  env: { ...process.env, PORT: String(port), DATA_DIR: dataDir, PUBLIC_ORIGIN: origin, REVIEW_KEY: reviewKey },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 
@@ -212,8 +213,7 @@ test('malformed JSON is rejected and deep links resolve', async () => {
 });
 
 test('review key bootstraps an HTTP-only cookie and leaves the URL', async () => {
-  const key = fs.readFileSync(path.join(dataDir, 'admin-key'), 'utf8').trim();
-  const bootstrap = await fetch(`${origin}/review?k=${encodeURIComponent(key)}`, { redirect: 'manual' });
+  const bootstrap = await fetch(`${origin}/review?k=${encodeURIComponent(reviewKey)}`, { redirect: 'manual' });
   assert.equal(bootstrap.status, 303);
   assert.equal(bootstrap.headers.get('location'), '/review');
   const setCookie = bootstrap.headers.get('set-cookie');

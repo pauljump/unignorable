@@ -11,10 +11,11 @@ Thesis proof (real data, 2026-06-18): NYC's #1 outcome for the 199,865 "Encampme
 ## How We Build Together
 
 Portfolio policy: `/Users/mini-home/Desktop/Monorepo/control-plane/AGENT-CORE.md`.
+
 ## Architecture
 
 ```
-/Users/mini-home/Desktop/Monorepo/unignorable/
+/Users/mini-home/unignorable/
   server.js                    # zero-dep Node HTTP server and server-rendered campaign/area pages
   index.html                   # single-page Leaflet map, dossier card, trends, and disparity views
   ugc.js                       # node:sqlite citizen reports, confirmations, campaigns, actions, areas
@@ -22,7 +23,7 @@ Portfolio policy: `/Users/mini-home/Desktop/Monorepo/control-plane/AGENT-CORE.md
   scripts/build.js             # deterministic issue, narrative, cost, episode, trend, disparity build
   scripts/refresh.sh           # daily Socrata ingest -> atomic build -> PM2 restart
   tests/                       # client syntax and HTTP smoke tests
-  data/
+  /Users/mini-home/.local/share/unignorable/
     issues.json                # generated; current issue payload
     trends.json                # generated monthly trend payload
     disparity.json             # generated district comparison payload
@@ -34,7 +35,7 @@ Portfolio policy: `/Users/mini-home/Desktop/Monorepo/control-plane/AGENT-CORE.md
 - **The clustering engine (the moat):** groups sr311 points by ~110m grid cell (`round(lat,3),round(lng,3)`) × complaint_type into Issues with: count, centroid, first/last seen, `nothing_found` count (city visited + closed "nothing found"), representative address, council district, community board.
 - **Types in v0:** Encampment, Drug Activity, Homeless Person Assistance, Panhandling (the 4 quality-of-life types sidewalk ingested).
 
-Runtime state defaults to `./data` and can be relocated with `DATA_DIR`. The source tree never assumes that code and mutable data must be deployed together.
+Production runtime state lives at `/Users/mini-home/.local/share/unignorable` and is injected with `DATA_DIR`. Local development may still default to `./data`.
 
 ### Build and verify
 
@@ -48,13 +49,13 @@ bash scripts/refresh.sh
 
 | Component | Where | Port | URL |
 |-----------|-------|------|-----|
-| web (zero-dep node) | pm2 `unignorable` (pm2 save'd) | **8000** | unignorable.polyfeeds.dev |
+| web (zero-dep node) | pm2 `unignorable-canonical` (control-plane owned) | **8000** | unignorable.polyfeeds.dev |
 
 Cloudflare: ingress + DNS CNAME added via API (mini-dev tunnel). `unignorable.app` available — buy when ready.
 
 ```bash
-pm2 start ecosystem.config.cjs --only unignorable
-pm2 restart unignorable
+pm2 start ecosystem.config.cjs --only unignorable-canonical
+pm2 restart unignorable-canonical
 ```
 
 ## Current State
@@ -99,8 +100,8 @@ pm2 restart unignorable
 
 ## Refresh / keep data fresh
 ```bash
-bash /Users/mini-home/Desktop/Monorepo/unignorable/scripts/refresh.sh
-tail -f /Users/mini-home/Desktop/Monorepo/unignorable/data/refresh.log
+bash /Users/mini-home/unignorable/scripts/refresh.sh
+tail -f /Users/mini-home/.local/share/unignorable/refresh.log
 launchctl list | grep unignorable          # confirm the schedule is loaded
 ```
 
@@ -129,7 +130,7 @@ launchctl list | grep unignorable          # confirm the schedule is loaded
 - **Why this exists (Paul's framing):** our path is to **submit reports to 311 on the citizen's behalf**. NYC has *no public 311 submission API* (portal is MS Dynamics; reCAPTCHA at the end) — so per the `civic-311-assist-and-proof` playbook + muster, filing is **assisted: we pre-fill, a human taps Submit**, and that's also the smarter play (bot-clustered submissions are trivially detectable + easier for the city to dismiss). So before anything carries our name into 311, **Paul reviews it personally.** The actual 311-filing flow is the *next* phase ("eventually"); this session built the gate it hangs off.
 - **Report lifecycle:** `pending` → `approved` (public + queued for 311) → *(filed w/ SR# — the deferred assisted-311 build)* → *(tracked via Socrata proof loop, already solved in muster)*.
 - **Moderation model:** a REPORT (`kind='comment'` — photo and/or written description, the thing we'd file to 311) lands `mod='pending'`, invisible to the public until approved. A TAP (`kind='seen'` — "I see this often") is live corroboration, not a filing, so it stays instant. Clean line: **content waits for Paul, taps stay live.** Public read paths (thread/counts/verdict) only ever reflect `mod='approved'`.
-- **Paul's review surface:** token-gated mobile page **`/review?k=<KEY>`** (dark UI matching the app). The bootstrap URL immediately exchanges the key for an HttpOnly, Secure, SameSite=Strict cookie and redirects to clean `/review`, keeping the secret out of browser history and API URLs. Each pending card shows the photo, description, status, and Issue context, with **Approve** / **Reject**. Key: `process.env.REVIEW_KEY` else `data/admin-key` (gitignored). The review APIs return 401 without the cookie.
+- **Paul's review surface:** token-gated mobile page **`/review?k=<KEY>`** (dark UI matching the app). The bootstrap URL immediately exchanges the key for an HttpOnly, Secure, SameSite=Strict cookie and redirects to clean `/review`, keeping the secret out of browser history and API URLs. Each pending card shows the photo, description, status, and Issue context, with **Approve** / **Reject**. Production requires `process.env.REVIEW_KEY`, injected from `UNIGNORABLE_REVIEW_KEY` in `/Users/mini-home/.secrets/monorepo.env`. The review APIs return 401 without the cookie.
 - **Submitter honesty:** form button is now "Submit for review" + a note ("A person reviews every report before it's published — and before we file it to the city on your behalf"); after submit they get a "pending review" acknowledgment, never a fake "it's live."
 - DB: `posts.mod` column (migrated; index created *after* the ALTER — an index-before-column ordering bug crashed the boot once, fixed). Verified end-to-end over the live tunnel (submit→hidden→queue→approve→public; reject→photo deleted→stays hidden; wrong key→401). **Awaiting Paul's on-device QA of the review page.**
 
@@ -162,5 +163,5 @@ launchctl list | grep unignorable          # confirm the schedule is loaded
 4. The repo housekeeping batch above (ecosystem/registry/dash/sidewalk-CLAUDE) — all live stuff works without it; it's about boot-canonical + visibility.
 5. Maybe-later: share card per Issue (populus OG-card pattern → travels to X/press/council); fold in muster as the voice report path; bounties marketplace (the old `snitch` idea).
 
-**Backup:** source now lives in the monorepo. Mutable `data/` needs filesystem backup; it is intentionally gitignored.
+**Backup:** this standalone directory owns the project's Git history. Commit intentionally scoped changes locally; push only when the current task authorizes publication. Mutable production data lives outside Git at `/Users/mini-home/.local/share/unignorable`; the former project-local copies remain preserved for rollback.
 ```

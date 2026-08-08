@@ -1,18 +1,7 @@
-const path = require('path');
-
-const cwd = __dirname;
+// The portfolio control plane owns production process definitions. This wrapper
+// keeps project-local PM2 commands usable without creating a second definition.
+const controlPlane = require('/Users/mini-home/Desktop/Monorepo/control-plane/deploy/pm2/ecosystem.config.cjs');
 
 module.exports = {
-  apps: [{
-    name: 'unignorable',
-    cwd,
-    script: 'node',
-    args: 'server.js',
-    env: {
-      PORT: '8000',
-      PUBLIC_ORIGIN: 'https://unignorable.polyfeeds.dev',
-      DATA_DIR: path.join(cwd, 'data'),
-      NODE_ENV: 'production',
-    },
-  }],
+  apps: controlPlane.apps.filter(app => app.name === 'unignorable-canonical'),
 };
