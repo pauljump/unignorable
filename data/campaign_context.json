@@ -1,0 +1,11 @@
+{
+  "Encampment|40.736,-73.983": {
+    "display_location": "near 246 East 20th Street",
+    "address_matches": ["246 EAST 20 STREET"],
+    "observation": {
+      "minimum_months": 3,
+      "as_of": "2026-07-13",
+      "attribution": "campaign organizer"
+    }
+  }
+}

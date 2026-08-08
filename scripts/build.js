@@ -8,8 +8,13 @@ const fs = require('fs');
 const path = require('path');
 
 const DB = process.env.DB || '/Users/mini-home/Desktop/Monorepo/sidewalk/data/sidewalk.db';
-const dataDir = path.join(__dirname, '..', 'data');
+const dataDir = path.resolve(process.env.DATA_DIR || path.join(__dirname, '..', 'data'));
 const TYPES = "('Encampment','Homeless Person Assistance','Drug Activity','Panhandling')";
+
+let campaignContext = {};
+try { campaignContext = JSON.parse(fs.readFileSync(path.join(dataDir, 'campaign_context.json'), 'utf8')); } catch {}
+let sensitiveSiteData = { sites: [], source: null, refreshed_at: null };
+try { sensitiveSiteData = JSON.parse(fs.readFileSync(path.join(dataDir, 'sensitive_sites.json'), 'utf8')); } catch {}
 
 const db = new DatabaseSync(DB, { readOnly: true });
 
@@ -30,6 +35,17 @@ const issues = db.prepare(`
          min(date(created_date)) AS first_seen, max(date(created_date)) AS last_seen,
          max(agency) AS agency,
          sum(CASE WHEN closed_date IS NOT NULL THEN 1 ELSE 0 END) AS closed_n,
+         count(DISTINCT CASE WHEN resolution_description LIKE '%observed an encampment%'
+              THEN date(created_date)||'|positive' END) AS positive_response_days,
+         count(DISTINCT CASE WHEN resolution_description LIKE '%attempted to engage the individuals%'
+                   OR resolution_description LIKE '%offered services to the individual%'
+              THEN date(created_date)||'|outreach' END) AS outreach_response_days,
+         count(DISTINCT CASE WHEN resolution_description LIKE '%no Encampment was found%'
+                   OR resolution_description LIKE '%observed no encampment%'
+                   OR resolution_description LIKE '%could not find%'
+                   OR resolution_description LIKE '%could not locate%'
+                   OR resolution_description LIKE '%did not observe%'
+              THEN date(created_date)||'|negative' END) AS negative_response_days,
          sum(CASE WHEN resolution_description LIKE '%no Encampment was found%'
                    OR resolution_description LIKE '%observed no encampment%'
                    OR resolution_description LIKE '%could not find%'
@@ -116,6 +132,24 @@ flush();
 // Deterministic, pure arithmetic over fields already on the row. Both are SINGLE SOURCE OF TRUTH:
 // the card and the shame-board read issue.headline / issue.score, never re-derive them.
 const num = v => Number.isFinite(v) ? v : 0;
+// Response-labor range, not an audited cost. Each unit is one unique day + response class
+// (positive inspection, negative inspection, or outreach), which avoids pricing duplicate requests
+// as separate visits. Reference wage is NYPD's published $58,580 starting salary / 2,080 hours.
+// Low = one worker for 30 minutes. Planning = two workers for one hour. No cleanup is inferred.
+const COST = Object.freeze({ annualReferenceSalary: 58580, annualHours: 2080 });
+const RESPONSE_HOURLY = COST.annualReferenceSalary / COST.annualHours;
+function responseLaborEstimate(units) {
+  return {
+    response_units: units,
+    low: Math.round(units * RESPONSE_HOURLY * 0.5),
+    planning: Math.round(units * RESPONSE_HOURLY * 2),
+    reference_hourly: +RESPONSE_HOURLY.toFixed(2),
+    low_assumption: 'one worker for 30 minutes per unique response-day and class',
+    planning_assumption: 'two workers for one hour per unique response-day and class',
+    excludes: ['311 intake', 'vehicles', 'supervision', 'contractor overhead', 'cleanup', 'shelter', 'medical care'],
+    source: 'https://www.nyc.gov/site/nypd/careers/police-officers/OLD-po-benefits.page',
+  };
+}
 
 // Headline: pick the most damning TRUE signal in fixed precedence; cite only literal field values.
 // R1 cites the raw nothing_found count (never a %): nothing_found is matched over ALL rows while
@@ -177,6 +211,55 @@ for (const r of issues) {
   r.score = scoreFor(r);
   r.nothing_found_rate = num(r.closed_n) ? +(num(r.nothing_found) / num(r.closed_n)).toFixed(2) : 0;
   r.phantom_closure_score = phantomScore(r);
+  const responseUnits = num(r.positive_response_days) + num(r.outreach_response_days) + num(r.negative_response_days);
+  r.response_labor = responseLaborEstimate(responseUnits);
+  // Compatibility field for existing clients; the UI labels this as a planning estimate.
+  r.estimated_cost = r.response_labor.planning;
+  r.estimated_cost_basis = r.response_labor;
+}
+
+// ---- SENSITIVE-SITE PROXIMITY: literal distances, citywide and reusable ----
+// The daily Facilities Database snapshot supplies schools and childcare sites. We publish counts
+// and straight-line distances within 500 feet; proximity is never treated as proof of harm and is
+// not folded into an opaque score. A 0.01-degree bucket index keeps the citywide join inexpensive.
+const SENSITIVE_RADIUS_FT = 500;
+const siteBuckets = new Map();
+const bucketKey = (lat, lng) => `${Math.floor(lat * 100)},${Math.floor(lng * 100)}`;
+for (const site of sensitiveSiteData.sites || []) {
+  if (!Number.isFinite(site.lat) || !Number.isFinite(site.lng)) continue;
+  const bk = bucketKey(site.lat, site.lng);
+  if (!siteBuckets.has(bk)) siteBuckets.set(bk, []);
+  siteBuckets.get(bk).push(site);
+}
+const distanceFeet = (aLat, aLng, bLat, bLng) => {
+  const rad = Math.PI / 180;
+  const x = (bLng - aLng) * rad * Math.cos((aLat + bLat) * rad / 2);
+  const y = (bLat - aLat) * rad;
+  return Math.sqrt(x * x + y * y) * 6371000 * 3.28084;
+};
+function sensitiveSitesNear(lat, lng) {
+  const by = Math.floor(lat * 100), bx = Math.floor(lng * 100), candidates = [];
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    candidates.push(...(siteBuckets.get(`${by + dy},${bx + dx}`) || []));
+  }
+  return candidates.map(site => ({ ...site, distance_ft: Math.round(distanceFeet(lat, lng, site.lat, site.lng)) }))
+    .filter(site => site.distance_ft <= SENSITIVE_RADIUS_FT)
+    .sort((a, b) => a.distance_ft - b.distance_ft);
+}
+for (const r of issues) {
+  const nearby = sensitiveSitesNear(Number(r.lat), Number(r.lng));
+  const schools = nearby.filter(site => site.category === 'school');
+  const childcare = nearby.filter(site => site.category === 'childcare');
+  r.sensitive_sites = nearby.slice(0, 8);
+  r.sensitive_site_summary = {
+    radius_ft: SENSITIVE_RADIUS_FT,
+    school_count: schools.length,
+    childcare_count: childcare.length,
+    nearest_school_ft: schools[0]?.distance_ft ?? null,
+    nearest_childcare_ft: childcare[0]?.distance_ft ?? null,
+    source: sensitiveSiteData.source || null,
+    source_refreshed_at: sensitiveSiteData.refreshed_at || null,
+  };
 }
 // Sanity log: top citywide score + per-borough #1 spread (confirms the formula discriminates).
 {
@@ -347,10 +430,178 @@ function atomicWrite(file, obj) {
   fs.writeFileSync(tmp, JSON.stringify(obj));
   fs.renameSync(tmp, file);   // atomic on same filesystem
 }
+
+// Campaign evidence is narrower than the map's approximate-block cell. A campaign can name one
+// or more normalized city incident addresses and receive a daily, reproducible count for only
+// those records. This preserves both truths: the block-level history and the address-specific
+// reporting record, without pretending either proves one physical object persisted throughout.
+const normalizeAddress = value => String(value || '')
+  .toUpperCase().replace(/\b(\d+)(ST|ND|RD|TH)\b/g, '$1').replace(/\s+/g, ' ').trim();
+const classifyCampaignResolution = value => {
+  const text = String(value || '').toLowerCase();
+  if (text.includes('observed an encampment')) return 'positive';
+  if (text.includes('attempted to engage the individuals')
+      || text.includes('offered services to the individual')) return 'outreach';
+  if (text.includes('observed no encampment')
+      || text.includes('no encampment was found')
+      || text.includes('could not find')
+      || text.includes('could not locate')
+      || text.includes('did not observe')) return 'negative';
+  return 'unclassified';
+};
+
+// Address-state model v1. Agency observations and outreach contacts anchor supported occupation;
+// ordinary reports determine local cadence; negative inspections are retained as counterevidence.
+// A long evidence gap can identify a possible interruption, but never a cleanup: 311 resolutions
+// do not consistently record removals. The 0-100 result is a transparent index, not a probability.
+function inferAddressState(rows) {
+  const byDay = new Map();
+  for (const row of rows) {
+    const d = byDay.get(row.day) || { day: row.day, reports: 0, positive: 0, outreach: 0, negative: 0, unclassified: 0 };
+    d.reports++;
+    d[classifyCampaignResolution(row.resolution_description)]++;
+    byDay.set(row.day, d);
+  }
+  const daily = [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day));
+  const support = daily.filter(d => d.positive + d.outreach > 0);
+  if (!support.length) return null;
+
+  const activeEraDays = daily.filter(d => d.day >= support[0].day);
+  const reportGaps = [];
+  for (let i = 1; i < activeEraDays.length; i++) reportGaps.push(ord(activeEraDays[i].day) - ord(activeEraDays[i - 1].day));
+  const medianReportGap = reportGaps.length ? median(reportGaps) : MAX_GAP;
+  const cadence = Math.round(Math.min(60, Math.max(30, 4 * medianReportGap)));
+
+  const segments = [];
+  let segment = [support[0]];
+  for (let i = 1; i < support.length; i++) {
+    if (ord(support[i].day) - ord(support[i - 1].day) > cadence) {
+      segments.push(segment);
+      segment = [];
+    }
+    segment.push(support[i]);
+  }
+  segments.push(segment);
+
+  const segmentSummary = (items, index) => {
+    const start = items[0].day, end = items[items.length - 1].day;
+    const within = daily.filter(d => d.day >= start && d.day <= end);
+    let maxGap = 0;
+    for (let i = 1; i < items.length; i++) maxGap = Math.max(maxGap, ord(items[i].day) - ord(items[i - 1].day));
+    return {
+      index: index + 1,
+      supported_from: start,
+      supported_through: end,
+      span_days: ord(end) - ord(start),
+      support_days: items.length,
+      report_days: within.length,
+      reports: within.reduce((n, d) => n + d.reports, 0),
+      positive_observations: within.reduce((n, d) => n + d.positive, 0),
+      outreach_contacts: within.reduce((n, d) => n + d.outreach, 0),
+      negative_inspections: within.reduce((n, d) => n + d.negative, 0),
+      conflicted_days: within.filter(d => d.negative > 0 && d.positive + d.outreach > 0).length,
+      max_support_gap_days: maxGap,
+    };
+  };
+  const summaries = segments.map(segmentSummary);
+  const interruptions = [];
+  for (let i = 1; i < segments.length; i++) {
+    const before = segments[i - 1][segments[i - 1].length - 1];
+    const after = segments[i][0];
+    const between = daily.filter(d => d.day > before.day && d.day < after.day);
+    const negativeOnlyDays = between.filter(d => d.negative > 0 && d.positive + d.outreach === 0).length;
+    const gapDays = ord(after.day) - ord(before.day);
+    interruptions.push({
+      last_support_before: before.day,
+      next_support: after.day,
+      support_gap_days: gapDays,
+      report_days_during_gap: between.length,
+      negative_only_days: negativeOnlyDays,
+      inference: gapDays >= 2 * cadence || (gapDays >= 1.5 * cadence && negativeOnlyDays >= 1)
+        ? 'likely_interruption' : 'possible_interruption',
+      return_supported_on: after.day,
+    });
+  }
+
+  const current = summaries[summaries.length - 1];
+  const latestSupportSilence = DATA_ORD - ord(current.supported_through);
+  const frequencyFactor = Math.min(1, current.report_days / Math.max(4, (current.span_days / cadence) * 4));
+  const spanFactor = Math.min(1, current.span_days / 90);
+  const recencyFactor = Math.max(0, 1 - latestSupportSilence / cadence);
+  const consistencyFactor = Math.max(0, 1 - Math.min(0.5,
+    (current.negative_inspections - current.conflicted_days) / Math.max(1, current.support_days)));
+  const confidence = Math.round(100 * (
+    0.35 * frequencyFactor + 0.25 * spanFactor + 0.30 * recencyFactor + 0.10 * consistencyFactor
+  ));
+  const responseUnits = daily.reduce((n, d) => n
+    + (d.positive > 0 ? 1 : 0) + (d.outreach > 0 ? 1 : 0) + (d.negative > 0 ? 1 : 0), 0);
+
+  return {
+    version: 'address-state-v1',
+    label: confidence >= 75 && latestSupportSilence <= cadence ? 'continuously_supported' : 'uncertain',
+    continuity_confidence_score: confidence,
+    confidence_is_probability: false,
+    cadence_window_days: cadence,
+    median_report_gap_days: +medianReportGap.toFixed(1),
+    latest_support_silence_days: latestSupportSilence,
+    current: current,
+    prior_segments: summaries.slice(0, -1),
+    interruptions,
+    response_labor: responseLaborEstimate(responseUnits),
+    totals: {
+      reports: rows.length,
+      report_days: daily.length,
+      positive_observations: daily.reduce((n, d) => n + d.positive, 0),
+      outreach_contacts: daily.reduce((n, d) => n + d.outreach, 0),
+      negative_inspections: daily.reduce((n, d) => n + d.negative, 0),
+      unclassified_reports: daily.reduce((n, d) => n + d.unclassified, 0),
+      conflicted_days: daily.filter(d => d.negative > 0 && d.positive + d.outreach > 0).length,
+    },
+    method: 'Support is anchored by positive agency observations or outreach contact. The continuity window is four times the median gap between all address report days after support begins, bounded to 30-60 days. Longer gaps between support days create interruption candidates. An interruption is likely only when the gap is at least twice the window, or at least 1.5 times the window with a negative-only inspection. Same-day conflicts remain visible. The confidence score weights report frequency (35%), supported span (25%), recency (30%), and consistency (10%). It is an evidence index, not a probability or proof of one unchanged tent.',
+  };
+}
+const campaignEvidence = {};
+const addressRows = db.prepare(`
+  SELECT date(created_date) AS day, incident_address AS address, resolution_description
+  FROM sr311
+  WHERE complaint_type=? AND round(latitude,3)||','||round(longitude,3)=?
+    AND incident_address IS NOT NULL
+  ORDER BY created_date
+`);
+for (const [issueKey, context] of Object.entries(campaignContext)) {
+  const splitAt = issueKey.indexOf('|');
+  if (splitAt < 1) continue;
+  const type = issueKey.slice(0, splitAt), id = issueKey.slice(splitAt + 1);
+  const wanted = new Set((context.address_matches || []).map(normalizeAddress));
+  if (!wanted.size) continue;
+  const rows = addressRows.all(type, id).filter(r => wanted.has(normalizeAddress(r.address)));
+  const issue = issues.find(r => r.type === type && r.id === id);
+  const days = [...new Set(rows.map(r => r.day))].sort();
+  const currentEpisode = issue && Array.isArray(issue.episodes) && issue.episodes.length
+    ? issue.episodes[issue.episodes.length - 1] : null;
+  const currentRows = currentEpisode ? rows.filter(r => r.day >= currentEpisode[0]) : [];
+  const currentDays = [...new Set(currentRows.map(r => r.day))].sort();
+  campaignEvidence[issueKey] = {
+    generated_through: DATA_MAX_DATE,
+    approximate_block_requests: issue ? Number(issue.n) || 0 : 0,
+    reporting_episode_start: currentEpisode ? currentEpisode[0] : null,
+    reporting_episode_requests: currentEpisode ? Number(currentEpisode[2]) || 0 : 0,
+    address_requests: rows.length,
+    address_report_days: days.length,
+    address_first_report: days[0] || null,
+    address_latest_report: days[days.length - 1] || null,
+    address_current_episode_requests: currentRows.length,
+    address_current_episode_report_days: currentDays.length,
+    address_current_episode_first_report: currentDays[0] || null,
+    address_current_episode_latest_report: currentDays[currentDays.length - 1] || null,
+    state_model: inferAddressState(rows),
+  };
+}
 atomicWrite(path.join(dataDir, 'issues.json'), issues);
 atomicWrite(path.join(dataDir, 'trends.json'), trends);
 atomicWrite(path.join(dataDir, 'disparity.json'), disparity);
-console.log(`built ${issues.length} issues + ${trends.length} trend rows + ${disparity.districts.length} districts (atomic)`);
+atomicWrite(path.join(dataDir, 'campaign_evidence.json'), campaignEvidence);
+console.log(`built ${issues.length} issues + ${trends.length} trend rows + ${disparity.districts.length} districts + ${Object.keys(campaignEvidence).length} campaign evidence records (atomic)`);
 
 // ---- Win-condition pass for active campaigns ----
 // Wrapped in try/catch: if ugc.db/campaigns table is absent, the daily refresh must NOT crash.

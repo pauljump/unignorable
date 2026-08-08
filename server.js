@@ -37,39 +37,48 @@ function geocode(q) {
 }
 
 const DIR = __dirname;
+const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(DIR, 'data'));
 const PORT = process.env.PORT || 8000;
-const ISSUES = JSON.parse(fs.readFileSync(path.join(DIR, 'data', 'issues.json'), 'utf8'));
-const TRENDS = fs.readFileSync(path.join(DIR, 'data', 'trends.json'));
+const ISSUES = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'issues.json'), 'utf8'));
+const TRENDS = fs.readFileSync(path.join(DATA_DIR, 'trends.json'));
 // Disparity engine output (the city's own dismissal-rate gap between districts). Degrades to empty
 // if the build hasn't produced it yet — the /api/disparity route returns {} and the view hides.
 let DISPARITY = Buffer.from('{}');
-try { DISPARITY = fs.readFileSync(path.join(DIR, 'data', 'disparity.json')); } catch {}
+try { DISPARITY = fs.readFileSync(path.join(DATA_DIR, 'disparity.json')); } catch {}
 
 // Accountable-officials roster (council district -> member + contact + X handle, Mayor's CAU).
 // Optional: the receipt page degrades to "district N + look-up link" if the file isn't present yet.
 let OFFICIALS = { council: {}, cau: null, borough_presidents: {} };
-try { OFFICIALS = JSON.parse(fs.readFileSync(path.join(DIR, 'data', 'officials.json'), 'utf8')); } catch {}
+try { OFFICIALS = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'officials.json'), 'utf8')); } catch {}
 
 // Community boards data (for cb_agenda action template). Degrades gracefully if missing.
 let COMMUNITY_BOARDS = {};
-try { COMMUNITY_BOARDS = JSON.parse(fs.readFileSync(path.join(DIR, 'data', 'community_boards.json'), 'utf8')); } catch {}
+try { COMMUNITY_BOARDS = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'community_boards.json'), 'utf8')); } catch {}
 
 // Press tip lines (for press_tip action template). Degrades gracefully if missing.
 let PRESS_TIPS = {};
-try { PRESS_TIPS = JSON.parse(fs.readFileSync(path.join(DIR, 'data', 'press_tips.json'), 'utf8')); } catch {}
+try { PRESS_TIPS = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'press_tips.json'), 'utf8')); } catch {}
+
+let CAMPAIGN_CONTEXT = {}, CAMPAIGN_EVIDENCE = {};
+try { CAMPAIGN_CONTEXT = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'campaign_context.json'), 'utf8')); } catch {}
+try { CAMPAIGN_EVIDENCE = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'campaign_evidence.json'), 'utf8')); } catch {}
 
 // Action type registry — DATA, not code. Actions are addable as a row with no server rebuild.
 let ACTION_TYPES = [];
-try { ACTION_TYPES = JSON.parse(fs.readFileSync(path.join(DIR, 'data', 'action_types.json'), 'utf8')); } catch {}
+try { ACTION_TYPES = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'action_types.json'), 'utf8')); } catch {}
 // Allowlist: enabled, non-coming action ids (instant|prepared|external).
 const TRACKABLE_ACTIONS = new Set(
   ACTION_TYPES.filter(a => a.enabled && a.kind !== 'coming').map(a => a.id)
 );
 
 const PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN || 'https://unignorable.polyfeeds.dev';
+const CANARY_TYPE = 'Encampment';
+const CANARY_ID = '40.736,-73.983';
+const CANARY_URL = `/c?t=${encodeURIComponent(CANARY_TYPE)}&id=${encodeURIComponent(CANARY_ID)}`;
+const PULSE_BEACON = `<script>(function(){if(location.hostname==="localhost"||location.hostname==="127.0.0.1")return;var I="https://pulse.polyfeeds.dev/api/ingest";function s(e,x){try{var b=JSON.stringify(Object.assign({event:e,path:location.pathname,referrer:document.referrer||undefined,screen:innerWidth+"x"+innerHeight},x||{}));if(navigator.sendBeacon){navigator.sendBeacon(I,new Blob([b],{type:"text/plain"}))}else{fetch(I,{method:"POST",headers:{"Content-Type":"text/plain"},keepalive:true,body:b})}}catch(e){}}window.pulse=s;s("page_view");var t=Date.now();function d(){s("page_dwell",{dwellMs:Date.now()-t})}addEventListener("pagehide",d);document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden")d()})})();</script>`;
 
 // Photo store — the proof layer 311 open data structurally can't have. Bytes on disk, served by id.
-const PHOTO_DIR = path.join(DIR, 'data', 'photos');
+const PHOTO_DIR = path.join(DATA_DIR, 'photos');
 fs.mkdirSync(PHOTO_DIR, { recursive: true });
 const PHOTO_TYPES = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 const PHOTO_MAX = 2_000_000;  // ~2MB of decoded bytes; the client downscales to ~1280px JPEG (< this)
@@ -106,8 +115,14 @@ function rateLimited(req) {
 }
 
 const key = (type, id) => type + '|' + id;
-const send = (res, code, body, type) => {
-  res.writeHead(code, { 'Content-Type': type, 'Access-Control-Allow-Origin': '*' });
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(self), geolocation=(self), microphone=()',
+};
+const send = (res, code, body, type, extra = {}) => {
+  res.writeHead(code, { ...SECURITY_HEADERS, 'Content-Type': type, ...extra });
   res.end(body);
 };
 // Gzip a response body when the client accepts it, falling back to identity otherwise.
@@ -116,8 +131,8 @@ const sendMaybeGzip = (req, res, body, type) => {
   const ae = req.headers['accept-encoding'] || '';
   if (/\bgzip\b/.test(ae)) {
     const gz = Buffer.isBuffer(body) && body._gz ? body._gz : zlib.gzipSync(body);
-    res.writeHead(200, { 'Content-Type': type, 'Content-Encoding': 'gzip',
-      'Vary': 'Accept-Encoding', 'Access-Control-Allow-Origin': '*' });
+    res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': type, 'Content-Encoding': 'gzip',
+      'Vary': 'Accept-Encoding' });
     return res.end(gz);
   }
   return send(res, 200, body, type);
@@ -130,6 +145,7 @@ const sendMaybeGzip = (req, res, body, type) => {
 // Computed once at server start; never hardcoded. Contract requires same-type ranking by score desc.
 const SEVERITY_CITY = new Map();
 const SEVERITY_DISTRICT = new Map();
+const REPORT_PRESSURE = new Map();
 {
   // Group active issues by type; sort each group by score desc.
   const byType = {};
@@ -141,6 +157,12 @@ const SEVERITY_DISTRICT = new Map();
   for (const type of Object.keys(byType)) {
     const sorted = byType[type].slice().sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
     sorted.forEach((iss, idx) => SEVERITY_CITY.set(key(iss.type, iss.id), { rank: idx + 1, total: sorted.length }));
+    const byReports = byType[type].slice().sort((a, b) => (Number(b.n) || 0) - (Number(a.n) || 0));
+    byReports.forEach((iss, idx) => REPORT_PRESSURE.set(key(iss.type, iss.id), {
+      rank: idx + 1,
+      total: byReports.length,
+      percentile: Math.round(100 * (byReports.length - idx) / byReports.length),
+    }));
   }
 
   // Group active issues by type+district; sort each group by score desc.
@@ -167,25 +189,45 @@ function issuesPayload() {
   // Signature includes campaign key set so new campaigns bust the cache.
   const sig = JSON.stringify(counts) + '|' + JSON.stringify([...campaignKeys].sort());
   if (ISSUES_CACHE && ISSUES_CACHE.sig === sig) return ISSUES_CACHE;
-  const out = ISSUES.map(({ episodes, headline_kind, nothing_found, ...i }) =>
+  const out = ISSUES.map(({ episodes, headline_kind, ...i }) =>
     ({ ...i, seen: counts[key(i.type, i.id)] || 0, campaign: campaignKeys.has(key(i.type, i.id)) }));
   const raw = Buffer.from(JSON.stringify(out));
   ISSUES_CACHE = { sig, raw, gz: zlib.gzipSync(raw) };
   return ISSUES_CACHE;
 }
-const readBody = (req) => new Promise((resolve) => {
-  let b = ''; req.on('data', c => b += c);
-  req.on('end', () => { try { resolve(JSON.parse(b || '{}')); } catch { resolve({}); } });
+const BODY_MAX = 3_000_000;
+const readBody = (req) => new Promise((resolve, reject) => {
+  let b = '', size = 0;
+  req.on('data', c => {
+    size += c.length;
+    if (size > BODY_MAX) {
+      reject(Object.assign(new Error('request body too large'), { statusCode: 413 }));
+      return;
+    }
+    b += c;
+  });
+  req.on('end', () => { try { resolve(JSON.parse(b || '{}')); } catch { reject(Object.assign(new Error('invalid JSON'), { statusCode: 400 })); } });
+  req.on('error', reject);
 });
 
 // Review key — Paul's personal gate. Stable secret in data/admin-key (gitignored), generated once.
-const KEY_FILE = path.join(DIR, 'data', 'admin-key');
+const KEY_FILE = path.join(DATA_DIR, 'admin-key');
 let REVIEW_KEY = process.env.REVIEW_KEY || '';
 if (!REVIEW_KEY) {
   try { REVIEW_KEY = fs.readFileSync(KEY_FILE, 'utf8').trim(); } catch {}
   if (!REVIEW_KEY) { REVIEW_KEY = crypto.randomBytes(16).toString('hex'); fs.writeFileSync(KEY_FILE, REVIEW_KEY); }
 }
-const authed = (u) => REVIEW_KEY && u.searchParams.get('k') === REVIEW_KEY;
+function reviewToken(req, u) {
+  const query = u.searchParams.get('k');
+  if (query) return query;
+  const cookie = (req.headers.cookie || '').split(';').map(x => x.trim()).find(x => x.startsWith('unig_review='));
+  return cookie ? decodeURIComponent(cookie.slice('unig_review='.length)) : '';
+}
+function authed(req, u) {
+  const token = reviewToken(req, u);
+  if (!REVIEW_KEY || token.length !== REVIEW_KEY.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(REVIEW_KEY));
+}
 
 // A report attaches to a city Issue; that Issue carries the location/type a 311 filing needs.
 const ISSUE_BY_KEY = new Map(ISSUES.map(i => [key(i.type, i.id), i]));
@@ -202,11 +244,24 @@ const issueMeta = (issueKey) => {
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtN = (x) => Math.round(Number(x) || 0).toLocaleString('en-US');
+const formatEstimatedCost = (x) => {
+  const n = Number(x) || 0;
+  if (n >= 1000) return `~$${n >= 10000 ? Math.round(n / 1000) : (n / 1000).toFixed(1).replace('.0', '')}k`;
+  return `~$${Math.round(n)}`;
+};
+const formatResponseCostRange = basis => basis
+  ? `${formatEstimatedCost(basis.low)}-${formatEstimatedCost(basis.planning).replace(/^~/, '')}`
+  : 'n/a';
 const titleCase = (s) => String(s || '').toLowerCase().replace(/\b\w/g, c => c.toUpperCase()).trim();
 const daysSince = (iso) => {
   const t = Date.parse((iso || '') + 'T00:00:00Z');
   if (!Number.isFinite(t)) return null;
   return Math.max(0, Math.floor((Date.now() - t) / 86400000));
+};
+const daysBetween = (start, end) => {
+  const a = Date.parse((start || '') + 'T00:00:00Z');
+  const b = Date.parse((end || '') + 'T00:00:00Z');
+  return Number.isFinite(a) && Number.isFinite(b) ? Math.max(0, Math.floor((b - a) / 86400000)) : 0;
 };
 const fmtYears = (d) => d == null ? '' : (d >= 365 ? (d / 365).toFixed(d >= 730 ? 0 : 1) + ' years' : Math.round(d / 30) + ' months');
 
@@ -315,15 +370,26 @@ function ladderState(campaign, issue, actionCountsObj) {
 // href = the mailto: or X intent URL. These are prepare-and-hand-to-human — server never sends.
 // The CAU fallback email is used when the member contact is missing or unverified.
 const CAU_EMAIL = (OFFICIALS.cau && OFFICIALS.cau.email) || 'constituentservices@cau.nyc.gov';
+const contextFor = issue => CAMPAIGN_CONTEXT[key(issue.type, issue.id)] || null;
+const evidenceFor = issue => CAMPAIGN_EVIDENCE[key(issue.type, issue.id)] || null;
+const displayLocation = issue => (contextFor(issue) && contextFor(issue).display_location)
+  || titleCase(issue.addr) || 'this location';
 
 // THE ASK block per complaint type. Service-first, no criminal claim for non-structure types.
-function askForType(type) {
+function askForType(issueOrType) {
+  const issue = typeof issueOrType === 'string' ? null : issueOrType;
+  const type = typeof issueOrType === 'string' ? issueOrType : issueOrType.type;
   if (type === 'Encampment') {
+    const proximity = issue && issue.sensitive_site_summary;
+    const schoolAsk = proximity && proximity.school_count > 0
+      ? `Treat the school approach as urgent. The NYC Facilities Database places ${fmtN(proximity.school_count)} K-12 school${proximity.school_count === 1 ? '' : 's'} within ${fmtN(proximity.radius_ft)} feet, the nearest about ${fmtN(proximity.nearest_school_ft)} feet away. Children, families, and staff should not have to navigate a repeatedly confirmed sidewalk encampment while agencies cycle through closures.`
+      : null;
     return [
       'Clear the sidewalk obstruction. NYC Admin Code §16-122 and §19-136 give the city clear authority to act on persistent sidewalk obstructions.',
+      schoolAsk,
       'Connect these neighbors to services. File this location as an outreach request to DHS so the people here are offered shelter and help. Clearing without serving just moves the problem.',
-      'Make it durable. When the city last did this right (Sheepshead Bay), it cleared the site and prevented its return. Closing a ticket is not the same as fixing the problem.',
-    ];
+      'Require a durable, written response plan: named agency ownership, repeated outreach, a clear pedestrian route, and a dated follow-up inspection. Closing a ticket is not the same as fixing the problem.',
+    ].filter(Boolean);
   }
   if (type === 'Homeless Person Assistance') {
     return [
@@ -347,39 +413,48 @@ function askForType(type) {
 }
 
 // email_official: pre-filled mailto to district council member (falls back to CAU).
-function buildEmailOfficialUrl(issue, campaign) {
+function buildEmailOfficialUrl(issue, campaign, trackedReceiptUrl) {
   const m = councilFor(issue.council);
   const verified = !!(m && m.member && m.verified);
   const toEmail = verified ? m.email : CAU_EMAIL;
   const toName = verified ? m.member : 'Council Member';
-  const addr = titleCase(issue.addr) || 'this location';
+  const addr = displayLocation(issue);
 
   // Live numbers from the issue record.
   const eps = Array.isArray(issue.episodes) ? issue.episodes : [];
   const curEp = eps.length ? eps[eps.length - 1] : null;
   const epStart = curEp ? curEp[0] : (issue.first_seen || '');
   const epStartFmt = fmtDate(epStart);
-  const dayN = daysSince(epStart) || 0;
+  const dayN = curEp ? daysBetween(curEp[0], curEp[1]) : 0;
   const cn = Number(issue.closed_n) || 0;
   const nf = Number(issue.nothing_found) || 0;
   const n = Number(issue.n) || 0;
 
-  const receiptUrl = `${PUBLIC_ORIGIN}/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`;
-  const askLines = askForType(issue.type);
+  const receiptUrl = trackedReceiptUrl || `${PUBLIC_ORIGIN}/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`;
+  const evidence = evidenceFor(issue);
+  const state = evidence && evidence.state_model;
+  const currentState = state && state.current;
+  const askLines = askForType(issue);
 
-  const subject = `[Constituent Request] Persistent ${issue.type} at ${addr} (${dayN} days open, City Case on Record)`;
+  const subject = `[Constituent Request] Repeated ${issue.type} reports ${addr}`;
 
   const body = [
     `Dear ${toName},`,
     '',
-    `I am writing as a constituent about a persistent ${issue.type.toLowerCase()} situation at ${addr} that has been active since ${epStartFmt}, now ${dayN} days without resolution.`,
+    `I am writing as a constituent about repeated ${issue.type.toLowerCase()} reports ${addr}. ${currentState
+      ? `The address-specific evidence model supports continuous occupation since ${fmtDate(currentState.supported_from)} with a ${state.continuity_confidence_score}/100 evidence-confidence score.`
+      : `NYC 311 reporting activity for this approximate block has continued in the current reporting episode since ${epStartFmt}.`} This is an inference from report frequency and agency observations, not proof that one unchanged tent was present throughout.`,
     '',
     `The city\'s own 311 record shows:`,
-    `- ${n} total reports filed for this location`,
+    `- ${n} service requests in the approximate-block record`,
+    evidence ? `- ${evidence.address_current_episode_requests} requests in the current reporting episode specifically naming the configured campaign address, across ${evidence.address_current_episode_report_days} distinct reporting days` : '',
+    currentState ? `- ${currentState.positive_observations} positive agency observations and ${currentState.outreach_contacts} outreach contacts in the current supported interval` : '',
+    state && state.response_labor ? `- ${formatResponseCostRange(state.response_labor)} estimated response-labor range across ${state.response_labor.response_units} deduplicated response-days/classes; this excludes cleanup, vehicles, supervision, shelter, and medical costs` : '',
+    state && state.interruptions.length ? `- The record shows a ${state.interruptions.at(-1).support_gap_days}-day support-evidence gap before ${fmtDate(state.interruptions.at(-1).return_supported_on)}, ${state.interruptions.at(-1).inference === 'likely_interruption' ? 'supporting a likely inactive interval and later return' : 'consistent with a possible interruption and return'}, but not a documented cleanup` : '',
     `- ${cn} times the city marked the case "resolved"`,
     nf ? `- ${nf} of those closures stated "nothing found"` : '',
     '',
-    `The situation is currently open and active according to the city\'s own data.`,
+    `The reporting record is currently active according to the published methodology.`,
     '',
     `I am asking your office to:`,
     ...askLines.map((a, i) => `${i + 1}. ${a}`),
@@ -403,11 +478,13 @@ function buildCbAgendaUrl(issue) {
   const cbData = COMMUNITY_BOARDS[boardCode];
   const toEmail = (cbData && cbData.email) ? cbData.email : CAU_EMAIL;
   const boardName = (cbData && cbData.board) ? cbData.board : `Community Board (${boardCode || 'district'})`;
-  const addr = titleCase(issue.addr) || 'this location';
+  const addr = displayLocation(issue);
   const receiptUrl = `${PUBLIC_ORIGIN}/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`;
-  const dayN = daysSince((Array.isArray(issue.episodes) && issue.episodes.length ? issue.episodes[issue.episodes.length - 1][0] : issue.first_seen)) || 0;
+  const cbEpisodes = Array.isArray(issue.episodes) ? issue.episodes : [];
+  const cbEpisode = cbEpisodes.length ? cbEpisodes[cbEpisodes.length - 1] : null;
+  const dayN = cbEpisode ? daysBetween(cbEpisode[0], cbEpisode[1]) : 0;
 
-  const subject = `Agenda Item Request: ${issue.type} at ${addr} (${dayN} days open)`;
+  const subject = `Agenda Item Request: repeated ${issue.type} reports ${addr}`;
   const body = [
     `Dear District Manager,`,
     '',
@@ -415,7 +492,7 @@ function buildCbAgendaUrl(issue) {
     '',
     `Location: ${addr}`,
     `Issue type: ${issue.type}`,
-    `Duration of current episode: ${dayN} days`,
+    `Current 311 reporting episode: ${dayN} days since its first request`,
     `City 311 reports filed: ${fmtN(issue.n)}`,
     '',
     `The full public record from NYC 311 open data is available here: ${receiptUrl}`,
@@ -438,17 +515,19 @@ function buildPressTipUrl(issue) {
   const outlet = primary || fallback;
   const toEmail = (outlet && outlet.email) ? outlet.email : CAU_EMAIL;
   const outletName = (outlet && outlet.name) ? outlet.name : 'local newsroom';
-  const addr = titleCase(issue.addr) || 'this location';
+  const addr = displayLocation(issue);
   const receiptUrl = `${PUBLIC_ORIGIN}/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`;
-  const dayN = daysSince((Array.isArray(issue.episodes) && issue.episodes.length ? issue.episodes[issue.episodes.length - 1][0] : issue.first_seen)) || 0;
+  const pressEpisodes = Array.isArray(issue.episodes) ? issue.episodes : [];
+  const pressEpisode = pressEpisodes.length ? pressEpisodes[pressEpisodes.length - 1] : null;
+  const dayN = pressEpisode ? daysBetween(pressEpisode[0], pressEpisode[1]) : 0;
 
-  const subject = `Tip: ${issue.type} at ${addr} (${dayN} days, documented in city data)`;
+  const subject = `Tip: repeated ${issue.type} reports ${addr}`;
   const body = [
     `Hi ${outletName} team,`,
     '',
     `I wanted to flag a situation that may be worth covering.`,
     '',
-    `There is a persistent ${issue.type.toLowerCase()} at ${addr} that has been active for ${dayN} days. According to NYC\'s own 311 open data, the city has received ${fmtN(issue.n)} reports and closed the case ${fmtN(Number(issue.closed_n) || 0)} times.`,
+    `NYC 311 reporting activity for an approximate block ${addr} has continued in the current reporting episode for ${dayN} days. This measures requests, not the uninterrupted presence of one physical object. The city has logged ${fmtN(issue.n)} service requests for the block-level record and closed ${fmtN(Number(issue.closed_n) || 0)} of them.`,
     '',
     `The full documented record, built entirely from city data, is publicly available here: ${receiptUrl}`,
     '',
@@ -462,23 +541,27 @@ function buildPressTipUrl(issue) {
 }
 
 // share: X intent URL + copy-link (the external action row renders both).
-function buildShareUrl(issue) {
+function buildShareUrl(issue, trackedShareUrl) {
   const m = councilFor(issue.council);
-  const tag = (m && m.x) ? `@${m.x.replace(/^@/, '')} ` : '';
-  const addr = titleCase(issue.addr) || 'this location';
+  const tag = (m && m.x) ? `@${m.x.replace(/^@/, '')} ` : '@NYCCouncil ';
+  const addr = displayLocation(issue);
   const active = issue.status === 'active';
   const eps = Array.isArray(issue.episodes) ? issue.episodes : [];
   const curEp = eps.length ? eps[eps.length - 1] : null;
   const epStart = curEp ? curEp[0] : issue.first_seen;
-  const dayN = daysSince(epStart) || 0;
-  const durTxt = humanizeDur(dayN);
+  const episodeReports = curEp ? Number(curEp[2]) || 0 : Number(issue.n) || 0;
   const cn = Number(issue.closed_n) || 0;
   const n = Number(issue.n) || 0;
+  const evidence = evidenceFor(issue);
+  const state = evidence && evidence.state_model;
+  const currentState = state && state.current;
 
-  const shareUrl = `${PUBLIC_ORIGIN}/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`;
+  const shareUrl = trackedShareUrl || `${PUBLIC_ORIGIN}/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`;
   const tweet = `${tag}`
-    + (active && durTxt ? `There\'s been a tent at ${addr} for ${durTxt}. ` : `${addr}: `)
-    + `NYC 311 was told ${fmtN(n)} times and closed it ${fmtN(cn)} times. ${active ? 'Still here. ' : ''}`
+    + `${addr}: NYC 311 logged ${fmtN(n)} service requests for the approximate block`
+    + (currentState ? `. Address-level evidence supports continuous occupation since ${fmtDate(currentState.supported_from)} (${state.continuity_confidence_score}/100 confidence index). `
+      : active ? `, including ${fmtN(episodeReports)} in the current reporting episode. ` : '. ')
+    + `The city closed ${fmtN(cn)} requests. `
     + `Clear the sidewalk AND connect these neighbors to services. The record:`;
   const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}&url=${encodeURIComponent(shareUrl)}`;
   return { tweetUrl, shareUrl };
@@ -489,10 +572,15 @@ function buildShareUrl(issue) {
 // Layout: Day-N hero -> severity line -> THE ASK -> evidence block -> action rail -> momentum -> UGC thread.
 function renderCampaign(issue) {
   const issueKey = key(issue.type, issue.id);
-  const addr = titleCase(issue.addr) || 'this location';
+  const context = contextFor(issue);
+  const evidence = evidenceFor(issue);
+  const state = evidence && evidence.state_model;
+  const currentState = state && state.current;
+  const latestInterruption = state && state.interruptions && state.interruptions.length
+    ? state.interruptions[state.interruptions.length - 1] : null;
+  const addr = displayLocation(issue);
   const boro = titleCase(issue.borough);
   const area = boro ? `${addr}, ${boro}` : addr;
-  const known = daysSince(issue.first_seen);
   const nf = Number(issue.nothing_found) || 0;
   const cn = Number(issue.closed_n) || 0;
   const rn = Number(issue.returned_n) || 0;
@@ -502,21 +590,26 @@ function renderCampaign(issue) {
   const law = LAW[issue.type];
   const cau = OFFICIALS.cau;
   const active = issue.status === 'active';
-  const yrsTxt = fmtYears(known) || 'years';
+  const yrsTxt = issue.first_seen ? `since ${monthYear(issue.first_seen)}` : 'in the public record';
 
   // Campaign permalink uses /c.
   const shareUrl = `${PUBLIC_ORIGIN}/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`;
-  const mapUrl = `${PUBLIC_ORIGIN}/map?focus=${encodeURIComponent(issue.type + '|' + issue.id)}`;
 
   // Current episode start — computed LIVE at render (not the stale current_days field).
   const eps = Array.isArray(issue.episodes) ? issue.episodes : [];
   const curEp = eps.length ? eps[eps.length - 1] : null;
   const episodeStart = curEp ? curEp[0] : issue.first_seen;
-  // Day-N: computed live from episode start, not stored.
-  const dayN = daysSince(episodeStart) || 0;
+  // Episode duration ends at the latest city request; it never silently extends to today.
+  const dayN = curEp ? daysBetween(curEp[0], curEp[1]) : 0;
   const instReports = curEp ? curEp[2] : issue.n;
-  const durTxt = humanizeDur(dayN);
   const startTxt = monthYear(episodeStart);
+  const observation = context && context.observation;
+  const sensitiveSites = Array.isArray(issue.sensitive_sites) ? issue.sensitive_sites : [];
+  const schoolSites = sensitiveSites.filter(site => site.category === 'school');
+  const childcareSites = sensitiveSites.filter(site => site.category === 'childcare');
+  const sensitiveSummary = issue.sensitive_site_summary || null;
+  const pressure = REPORT_PRESSURE.get(issueKey);
+  const reportPressure = pressure ? pressure.percentile : null;
 
   // The citizen layer, on top of the city's record.
   let T = { corrob: 0, posts: [], verdict: 'unverified' };
@@ -535,31 +628,20 @@ function renderCampaign(issue) {
   }
 
   // Severity rank (precomputed, never hardcoded).
-  const sevCity = SEVERITY_CITY.get(issueKey);
-  const sevDist = SEVERITY_DISTRICT.get(issueKey);
-  const districtNum = m ? m.district : null;
   let severityLine = '';
-  if (active && sevCity && sevDist) {
-    severityLine = `#${sevCity.rank} most severe active ${esc(issue.type)} citywide (by severity score) &middot; #${sevDist.rank} in District ${districtNum || esc(issue.council || '')}`;
-  } else if (active && sevCity) {
-    severityLine = `#${sevCity.rank} most severe active ${esc(issue.type)} citywide (by severity score)`;
+  if (active && pressure) {
+    severityLine = `#${pressure.rank} of ${pressure.total} active ${esc(issue.type)} approximate blocks citywide by service-request volume`;
   }
 
-  // Title/OG — lead with TIME (the gut-punch), keep the counts for the indictment below.
-  const ogTitle = active && durTxt
-    ? `A tent has been here ${durTxt}. The city has known the whole time.`
+  // Title/OG leads with literal request volume. Reporting continuity is not physical continuity.
+  const ogTitle = currentState
+    ? `Occupation supported since ${fmtDate(currentState.supported_from)} ${addr}.`
+    : active
+    ? `${fmtN(instReports)} NYC service requests in the current reporting episode ${addr}.`
     : `${area}: ${fmtN(issue.n)} reports on the city's own record.`;
-  const ogDesc = `Reported ${fmtN(issue.n)} times to NYC 311 over ${yrsTxt}; the city closed it ${fmtN(cn)} times`
-    + (active ? `. Still here.` : '.')
+  const ogDesc = `${fmtN(issue.n)} NYC 311 service requests ${yrsTxt}; the city closed ${fmtN(cn)} requests`
+    + (active ? `. The public record remains active.` : '.')
     + (verified ? ` Accountable: Council Member ${m.member}.` : '');
-
-  // X share (uses /c permalink).
-  const tag = (m && m.x) ? `@${m.x.replace(/^@/, '')} ` : '';
-  const tweet = `${tag}`
-    + (active && durTxt ? `There's been a tent at ${addr} for ${durTxt}. ` : `${addr}: `)
-    + `NYC 311 was told ${fmtN(issue.n)} times and closed it ${fmtN(cn)} times. ${active ? 'Still here. ' : ''}`
-    + `Clear the sidewalk AND connect these neighbors to services. Your move.`;
-  const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweet)}&url=${encodeURIComponent(shareUrl)}`;
 
   // Accountable-official card.
   let officialBlock;
@@ -573,7 +655,7 @@ function renderCampaign(issue) {
       + `<div class="who-role">NYC Council Member, District ${m.district}${m.borough ? ' &middot; ' + esc(m.borough) : ''}</div>`
       + (contacts ? `<div class="who-contact">${contacts}</div>` : '')
       + `<div class="who-now">Represents this block today. ${issue.status === 'active'
-          ? 'It is still here on their watch and within their power to move DHS, Sanitation, and NYPD on it now.'
+          ? 'The record remains active on their watch and within their power to move DHS, Sanitation, and NYPD on it now.'
           : 'The record is theirs to answer for.'}</div>`;
   } else {
     const dn = m && m.district ? m.district : (issue.council || '?');
@@ -585,7 +667,7 @@ function renderCampaign(issue) {
     + (issue.last_seen ? `, current through ${esc(issue.last_seen)}` : '') + '.';
 
   // THE ASK lines for this issue type.
-  const askLines = askForType(issue.type);
+  const askLines = askForType(issue);
 
   // Action rail — iterate ACTION_TYPES, build controls.
   // For prepared actions: build mailto/intent href; onclick logs to /api/act then proceeds.
@@ -595,11 +677,37 @@ function logAct(actionType){
     body:JSON.stringify({action_type:actionType,type:${JSON.stringify(issue.type)},id:${JSON.stringify(issue.id)}})
   }).catch(()=>{});
 }
+function confirmIssue(button){
+  button.disabled=true;
+  fetch('/api/seen',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type:${JSON.stringify(issue.type)},id:${JSON.stringify(issue.id)}})
+  }).then(function(response){
+    if(!response.ok) throw new Error('confirmation failed');
+    button.textContent='Confirmed';
+    logAct('corroborate');
+  }).catch(function(){
+    button.disabled=false;
+    button.textContent='Try again';
+  });
+}
 function copyLink(url){
   navigator.clipboard && navigator.clipboard.writeText(url).then(()=>{
     var el=document.getElementById('copy-link-btn');
     if(el){var orig=el.textContent;el.textContent='Copied!';setTimeout(()=>{el.textContent=orig;},1500);}
   }).catch(()=>{ window.prompt('Copy this link:',url); });
+}
+async function prepareOfficialAction(button,actionType){
+  var original=button.textContent;
+  button.disabled=true;button.textContent='Preparing...';
+  try{
+    var response=await fetch('/api/action/prepare',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action_type:actionType,type:${JSON.stringify(issue.type)},id:${JSON.stringify(issue.id)}})});
+    var out=await response.json();if(!response.ok)throw new Error(out.error||'Could not prepare action');
+    if(window.pulse)window.pulse('official_action_prepared',{actionType:actionType,receipt:out.receipt});
+    var receipt=document.getElementById('action-receipt-link');
+    if(receipt){receipt.href=out.receiptUrl;receipt.hidden=false;}
+    location.href=out.href;
+  }catch(error){button.disabled=false;button.textContent=original;}
 }
 </script>`;
 
@@ -621,11 +729,7 @@ function copyLink(url){
       // instant — logs to /api/seen (corroboration) AND /api/act (momentum). Two counters, intentional.
       actionRailHtml += `<div class="act-row">
         <div class="act-meta">${iconHtml}<div><div class="act-title">${esc(at.title)}</div><div class="act-desc">${esc(at.desc)}</div></div></div>
-        <button class="act-btn" onclick="
-          fetch('/api/seen',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:${JSON.stringify(issue.type)},id:${JSON.stringify(issue.id)}})}).catch(()=>{});
-          logAct('corroborate');
-          this.textContent='Confirmed';this.disabled=true;
-        ">Confirm</button>
+        <button class="act-btn" onclick="confirmIssue(this)">Confirm</button>
       </div>`;
       continue;
     }
@@ -642,10 +746,9 @@ function copyLink(url){
     }
 
     if (at.id === 'email_official') {
-      const mailto = buildEmailOfficialUrl(issue, campaign);
       actionRailHtml += `<div class="act-row">
         <div class="act-meta">${iconHtml}<div><div class="act-title">${esc(at.title)}</div><div class="act-desc">${esc(at.desc)}</div></div></div>
-        <a class="act-btn" href="${esc(mailto)}" onclick="logAct('email_official')">Email</a>
+        <button class="act-btn" onclick="prepareOfficialAction(this,'email_official')">Email</button>
       </div>`;
       continue;
     }
@@ -660,12 +763,12 @@ function copyLink(url){
     }
 
     if (at.id === 'share_card') {
-      const { tweetUrl: tUrl, shareUrl: sUrl } = buildShareUrl(issue);
+      const { shareUrl: sUrl } = buildShareUrl(issue);
       actionRailHtml += `<div class="act-row">
         <div class="act-meta">${iconHtml}<div><div class="act-title">${esc(at.title)}</div><div class="act-desc">${esc(at.desc)}</div></div></div>
         <div class="act-btn-group">
-          <a class="act-btn" href="${esc(tUrl)}" onclick="logAct('share_card')" target="_blank" rel="noopener">Post to X</a>
-          <button class="act-btn act-btn-ghost" id="copy-link-btn" onclick="logAct('share_card');copyLink(${JSON.stringify(sUrl)})">Copy link</button>
+          <button class="act-btn" onclick="prepareOfficialAction(this,'share_card')">Post to X</button>
+          <button class="act-btn act-btn-ghost" id="copy-link-btn" data-url="${esc(sUrl)}" onclick="logAct('share_card');copyLink(this.dataset.url)">Copy link</button>
         </div>
       </div>`;
       continue;
@@ -680,6 +783,7 @@ function copyLink(url){
       continue;
     }
   }
+  actionRailHtml += `<div class="action-receipt"><a id="action-receipt-link" hidden target="_blank" rel="noopener">View permanent action receipt</a></div>`;
 
   // Momentum feed — from actionCounts.thisWeek.
   const wkTotal = actionCts.thisWeek.total || 0;
@@ -687,8 +791,10 @@ function copyLink(url){
   let momentumHtml;
   if (wkTotal > 0) {
     const parts = [];
-    if (wkByType.email_official) parts.push(`${wkByType.email_official} email${wkByType.email_official !== 1 ? 's' : ''}`);
-    if (wkByType.share_card) parts.push(`${wkByType.share_card} share${wkByType.share_card !== 1 ? 's' : ''}`);
+    if (wkByType.email_official_prepared) parts.push(`${wkByType.email_official_prepared} official email draft${wkByType.email_official_prepared !== 1 ? 's' : ''} prepared`);
+    if (wkByType.email_official) parts.push(`${wkByType.email_official} official email${wkByType.email_official !== 1 ? 's' : ''} sender-confirmed`);
+    if (wkByType.share_card_prepared) parts.push(`${wkByType.share_card_prepared} X post${wkByType.share_card_prepared !== 1 ? 's' : ''} prepared`);
+    if (wkByType.share_card) parts.push(`${wkByType.share_card} X post${wkByType.share_card !== 1 ? 's' : ''} sender-confirmed`);
     if (wkByType.corroborate) parts.push(`${wkByType.corroborate} confirmation${wkByType.corroborate !== 1 ? 's' : ''}`);
     const partsStr = parts.length ? `: ${parts.join(', ')}` : '';
     momentumHtml = `<div class="momentum">${wkTotal} neighbor${wkTotal !== 1 ? 's' : ''} acted this week${partsStr}.</div>`;
@@ -705,13 +811,49 @@ function copyLink(url){
     } else if (!rung.unlocked) {
       ladderHtml = `<div class="ladder locked">Next action in ${rung.day - ladder.campaignAgeDays} days: ${esc(rung.label)}</div>`;
     } else {
-      const recurrenceNote = ladder.recurrence ? ' <b>A new flare-up has started. Re-engage the official with the updated record.</b>' : '';
+      const recurrenceNote = ladder.recurrence ? ' <b>A new reporting episode began after a quiet interval. Re-engage the official with the updated record.</b>' : '';
       ladderHtml = `<div class="ladder active">Next action: ${esc(rung.label)}${recurrenceNote}</div>`;
     }
   }
 
   const stat = (big, label, alarm) =>
     `<div class="stat"><div class="big ${alarm ? 'alarm' : ''}">${big}</div><div class="lbl">${label}</div></div>`;
+  const publicHeadline = currentState
+    ? `Address-level evidence supports continuous occupation since ${fmtDate(currentState.supported_from)}.`
+    : issue.headline_kind === 'persistence'
+    ? `311 reporting activity has continued in this episode since ${fmtDate(episodeStart)}.`
+    : issue.headline_kind === 'recurrence'
+      ? `${fmtN(issue.episode_count)} reporting episodes are separated by material quiet intervals.`
+      : (issue.headline || '');
+  const observationHtml = observation
+    ? `<div class="observation"><b>Dated neighbor observation:</b> the ${esc(observation.attribution || 'campaign organizer')} reports seeing the current tent for at least ${fmtN(observation.minimum_months)} months as of ${esc(fmtDate(observation.as_of))}. This is a firsthand minimum, not a claim that it is the same object as earlier 311 records.</div>`
+    : '';
+  const evidenceHtml = evidence
+    ? `<div class="evidence"><b>Address-specific record:</b> ${fmtN(evidence.address_requests)} requests match the configured address near 246 East 20th Street across ${fmtN(evidence.address_report_days)} reporting days from ${esc(fmtDate(evidence.address_first_report))} through ${esc(fmtDate(evidence.address_latest_report))}. The wider approximate-block cell contains ${fmtN(evidence.approximate_block_requests)} requests.</div>`
+    : '';
+  const stateHtml = currentState
+    ? `<section class="state"><h2>Occupation evidence</h2>
+      <div class="state-verdict"><div><b>${state.continuity_confidence_score}/100</b><span>continuity confidence</span></div><p>Agency observations, outreach contacts, and report frequency support continuous occupation from <b>${esc(fmtDate(currentState.supported_from))}</b> through the latest supporting city record on <b>${esc(fmtDate(currentState.supported_through))}</b>.</p></div>
+      <div class="state-facts"><span><b>${fmtN(currentState.support_days)}</b> support days</span><span><b>${fmtN(currentState.positive_observations)}</b> positive observations</span><span><b>${fmtN(currentState.outreach_contacts)}</b> outreach contacts</span><span><b>${fmtN(state.cadence_window_days)}d</b> continuity window</span></div>
+      ${latestInterruption ? `<div class="interruption"><b>${latestInterruption.inference === 'likely_interruption' ? 'Likely interruption; return supported' : 'Possible interruption and return'}:</b> supporting evidence stops after ${esc(fmtDate(latestInterruption.last_support_before))} and resumes ${esc(fmtDate(latestInterruption.next_support))}, a ${fmtN(latestInterruption.support_gap_days)}-day gap${latestInterruption.negative_only_days ? ` containing ${fmtN(latestInterruption.negative_only_days)} negative-only inspection${latestInterruption.negative_only_days === 1 ? '' : 's'}` : ''}. This supports a period of likely inactivity followed by renewed occupation, but does not document a cleanup.</div>` : ''}
+      <p class="fine">This score is an evidence index, not a probability. It does not prove one unchanged tent or a documented cleanup.</p>
+    </section>` : '';
+  const costBasis = state && state.response_labor ? state.response_labor : issue.response_labor;
+  const costHtml = costBasis && costBasis.response_units > 0
+    ? `<section class="cost"><h2>What repeated response has cost</h2>
+      <div class="cost-range">${esc(formatResponseCostRange(costBasis))}</div>
+      <p class="cost-lead">Estimated response labor across ${fmtN(costBasis.response_units)} deduplicated response-days and response classes. The lower bound assumes one worker for 30 minutes; the planning estimate assumes two workers for one hour.</p>
+      <div class="cost-equation">${fmtN(costBasis.response_units)} units &times; $${costBasis.reference_hourly.toFixed(2)}/hour &times; 0.5-2 worker-hours</div>
+      <p class="fine">Not an audited bill. This deliberately excludes 311 intake, vehicles, supervision, contractor overhead, cleanup, shelter, and medical care because the location record does not support assigning those costs. Wage reference: <a href="${esc(costBasis.source)}" target="_blank" rel="noopener">NYPD published starting salary</a>.</p>
+    </section>` : '';
+  const impactHtml = sensitiveSummary && schoolSites.length
+    ? `<section class="impact"><h2>${fmtN(sensitiveSummary.school_count)} schools within ${fmtN(sensitiveSummary.radius_ft)} feet</h2>
+      <div class="impact-callout">It is unacceptable for the city to leave a repeatedly confirmed sidewalk encampment on a daily route used by children, families, and school staff, then treat ticket closure as resolution. This is a failure of both pedestrian access and human services.</div>
+      <div class="scoreline"><div><b>${fmtN(sensitiveSummary.school_count)}</b><span>K-12 schools within ${fmtN(sensitiveSummary.radius_ft)} ft</span></div><div><b>${fmtN(sensitiveSummary.nearest_school_ft)} ft</b><span>nearest recorded school</span></div><div><b>${reportPressure}</b><span>report-volume percentile</span></div></div>
+      <p class="fine">These are literal straight-line distances from the approximate issue location, not a claim that any person caused harm. Counts come from the citywide NYC Planning Facilities Database and are computed the same way for every issue.</p>
+      <div class="places">${schoolSites.map(place => `<div><b>${esc(place.name)}</b> &middot; ${esc(place.address || 'address unavailable')} &middot; ${fmtN(place.distance_ft)} ft</div>`).join('')}${childcareSites.length ? `<div><b>Also nearby:</b> ${fmtN(sensitiveSummary.childcare_count)} childcare/pre-K facilit${sensitiveSummary.childcare_count === 1 ? 'y' : 'ies'} within ${fmtN(sensitiveSummary.radius_ft)} feet.</div>` : ''}</div>
+      <p class="fine"><a href="${esc(sensitiveSummary.source)}" target="_blank" rel="noopener">NYC Planning Facilities Database source</a></p>
+    </section>` : '';
 
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -799,6 +941,14 @@ function copyLink(url){
   .act-btn:disabled{opacity:.5;cursor:not-allowed}
   .act-btn-ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
   .act-btn-group{display:flex;gap:6px;flex:none}
+  .action-receipt{padding-top:10px;font-size:12px}
+  .observation,.evidence{margin:12px 0;padding:12px 14px;border-left:3px solid var(--amber);background:var(--card);font-size:14px}
+  .state{margin:22px 0}.state h2{margin-top:0}.state-verdict{display:grid;grid-template-columns:120px 1fr;gap:16px;align-items:center;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:14px 0}.state-verdict>div{text-align:center}.state-verdict>div b{display:block;color:var(--amber);font-size:28px}.state-verdict>div span{display:block;color:var(--mut);font-size:11px}.state-verdict p{margin:0;font-size:14px}.state-facts{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);margin-top:1px}.state-facts span{background:var(--bg);padding:10px 6px;text-align:center;color:var(--mut);font-size:11px}.state-facts b{display:block;color:var(--ink);font-size:17px}.interruption{margin-top:14px;padding:12px 14px;border-left:3px solid var(--mut);background:var(--card);font-size:13px;color:var(--mut)}.interruption b{color:var(--ink)}
+  .cost{padding:22px 0;border-top:1px solid var(--line)}.cost h2{margin-top:0}.cost-range{font-size:42px;line-height:1;font-weight:800;color:var(--amber)}.cost-lead{font-size:15px;max-width:600px}.cost-equation{display:inline-block;padding:7px 9px;background:var(--card);border:1px solid var(--line);font:12px ui-monospace,SFMono-Regular,Menlo,monospace}.impact-callout{font-size:18px;line-height:1.45;font-weight:700;border-left:3px solid var(--alarm);padding:4px 0 4px 14px;margin:12px 0 18px}
+  .scoreline{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .scoreline>div{padding:14px 8px;text-align:center;border-right:1px solid var(--line)}
+  .scoreline>div:last-child{border-right:0}.scoreline b{display:block;font-size:25px;color:var(--amber)}.scoreline span{font-size:11px;color:var(--mut)}
+  .places{font-size:13px;line-height:1.55}.places>div{padding:8px 0;border-bottom:1px solid var(--line)}
   /* Momentum */
   .momentum{margin:16px 0 0;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:10px;font-size:13px;color:var(--ink)}
   .momentum.seed{color:var(--mut)}
@@ -807,24 +957,40 @@ function copyLink(url){
   .ladder.active{background:#1a1400;color:var(--amber)}
   .ladder.locked{background:var(--card);color:var(--mut);border-color:var(--line)}
   .ladder.done{background:#0d1a12;color:#3ddc84;border-color:#3ddc84}
+  .start-band{margin-top:30px;padding:24px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .start-band h2{margin:0 0 6px;color:var(--ink);font-size:20px;letter-spacing:0;text-transform:none}
+  .start-band p{margin:0 0 15px;color:var(--mut);font-size:14px;max-width:520px}
+  .start-link{display:inline-block;background:var(--amber);color:#000;text-decoration:none;border-radius:6px;padding:10px 15px;font-weight:800;font-size:14px}
+  @media(max-width:520px){.state-verdict{grid-template-columns:1fr}.state-verdict>div{text-align:left}.state-facts{grid-template-columns:repeat(2,1fr)}}
 </style></head><body><div class="wrap">
   <div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">UN<b>IGNOR</b>ABLE</a><span class="tag">a public receipt</span></div>
 
   <div class="hero">
     <div class="kicker">${esc(issue.type)} &middot; ${esc(area)}</div>
-    ${active
-      ? `<div class="day-hero">Day ${dayN}</div>
-    <div class="day-sub">ignored since ${esc(fmtDate(episodeStart))}</div>
-    <p class="lead"><b>${fmtN(instReports)} reports</b> in this stretch alone. It is still open.</p>`
+    ${currentState
+      ? `<div class="day-hero">${fmtN(currentState.reports)}</div>
+    <div class="day-sub">address-specific reports in the supported interval since ${esc(fmtDate(currentState.supported_from))}</div>
+    <p class="lead">The address-level record supports <b>continuous occupation</b>. Confidence: ${fmtN(state.continuity_confidence_score)}/100, based on observations, outreach, and reporting cadence.</p>`
+      : active
+      ? `<div class="day-hero">${fmtN(instReports)}</div>
+    <div class="day-sub">service requests in the current reporting episode since ${esc(fmtDate(episodeStart))}</div>
+    <p class="lead">This is continuous <b>reporting activity</b>, not proof that one tent remained for ${fmtN(dayN)} days.</p>`
       : `<div class="dur">${fmtN(issue.n)}</div>
     <p class="lead">reports on the city's own record for this block${startTxt ? ` since ${esc(startTxt)}` : ''}.</p>`}
 
     ${severityLine ? `<div class="severity">${severityLine}</div>` : ''}
 
-    <div class="indict">In ${esc(yrsTxt)}, the city was told <b>${fmtN(issue.n)} times</b> and closed the case <b>${fmtN(cn)} times</b>${nf ? `, including <b>${fmtN(nf)}</b> claiming nothing was there` : ''}. ${active ? 'It is still here.' : 'It kept coming back.'} Knowing is not fixing.</div>
+    ${observationHtml}
+    ${evidenceHtml}
+    ${stateHtml}
+
+    <div class="indict">${esc(yrsTxt.charAt(0).toUpperCase() + yrsTxt.slice(1))}, NYC 311 logged <b>${fmtN(issue.n)} service requests</b> in this approximate-block record and the city closed <b>${fmtN(cn)}</b>${nf ? `, including <b>${fmtN(nf)}</b> with a "nothing found" response` : ''}. ${active ? 'The reporting record remains active.' : 'The same block kept being reported again.'} Knowing is not fixing.</div>
 
     ${corrob > 0 ? `<div class="ugc"><div class="hdr">&#128065; <b>The block says it is still here.</b> ${fmtN(corrob)} ${corrob === 1 ? 'neighbor confirms' : 'neighbors confirm'}.</div>${latest && latest.text ? `<div class="q">"${esc(latest.text)}"${latest.photo ? ' (photo on file)' : ''}</div>` : ''}</div>` : ''}
   </div>
+
+  ${costHtml}
+  ${impactHtml}
 
   <h2>What we are asking for</h2>
   <div class="card ask"><ul style="margin:0;padding-left:18px">
@@ -840,21 +1006,21 @@ function copyLink(url){
 
   <details class="record"><summary>See the full city record &#8594;</summary>
 
-    <div class="headline">${esc(issue.headline || '')}</div>
+    <div class="headline">${esc(publicHeadline)}</div>
     <div class="grid">
-      ${stat(fmtN(issue.n), 'times reported to 311', true)}
+      ${stat(fmtN(issue.n), 'NYC 311 service requests', true)}
       ${stat(fmtN(cn), 'closed by the city')}
       ${stat(fmtN(nf), '"nothing found" closures', true)}
-      ${stat(fmtN(rn), 'came back after closing', true)}
-      ${stat(ard != null ? ard.toFixed(1) + 'd' : 'n/a', 'avg. before it returned')}
-      ${stat(fmtN(issue.episode_count), 'separate flare-ups')}
+      ${stat(fmtN(rn), 'new request after a closure', true)}
+      ${stat(ard != null ? ard.toFixed(1) + 'd' : 'n/a', 'avg. closure to next request')}
+      ${stat(fmtN(issue.episode_count), 'reporting episodes')}
     </div>
-    <div class="spark"><div class="cap">every red band = a stretch the city was getting reports and closing them. ${esc(issue.first_seen)} to today.</div>${sparkline(issue)}</div>
+    <div class="spark"><div class="cap">Every red band is a reporting episode separated from the next by more than this location's adaptive quiet-window threshold. Bands do not identify a physical tent. ${esc(issue.first_seen)} to today.</div>${sparkline(issue)}</div>
 
     <h2>Who is accountable</h2>
     <div class="card">
       ${officialBlock}
-      <div class="who-verdict">What the record shows: the city closed this <b>${fmtN(cn)} times</b>${nf ? `, including ${fmtN(nf)} of them as "nothing found"` : ''}. What changed on the block: <b>${active ? 'nothing, it is still here' : 'it kept coming back'}</b>. Responding agency on the tickets: ${esc(issue.agency || 'NYC')}.</div>
+      <div class="who-verdict">What the record shows: the city closed <b>${fmtN(cn)} requests</b>${nf ? `, including ${fmtN(nf)} with a "nothing found" response` : ''}. ${active ? 'The current reporting episode remains active under the published quiet-window rule.' : 'The same block kept being reported again.'} Responding agency on the requests: ${esc(issue.agency || 'NYC')}.</div>
     </div>
 
     ${law ? `<h2>What the law says</h2>
@@ -866,7 +1032,7 @@ function copyLink(url){
     </div>` : ''}
 
     <h2>How we define this spot</h2>
-    <div class="card disclose">The "Day ${dayN}" above is the count of days since the current unbroken run of reports began (the episode model), not the multi-year total. "This spot" is one ~1-block location in the city's data, whose coordinates round to about a block; nearby but distinct encampments are tracked as their own spots, never merged in to inflate a number. Every count is NYC's own 311 record for this location.</div>
+    <div class="card disclose">A report is one NYC 311 service-request record. For configured campaign addresses, positive agency observations and outreach contacts anchor occupation support. The continuity window is four times that address's median gap between all report days after support begins, bounded to 30-60 days; a longer gap between supporting observations creates an interruption candidate. A gap becomes a likely interruption only when it is at least twice the window, or at least 1.5 times the window and contains a negative-only inspection. Same-day positive and negative inspections remain visible as conflicts. The 0-100 confidence result weights report frequency, supported span, recency, and consistency. It is an evidence index, not a probability, proof of one unchanged object, or proof of cleanup. Other map locations still use the broader reporting-episode method.</div>
 
     <div class="stamp">${stamp}<br>This page documents a <b>government's</b> response to a public-safety obstruction. It is not about, and does not identify, any individual experiencing homelessness. They are failed by this inaction, not the cause of it.</div>
   </details>
@@ -876,7 +1042,13 @@ function copyLink(url){
     ${T.posts.map(p => `<div class="q">${esc(p.text || '')}${p.photo ? ' (photo on file)' : ''}<div style="font-size:11px;color:var(--mut);margin-top:4px">${esc(p.ts ? p.ts.slice(0,10) : '')}</div></div>`).join('')}
   </div>` : ''}
 
-${actScript}
+  <section class="start-band">
+    <h2>${campaign ? 'Your block can be next.' : 'Make this a public campaign.'}</h2>
+    <p>${campaign ? 'Find an active issue near you and give neighbors one permanent place to confirm it, organize, and track what happens.' : 'Confirm this issue is still present and start organizing from the city-backed record.'}</p>
+    <a class="start-link" href="/start${campaign ? '' : `?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`}">${campaign ? 'Start a campaign' : 'Start this campaign'}</a>
+  </section>
+
+${actScript}${PULSE_BEACON}
 </div></body></html>`;
 }
 
@@ -927,7 +1099,7 @@ function areaTitle(stats) {
 // The X/copy tweet for a zone.
 function areaTweet(stats, url) {
   const where = titleCase(stats.worst && stats.worst.addr) ? `Around ${titleCase(stats.worst.addr)}` : (stats.boroughs[0] || 'NYC');
-  return `${where}: ${fmtN(stats.spots)} chronic spots on NYC's own 311 record — ${fmtN(stats.n)} reports, closed ${fmtN(stats.closed)}×. ${fmtN(stats.activeSpots)} still here. The receipt: ${url}`;
+  return `${where}: ${fmtN(stats.spots)} chronic spots on NYC's own 311 record — ${fmtN(stats.n)} reports, closed ${fmtN(stats.closed)}×. ${fmtN(stats.activeSpots)} records remain active. The receipt: ${url}`;
 }
 
 // Resolve verified, named council members spanning the zone's districts (deduped).
@@ -1266,8 +1438,132 @@ function renderHotspotsIndex() {
 </div></body></html>`;
 }
 
-const server = http.createServer(async (req, res) => {
+function distanceMeters(lat1, lng1, lat2, lng2) {
+  const p = Math.PI / 180;
+  const a = 0.5 - Math.cos((lat2 - lat1) * p) / 2
+    + Math.cos(lat1 * p) * Math.cos(lat2 * p) * (1 - Math.cos((lng2 - lng1) * p)) / 2;
+  return 12742000 * Math.asin(Math.sqrt(a));
+}
+
+function renderCampaignStart(selectedIssue) {
+  const selected = selectedIssue ? {
+    type: selectedIssue.type, id: selectedIssue.id, addr: titleCase(selectedIssue.addr),
+    borough: titleCase(selectedIssue.borough), reports: selectedIssue.n,
+    currentDays: selectedIssue.current_days || 0,
+    campaign: !!ugc.getCampaign(key(selectedIssue.type, selectedIssue.id)),
+  } : null;
+  return `<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="index,follow"><title>Start a campaign on your block — unignorable</title>
+<style>
+  :root{--bg:#0b0d10;--ink:#e8eaed;--mut:#969ba4;--line:#2b3038;--alarm:#ff4d4d;--amber:#ffb020;--field:#14171c}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  button,input{font:inherit}button{cursor:pointer}.wrap{max-width:680px;margin:0 auto;padding:20px 18px 72px}
+  .mast{display:flex;align-items:center;justify-content:space-between;padding:6px 0 18px;border-bottom:1px solid var(--line)}
+  .word{font-weight:800;letter-spacing:.06em;font-size:14px;color:var(--ink);text-decoration:none}.word b{color:var(--alarm)}
+  .map-link{color:var(--mut);font-size:13px}.hero{padding:34px 0 26px}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--alarm);font-weight:800}
+  h1{font-size:38px;line-height:1.08;margin:8px 0 12px;max-width:560px}p{margin:0;color:var(--mut)}
+  .step{padding:24px 0;border-top:1px solid var(--line)}.step h2{font-size:17px;margin:0 0 5px}.step>p{font-size:14px;margin-bottom:14px}
+  .search{display:grid;grid-template-columns:1fr auto;gap:8px}.field{width:100%;background:var(--field);border:1px solid var(--line);border-radius:6px;color:var(--ink);padding:12px 13px;min-height:46px}
+  .field:focus{outline:2px solid var(--amber);outline-offset:1px}.btn{border:0;border-radius:6px;background:var(--amber);color:#090a0c;font-weight:800;padding:11px 16px;min-height:46px}
+  .btn:disabled{opacity:.5;cursor:not-allowed}.results{margin-top:12px;border-top:1px solid var(--line)}
+  .result{width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;text-align:left;background:transparent;color:var(--ink);border:0;border-bottom:1px solid var(--line);padding:14px 2px}
+  .result:hover,.result:focus{background:#11141a;outline:none}.result-main{min-width:0}.result-title{display:block;font-weight:750}.result-meta{display:block;color:var(--mut);font-size:12px;margin-top:2px}.arrow{color:var(--amber);font-weight:800}
+  .selected{border-left:3px solid var(--amber);padding:14px 15px;background:var(--field);margin-bottom:16px}.selected b{display:block;font-size:17px}.selected span{display:block;color:var(--mut);font-size:13px;margin-top:3px}
+  .label{display:block;font-size:13px;font-weight:700;margin:13px 0 6px}.check{display:flex;align-items:flex-start;gap:9px;margin:14px 0;color:var(--ink);font-size:14px}.check input{margin-top:4px;accent-color:var(--amber)}
+  .fine{font-size:12px;color:var(--mut);margin:10px 0 16px}.status{font-size:13px;color:var(--mut);margin-top:10px;min-height:20px}.status.error{color:#ff7b7b}
+  [hidden]{display:none!important}@media(max-width:520px){h1{font-size:32px}.search{grid-template-columns:1fr}.search .btn{width:100%}}
+</style></head><body><div class="wrap">
+  <div class="mast"><a class="word" href="${esc(CANARY_URL)}">UN<b>IGNOR</b>ABLE</a><a class="map-link" href="/map">Explore NYC</a></div>
+  <div class="hero"><div class="eyebrow">Your block can be next</div><h1>Start a public campaign from the city's own record.</h1><p>Find a recurring issue, confirm it is still present, and give the block one permanent place to organize.</p></div>
+  <section class="step"><h2>1. Find the block</h2><p>Search an address or intersection in New York City.</p>
+    <form id="search-form" class="search"><input id="address" class="field" autocomplete="street-address" placeholder="Address or intersection" required><button class="btn" type="submit">Search</button></form>
+    <div id="search-status" class="status" aria-live="polite"></div><div id="results" class="results"></div>
+  </section>
+  <section id="organize" class="step" ${selected ? '' : 'hidden'}><h2>2. Start the campaign</h2><p>Organizer contact stays private. The campaign uses only the public city record and approved neighbor evidence.</p>
+    <div id="selected" class="selected"></div>
+    <form id="campaign-form">
+      <label class="label" for="email">Email for campaign updates</label><input id="email" class="field" type="email" autocomplete="email" maxlength="254" required>
+      <label class="check"><input id="confirmed" type="checkbox" required><span>I have seen this issue at this location recently.</span></label>
+      <p class="fine">Your email is stored privately for campaign verification and updates. It is never shown on the public page or shared with city agencies.</p>
+      <button id="start-button" class="btn" type="submit">Start campaign</button><div id="campaign-status" class="status" aria-live="polite"></div>
+    </form>
+  </section>
+</div>
+<script>
+var chosen=${JSON.stringify(selected)};
+var resultsEl=document.getElementById('results'), organize=document.getElementById('organize');
+function choose(issue){
+  chosen=issue;organize.hidden=false;
+  document.getElementById('selected').innerHTML='<b>'+escapeHtml(issue.type)+' near '+escapeHtml(issue.addr||'this block')+'</b><span>'+(issue.reports||0).toLocaleString()+' service requests in the approximate-block record'+(issue.currentDays?' · current reporting episode spans '+issue.currentDays+' days':'')+(issue.campaign?' · campaign already active':'')+'</span>';
+  document.getElementById('start-button').textContent=issue.campaign?'Join campaign':'Start campaign';
+  organize.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function escapeHtml(s){var d=document.createElement('div');d.textContent=s||'';return d.innerHTML;}
+if(chosen)choose(chosen);
+document.getElementById('search-form').addEventListener('submit',async function(e){
+  e.preventDefault();var q=document.getElementById('address').value.trim(), status=document.getElementById('search-status');
+  status.className='status';status.textContent='Searching…';resultsEl.innerHTML='';
+  try{
+    var places=await fetch('/api/geocode?q='+encodeURIComponent(q)).then(function(r){return r.json()});
+    if(!places.length)throw new Error('No NYC location found.');
+    var nearby=await fetch('/api/campaign/nearby?lat='+places[0].lat+'&lng='+places[0].lng).then(function(r){return r.json()});
+    if(!nearby.items||!nearby.items.length)throw new Error('No active city record found within walking distance.');
+    status.textContent=nearby.items.length+' active records nearby. Select the matching block.';
+    nearby.items.forEach(function(issue){var b=document.createElement('button');b.type='button';b.className='result';b.innerHTML='<span class="result-main"><span class="result-title">'+escapeHtml(issue.type)+' · '+escapeHtml(issue.addr||'Approximate block')+'</span><span class="result-meta">'+Math.round(issue.distance)+' m away · '+issue.reports.toLocaleString()+' reports'+(issue.campaign?' · active campaign':'')+'</span></span><span class="arrow">→</span>';b.onclick=function(){choose(issue)};resultsEl.appendChild(b)});
+  }catch(err){status.className='status error';status.textContent=err.message||'Search failed. Try again.';}
+});
+document.getElementById('campaign-form').addEventListener('submit',async function(e){
+  e.preventDefault();if(!chosen)return;var button=document.getElementById('start-button'),status=document.getElementById('campaign-status');button.disabled=true;status.className='status';status.textContent='Creating campaign…';
+  try{var response=await fetch('/api/campaign/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:chosen.type,id:chosen.id,email:document.getElementById('email').value,confirmed:document.getElementById('confirmed').checked})});var out=await response.json();if(!response.ok)throw new Error(out.error||'Could not start campaign.');if(window.pulse)window.pulse('campaign_started',{type:chosen.type,id:chosen.id});location.href=out.url;}catch(err){button.disabled=false;status.className='status error';status.textContent=err.message||'Could not start campaign.';}
+});
+</script>${PULSE_BEACON}</body></html>`;
+}
+
+function renderActionReceipt(receipt) {
+  const issue = ISSUE_BY_KEY.get(receipt.issue_key);
+  const label = receipt.action_type === 'email_official' ? 'Official email draft' : 'Official X post';
+  const location = issue ? displayLocation(issue) : 'campaign record';
+  const campaignUrl = issue
+    ? `/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}` : '/map';
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Action receipt | Unignorable</title><style>
+  :root{--bg:#0b0d10;--card:#14171c;--ink:#e8eaed;--mut:#8b9098;--line:#262b32;--amber:#ffb020}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:640px;margin:0 auto;padding:32px 18px 64px}a{color:var(--amber)}h1{font-size:30px;margin:28px 0 4px}.sub{color:var(--mut)}.receipt{margin-top:24px;border-top:1px solid var(--line)}.row{display:grid;grid-template-columns:170px 1fr;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}.row span{color:var(--mut)}.count{font-size:34px;color:var(--amber);font-weight:800}.confirm{margin-top:20px;padding:10px 15px;border:0;border-radius:6px;background:var(--amber);font-weight:800;cursor:pointer}.note{margin-top:24px;padding:14px;border-left:3px solid var(--amber);background:var(--card);font-size:13px;color:var(--mut)}@media(max-width:520px){.row{grid-template-columns:1fr;gap:3px}}
+  </style></head><body><main class="wrap"><a href="${esc(campaignUrl)}">UNIGNORABLE</a><h1>Permanent action receipt</h1><p class="sub">${esc(label)} for ${esc(location)}</p><div class="receipt">
+  <div class="row"><span>Receipt</span><b>${esc(receipt.token)}</b></div>
+  <div class="row"><span>Prepared</span><b>${esc(new Date(receipt.created_at).toLocaleString('en-US', { timeZone: 'America/New_York' }))} ET</b></div>
+  <div class="row"><span>Target</span><b>${esc(receipt.target || 'official channel')}</b></div>
+  <div class="row"><span>Sender confirmation</span><b>${receipt.sender_confirmed_at ? esc(new Date(receipt.sender_confirmed_at).toLocaleString('en-US', { timeZone: 'America/New_York' })) + ' ET' : 'Not confirmed'}</b></div>
+  <div class="row"><span>Tracked-link requests</span><b class="count">${fmtN(receipt.link_requests || 0)}</b></div>
+  <div class="row"><span>First link request</span><b>${receipt.first_link_request_at ? esc(new Date(receipt.first_link_request_at).toLocaleString('en-US', { timeZone: 'America/New_York' })) + ' ET' : 'None recorded'}</b></div>
+  <div class="row"><span>Last link request</span><b>${receipt.last_link_request_at ? esc(new Date(receipt.last_link_request_at).toLocaleString('en-US', { timeZone: 'America/New_York' })) + ' ET' : 'None recorded'}</b></div>
+  </div>${receipt.sender_confirmed_at ? '' : `<button class="confirm" onclick="confirmSent(this)">I sent this</button>`}<div class="note">This receipt proves that Unignorable prepared the action and records requests to its unique evidence link. Sender confirmation is a user assertion, not delivery proof. A link request may come from a human or a security scanner and does not prove that the named official personally read it. Email opens cannot be reliably measured from a draft sent through the resident's mail app.</div></main><script>async function confirmSent(button){button.disabled=true;var response=await fetch('/api/action/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:${JSON.stringify(receipt.token)}})});if(response.ok)location.reload();else button.disabled=false;}</script>${PULSE_BEACON}</body></html>`;
+}
+
+async function handleRequest(req, res) {
   const u = new URL(req.url, 'http://x');
+
+  if (u.pathname === '/healthz') {
+    return send(res, 200, JSON.stringify({ ok: true, issues: ISSUES.length, dataThrough: ISSUES.reduce((a, i) => i.last_seen > a ? i.last_seen : a, '') }), 'application/json', { 'Cache-Control': 'no-store' });
+  }
+
+  const trackedMatch = u.pathname.match(/^\/r\/([a-f0-9]{32})$/);
+  if (trackedMatch && req.method === 'GET') {
+    const receipt = ugc.getActionReceipt(trackedMatch[1]);
+    if (!receipt) return send(res, 404, 'Unknown receipt.', 'text/plain');
+    ugc.recordReceiptLinkRequest(receipt.token);
+    const issue = ISSUE_BY_KEY.get(receipt.issue_key);
+    if (!issue) return send(res, 404, 'Campaign record unavailable.', 'text/plain');
+    const destination = `/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}&via=${encodeURIComponent(receipt.action_type)}`;
+    res.writeHead(302, { ...SECURITY_HEADERS, Location: destination, 'Cache-Control': 'no-store' });
+    return res.end();
+  }
+
+  const receiptMatch = u.pathname.match(/^\/receipt\/([a-f0-9]{32})$/);
+  if (receiptMatch && req.method === 'GET') {
+    const receipt = ugc.getActionReceipt(receiptMatch[1]);
+    if (!receipt) return send(res, 404, 'Unknown receipt.', 'text/plain');
+    return send(res, 200, renderActionReceipt(receipt), 'text/html; charset=utf-8', { 'Cache-Control': 'no-store' });
+  }
 
   // Consolidation: sidewalk was absorbed into unignorable. Redirect the old host.
   if ((req.headers.host || '').startsWith('sidewalk')) {
@@ -1300,6 +1596,44 @@ const server = http.createServer(async (req, res) => {
     } catch { return send(res, 200, '[]', 'application/json'); }
   }
 
+  if (u.pathname === '/api/campaign/nearby') {
+    const lat = Number(u.searchParams.get('lat')), lng = Number(u.searchParams.get('lng'));
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < 40.47 || lat > 40.93 || lng < -74.27 || lng > -73.68) {
+      return send(res, 400, '{"ok":false,"error":"location must be in New York City"}', 'application/json');
+    }
+    const items = ISSUES.filter(i => i.status === 'active')
+      .map(i => ({ issue: i, distance: distanceMeters(lat, lng, Number(i.lat), Number(i.lng)) }))
+      .filter(x => Number.isFinite(x.distance) && x.distance <= 1200)
+      .sort((a, b) => a.distance - b.distance || (Number(b.issue.score) || 0) - (Number(a.issue.score) || 0))
+      .slice(0, 12)
+      .map(({ issue: i, distance }) => ({
+        type: i.type, id: i.id, addr: displayLocation(i), borough: titleCase(i.borough),
+        reports: Number(i.n) || 0, currentDays: Number(i.current_days) || 0,
+        distance: Math.round(distance), campaign: !!ugc.getCampaign(key(i.type, i.id)),
+      }));
+    return send(res, 200, JSON.stringify({ ok: true, items }), 'application/json');
+  }
+
+  if (u.pathname === '/api/campaign/start' && req.method === 'POST') {
+    if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
+    const { type, id, email, confirmed } = await readBody(req);
+    const issueKey = key(type, id), issue = ISSUE_BY_KEY.get(issueKey);
+    if (!issue || issue.status !== 'active') return send(res, 400, '{"ok":false,"error":"choose an active city record"}', 'application/json');
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (cleanEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return send(res, 400, '{"ok":false,"error":"enter a valid email"}', 'application/json');
+    }
+    if (confirmed !== true) return send(res, 400, '{"ok":false,"error":"recent firsthand confirmation is required"}', 'application/json');
+    const ipHash = crypto.createHash('sha256').update(clientIp(req)).digest('hex').slice(0, 16);
+    const existed = !!ugc.getCampaign(issueKey);
+    ugc.startCampaign(issueKey);
+    ugc.addCampaignOrganizer(issueKey, cleanEmail, ipHash);
+    ugc.addSeen(issueKey, ipHash);
+    ISSUES_CACHE = null;
+    const url = `${PUBLIC_ORIGIN}/c?t=${encodeURIComponent(type)}&id=${encodeURIComponent(id)}`;
+    return send(res, 200, JSON.stringify({ ok: true, existed, url }), 'application/json');
+  }
+
   // Citizen-submitted proof photo, served by id. Filenames are random hex; path-traversal can't escape.
   // design-mock previews for Paul's screenshot laps (basename-safe, html only, noindex)
   if (u.pathname.startsWith('/design/')) {
@@ -1308,8 +1642,17 @@ const server = http.createServer(async (req, res) => {
     const file = name.endsWith('.html') ? name : name + '.html';
     try {
       const buf = fs.readFileSync(path_.join(__dirname, 'design-mocks', file));
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'no-store' });
+      res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'text/html; charset=utf-8', 'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'no-store' });
       return res.end(buf);
+    } catch { return send(res, 404, 'not found', 'text/plain'); }
+  }
+
+  if (u.pathname.startsWith('/vendor/')) {
+    const name = path.basename(u.pathname);
+    const types = { 'leaflet.js': 'text/javascript; charset=utf-8', 'leaflet.css': 'text/css; charset=utf-8' };
+    if (!types[name]) return send(res, 404, 'not found', 'text/plain');
+    try {
+      return send(res, 200, fs.readFileSync(path.join(DIR, 'vendor', name)), types[name], { 'Cache-Control': 'public, max-age=31536000, immutable' });
     } catch { return send(res, 404, 'not found', 'text/plain'); }
   }
 
@@ -1319,7 +1662,7 @@ const server = http.createServer(async (req, res) => {
     if (!MIME[ext]) return send(res, 404, 'not found', 'text/plain');
     try {
       const buf = fs.readFileSync(path.join(PHOTO_DIR, name));
-      res.writeHead(200, { 'Content-Type': MIME[ext], 'Cache-Control': 'public, max-age=31536000, immutable' });
+      res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': MIME[ext], 'Cache-Control': 'public, max-age=31536000, immutable' });
       return res.end(buf);
     } catch { return send(res, 404, 'not found', 'text/plain'); }
   }
@@ -1330,8 +1673,8 @@ const server = http.createServer(async (req, res) => {
     const c = issuesPayload();
     const ae = req.headers['accept-encoding'] || '';
     if (/\bgzip\b/.test(ae)) {
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip',
-        'Vary': 'Accept-Encoding', 'Access-Control-Allow-Origin': '*' });
+      res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'application/json', 'Content-Encoding': 'gzip',
+        'Vary': 'Accept-Encoding' });
       return res.end(c.gz);
     }
     return send(res, 200, c.raw, 'application/json');
@@ -1347,6 +1690,7 @@ const server = http.createServer(async (req, res) => {
   // The thread: citizen commentary + the crowd's verdict for one issue.
   if (u.pathname === '/api/thread') {
     const t = u.searchParams.get('type'), id = u.searchParams.get('id');
+    if (!ISSUE_BY_KEY.has(key(t, id))) return send(res, 404, '{"ok":false,"error":"unknown issue"}', 'application/json');
     return send(res, 200, JSON.stringify(ugc.thread(key(t, id))), 'application/json');
   }
 
@@ -1354,8 +1698,11 @@ const server = http.createServer(async (req, res) => {
   if (u.pathname === '/api/seen' && req.method === 'POST') {
     if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
     const { type, id } = await readBody(req);
-    if (!type || !id) return send(res, 400, '{"ok":false}', 'application/json');
-    const t = ugc.addPost(key(type, id), 'seen', null, 'still_here');
+    const issueKey = key(type, id);
+    if (!ISSUE_BY_KEY.has(issueKey)) return send(res, 400, '{"ok":false,"error":"unknown issue"}', 'application/json');
+    const ipHash = crypto.createHash('sha256').update(clientIp(req)).digest('hex').slice(0, 16);
+    const t = ugc.addSeen(issueKey, ipHash);
+    ISSUES_CACHE = null;
     return send(res, 200, JSON.stringify({ ok: true, ...t }), 'application/json');
   }
 
@@ -1363,11 +1710,13 @@ const server = http.createServer(async (req, res) => {
   if (u.pathname === '/api/post' && req.method === 'POST') {
     if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
     const { type, id, text, status, photo } = await readBody(req);
+    const issueKey = key(type, id);
+    if (!ISSUE_BY_KEY.has(issueKey)) return send(res, 400, '{"ok":false,"error":"unknown issue"}', 'application/json');
     const file = photo ? savePhoto(photo) : null;
-    if (!type || !id || (!text && !status && !file)) return send(res, 400, '{"ok":false}', 'application/json');
+    if (!text && !status && !file) return send(res, 400, '{"ok":false}', 'application/json');
     const clean = (text || '').toString().slice(0, 500).trim();
     const st = ['still_here', 'worse', 'cleaned', 'gone'].includes(status) ? status : null;
-    const t = ugc.addPost(key(type, id), 'comment', clean || null, st, file);
+    const t = ugc.addPost(issueKey, 'comment', clean || null, st, file);
     return send(res, 200, JSON.stringify({ ok: true, ...t }), 'application/json');
   }
 
@@ -1375,6 +1724,43 @@ const server = http.createServer(async (req, res) => {
   // Rate-limited (shared 12/5min/IP budget). Rejects unknown/coming/disabled action ids (400).
   // Corroborate logs here for momentum count AND to /api/seen for the corroboration verdict counter —
   // intentional double-count: two different purposes, two different tables. See ugc.js note.
+  if (u.pathname === '/api/action/confirm' && req.method === 'POST') {
+    if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
+    const { token } = await readBody(req);
+    if (!/^[a-f0-9]{32}$/.test(String(token || ''))) return send(res, 400, '{"ok":false,"error":"bad receipt"}', 'application/json');
+    const existing = ugc.getActionReceipt(token);
+    if (!existing) return send(res, 404, '{"ok":false,"error":"unknown receipt"}', 'application/json');
+    const confirmed = ugc.confirmActionReceipt(token);
+    if (confirmed.changed) {
+      const ipHash = crypto.createHash('sha256').update(clientIp(req)).digest('hex').slice(0, 16);
+      ugc.logAction(existing.issue_key, existing.action_type, ipHash);
+    }
+    return send(res, 200, JSON.stringify({ ok: true, receipt: confirmed.receipt }), 'application/json', { 'Cache-Control': 'no-store' });
+  }
+
+  if (u.pathname === '/api/action/prepare' && req.method === 'POST') {
+    if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
+    const { action_type, type, id } = await readBody(req);
+    if (!['email_official', 'share_card'].includes(action_type)) {
+      return send(res, 400, '{"ok":false,"error":"unsupported prepared action"}', 'application/json');
+    }
+    const issueKey = key(type, id), issue = ISSUE_BY_KEY.get(issueKey);
+    if (!issue) return send(res, 400, '{"ok":false,"error":"unknown issue"}', 'application/json');
+    const official = councilFor(issue.council);
+    const target = action_type === 'email_official'
+      ? ((official && official.verified && official.email) ? official.email : CAU_EMAIL)
+      : ((official && official.x) ? `@${official.x.replace(/^@/, '')}` : '@NYCCouncil');
+    const ipHash = crypto.createHash('sha256').update(clientIp(req)).digest('hex').slice(0, 16);
+    const receipt = ugc.createActionReceipt(issueKey, action_type, target, ipHash);
+    const trackedUrl = `${PUBLIC_ORIGIN}/r/${receipt.token}`;
+    const href = action_type === 'email_official'
+      ? buildEmailOfficialUrl(issue, ugc.getCampaign(issueKey), trackedUrl)
+      : buildShareUrl(issue, trackedUrl).tweetUrl;
+    ugc.logAction(issueKey, `${action_type}_prepared`, ipHash);
+    const receiptUrl = `${PUBLIC_ORIGIN}/receipt/${receipt.token}`;
+    return send(res, 200, JSON.stringify({ ok: true, href, receipt: receipt.token, receiptUrl }), 'application/json', { 'Cache-Control': 'no-store' });
+  }
+
   if (u.pathname === '/api/act' && req.method === 'POST') {
     if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
     const body = await readBody(req);
@@ -1442,12 +1828,12 @@ const server = http.createServer(async (req, res) => {
 
   // --- Review queue (Paul's personal gate before anything is public / filed to 311) ---
   if (u.pathname === '/api/review') {
-    if (!authed(u)) return send(res, 401, '{"ok":false}', 'application/json');
+    if (!authed(req, u)) return send(res, 401, '{"ok":false}', 'application/json');
     const items = ugc.pending().map(p => ({ ...p, issue: issueMeta(p.issue_key) }));
     return send(res, 200, JSON.stringify({ ok: true, count: items.length, items }), 'application/json');
   }
   if (u.pathname === '/api/review/decide' && req.method === 'POST') {
-    if (!authed(u)) return send(res, 401, '{"ok":false}', 'application/json');
+    if (!authed(req, u)) return send(res, 401, '{"ok":false}', 'application/json');
     const { id, action } = await readBody(req);
     if (!['approve', 'reject'].includes(action)) return send(res, 400, '{"ok":false}', 'application/json');
     const row = ugc.decide(id, action);
@@ -1455,8 +1841,13 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, JSON.stringify({ ok: !!row, count: ugc.pendingCount() }), 'application/json');
   }
   if (u.pathname === '/review') {
-    if (!authed(u)) return send(res, 401, 'unauthorized', 'text/plain');
-    return send(res, 200, fs.readFileSync(path.join(DIR, 'review.html')), 'text/html; charset=utf-8');
+    if (!authed(req, u)) return send(res, 401, 'unauthorized', 'text/plain', { 'Cache-Control': 'no-store' });
+    if (u.searchParams.has('k')) {
+      res.writeHead(303, { ...SECURITY_HEADERS, Location: '/review', 'Cache-Control': 'no-store',
+        'Set-Cookie': `unig_review=${encodeURIComponent(REVIEW_KEY)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000` });
+      return res.end();
+    }
+    return send(res, 200, fs.readFileSync(path.join(DIR, 'review.html')), 'text/html; charset=utf-8', { 'Cache-Control': 'no-store' });
   }
 
   if (u.pathname === '/robots.txt') return send(res, 200, ROBOTS, 'text/plain');
@@ -1476,6 +1867,13 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, renderArea(area), 'text/html; charset=utf-8');
   }
 
+  if (u.pathname === '/start') {
+    const t = u.searchParams.get('t') || u.searchParams.get('type');
+    const id = u.searchParams.get('id');
+    const selected = t && id ? ISSUE_BY_KEY.get(key(t, id)) : null;
+    return send(res, 200, renderCampaignStart(selected), 'text/html; charset=utf-8', { 'Cache-Control': 'no-store' });
+  }
+
   // The CAMPAIGN PAGE: /i, /issue, /c, /campaign all render the same surface.
   if (u.pathname === '/i' || u.pathname === '/issue' || u.pathname === '/c' || u.pathname === '/campaign') {
     const t = u.searchParams.get('t') || u.searchParams.get('type');
@@ -1485,17 +1883,37 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, renderCampaign(issue), 'text/html; charset=utf-8');
   }
 
-  // The landing ("The Record") and the live map are ONE document: index.html decides what to
-  // render from location (hash / query). /map is the map-first entry (deep-links target it);
-  // / is the shame-board landing. Same file -> one /api/issues fetch, every map fn reused.
-  if (u.pathname === '/' || u.pathname === '/index.html' || u.pathname === '/map') {
+  // Launch front door: Campaign 001 proves the playbook. The citywide map remains the discovery
+  // surface, and every campaign carries a self-service path for another resident to start one.
+  if (u.pathname === '/' || u.pathname === '/index.html') {
+    res.writeHead(302, { ...SECURITY_HEADERS, Location: CANARY_URL, 'Cache-Control': 'no-store' });
+    return res.end();
+  }
+  if (u.pathname === '/map') {
     return send(res, 200, fs.readFileSync(path.join(DIR, 'index.html')), 'text/html; charset=utf-8');
   }
 
   send(res, 404, 'not found', 'text/plain');
+}
+
+const server = http.createServer((req, res) => {
+  handleRequest(req, res).catch((err) => {
+    const code = err && err.statusCode >= 400 && err.statusCode < 500 ? err.statusCode : 500;
+    console.error(JSON.stringify({ level: 'error', method: req.method, url: req.url, code, error: err && err.message }));
+    if (!res.headersSent) send(res, code, JSON.stringify({ ok: false, error: code === 500 ? 'internal error' : err.message }), 'application/json');
+    else res.end();
+  });
 });
 
 server.listen(PORT, () => {
   console.log(`unignorable on :${PORT} — ${ISSUES.length} issues`);
-  console.log(`review queue -> /review?k=${REVIEW_KEY}`);
+  console.log('review queue ready');
 });
+
+function shutdown(signal) {
+  console.log(`${signal}: closing HTTP server`);
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 5000).unref();
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

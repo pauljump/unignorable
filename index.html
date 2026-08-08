@@ -3,10 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
+<meta name="description" content="NYC's public record of chronic quality-of-life complaints the city keeps closing while the same blocks are reported again.">
+<meta property="og:title" content="unignorable — the record that doesn't forget">
+<meta property="og:description" content="See what is active near you, how long it has persisted, and what NYC's own 311 record says happened.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://unignorable.polyfeeds.dev/">
 <title>unignorable — the city's own record of what it keeps ignoring</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="/vendor/leaflet.css">
+<script src="/vendor/leaflet.js"></script>
 <style>
   :root{
     --bg:#080b11; --panel:#0e1420; --line:#1d2737; --ink:#eaf0fb; --dim:#9aa6bd;
@@ -21,7 +25,7 @@
      rules below so the map is the majority of the screen. Kept in markup for the full redesign. */
   .topline{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
   .views{display:flex;gap:3px;background:#0b111c;border:1px solid var(--line);border-radius:999px;padding:3px;flex:none}
-  .vbtn{font-size:12.5px;padding:5px 14px;border-radius:999px;color:var(--dim);cursor:pointer;user-select:none}
+  .vbtn{font:inherit;font-size:12.5px;padding:5px 14px;border:0;border-radius:999px;color:var(--dim);background:transparent;cursor:pointer;user-select:none}
   .vbtn.on{background:#1a2535;color:var(--ink)}
   #trends,#disparity{position:absolute;inset:0;background:var(--bg);overflow:auto;display:none;z-index:800}
   #trends.show,#disparity.show{display:block}
@@ -88,7 +92,7 @@
     z-index:1000;display:flex;flex-direction:column;overflow:auto}
   #card.open{transform:none}
   .card-pad{padding:18px 18px 24px}
-  .x{position:absolute;top:12px;right:14px;font-size:22px;color:var(--dim);cursor:pointer;line-height:1}
+  .x{position:absolute;top:10px;right:10px;width:36px;height:36px;font-size:22px;color:var(--dim);cursor:pointer;line-height:1;background:transparent;border:0;z-index:2}
   .badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;color:#0b0e14}
   .addr{font-size:17px;font-weight:800;margin:12px 0 2px;line-height:1.25}
   .sub{font-size:12.5px;color:var(--dim)}
@@ -188,6 +192,28 @@
   .damning{margin:14px 0 2px;font-size:17px;font-weight:800;line-height:1.35;letter-spacing:-.3px;color:#ffb3a8}
   .damning .sc{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.4px;color:var(--amber);
     background:#1c1608;border:1px solid #3a2c14;border-radius:5px;padding:2px 7px;margin-left:7px;vertical-align:middle;text-transform:uppercase}
+  .case-kicker{display:flex;align-items:center;gap:8px;padding-right:34px;font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--dim)}
+  .case-kicker .case-type{color:var(--type)}
+  .case-kicker .case-live{display:flex;align-items:center;gap:5px;color:var(--red)}
+  .case-kicker .case-live i{width:7px;height:7px;border-radius:50%;background:var(--red);animation:p 1.6s infinite}
+  .case-title{font-size:22px;line-height:1.28;font-weight:800;margin:12px 0 7px}
+  .case-place{font-size:12.5px;color:var(--dim);line-height:1.45}
+  .case-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);margin:17px -18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .case-fact{min-width:0;background:var(--panel);padding:13px 6px;text-align:center}
+  .case-fact b{display:block;font-size:19px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .case-fact b.hot{color:var(--red)}
+  .case-fact span{display:block;margin-top:3px;font-size:10px;line-height:1.3;color:var(--dim)}
+  .case-est{margin-top:5px;font-size:9.5px;color:#778398}
+  .case-indictment{font-size:13.5px;line-height:1.55;color:#cdd6e6;margin:15px 0 0}
+  .case-indictment b{color:var(--ink)}
+  .vote-row{display:grid;grid-template-columns:minmax(116px,auto) 1fr;gap:11px;align-items:center;margin-top:16px;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .vote-btn{display:flex;align-items:center;justify-content:center;gap:9px;min-height:48px;background:var(--red);color:#190b08;border:0;border-radius:8px;font-size:14px;font-weight:800;cursor:pointer}
+  .vote-btn .up{font-size:18px}.vote-btn .count{font-size:17px;font-variant-numeric:tabular-nums}
+  .vote-btn.done{background:#273244;color:var(--ink)}
+  .vote-copy{font-size:11.5px;line-height:1.4;color:var(--dim)}
+  .vote-copy b{color:var(--ink)}
+  .record-details{margin-top:14px;border-top:1px solid var(--line)}
+  .record-details summary{padding:14px 0 0;font-size:12.5px;font-weight:800;color:var(--amber);cursor:pointer;list-style-position:inside}
 
   /* ---------- findbar: search + locate, overlaid on the map (never reflows the flex layout) ---------- */
   .findbar{position:absolute;left:12px;right:12px;top:12px;z-index:650;display:flex;gap:8px;max-width:560px;margin:0 auto;pointer-events:none}
@@ -374,9 +400,9 @@
         <span class="tag">the city's own record of what it keeps closing — and keeps ignoring</span>
       </div>
       <div class="views" id="views">
-        <span class="vbtn on" data-v="map">Map</span>
-        <span class="vbtn" data-v="trends">Trends</span>
-        <span class="vbtn" data-v="disparity">Disparity</span>
+        <button class="vbtn on" type="button" data-v="map">Map</button>
+        <button class="vbtn" type="button" data-v="trends">Trends</button>
+        <button class="vbtn" type="button" data-v="disparity">Disparity</button>
       </div>
     </div>
     <div class="strip">
@@ -438,7 +464,7 @@
       <div class="dcap" id="d-cap"></div>
       <div id="d-bars"></div>
     </div></section>
-    <aside id="card"><span class="x" onclick="closeCard()">×</span><div class="card-pad" id="cardBody"></div></aside>
+    <aside id="card" aria-label="Issue details"><button class="x" type="button" aria-label="Close issue details" onclick="closeCard()">×</button><div class="card-pad" id="cardBody"></div></aside>
   </main>
 </div>
 
@@ -553,7 +579,7 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
   {attribution:'© OpenStreetMap © CARTO', maxZoom:19}).addTo(map);
 const canvas = L.canvas({padding:.5});
 
-function radius(n){ return Math.min(26, 4 + Math.sqrt(n)*0.9); }
+function radius(n,seen=0){ return Math.min(28, 4 + Math.sqrt(n)*0.82 + Math.sqrt(seen)*1.4); }
 
 let showResolved = false, meLayer = null;
 // --- Zoom-based grid clustering (zero-dep, keeps the canvas-circle look) ---
@@ -584,7 +610,7 @@ function draw(){
       const resolved = i.status==='resolved';
       L.circleMarker([i.lat,i.lng], {
         renderer:canvas,
-        radius: radius(i.n) * (persist?1.18:1),
+        radius: radius(i.n,i.seen) * (persist?1.12:1),
         color: col, weight: persist?2:1,
         fillColor: col,
         fillOpacity: resolved?0.12:(persist?0.6:0.42),
@@ -598,8 +624,9 @@ function draw(){
   for(const i of shown){
     const k = Math.round(i.lat/g)+'_'+Math.round(i.lng/g);
     let c = cells.get(k);
-    if(!c){ c = {sumN:0, slat:0, slng:0, w:0, topN:-1, topType:null, anyActive:false}; cells.set(k,c); }
+    if(!c){ c = {sumN:0,sumSeen:0,slat:0,slng:0,w:0,topN:-1,topType:null,anyActive:false}; cells.set(k,c); }
     c.sumN += i.n; c.slat += i.lat*i.n; c.slng += i.lng*i.n; c.w += i.n;
+    c.sumSeen += Number(i.seen)||0;
     if(i.n > c.topN){ c.topN = i.n; c.topType = i.type; }
     if(i.status==='active') c.anyActive = true;
   }
@@ -607,7 +634,7 @@ function draw(){
     const lat = c.slat/c.w, lng = c.slng/c.w, col = TYPES[c.topType].c;
     L.circleMarker([lat,lng], {
       renderer:canvas,
-      radius: Math.min(30, radius(c.sumN)*1.05),
+      radius: Math.min(30, radius(c.sumN,c.sumSeen)*1.05),
       color: col, weight: 1, fillColor: col,
       fillOpacity: c.anyActive?0.42:0.16, opacity: c.anyActive?0.85:0.4
     }).on('click', ()=>{ map.flyTo([lat,lng], Math.min(FULL_ZOOM+1, z+3), {duration:.7}); }).addTo(layer);
@@ -668,7 +695,7 @@ function sheetCopy(){
 
 let current = null, selStatus = null, photoData = null;
 const STATUS_LABEL = {still_here:'Still here', worse:'Got worse', cleaned:'Cleaned up', gone:'Gone'};
-const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function ago(ts){
   const s=(Date.now()-new Date(ts).getTime())/1000;
   if(s<60) return 'just now';
@@ -720,15 +747,32 @@ function renderSparkline(el, eps, type){
   const end = Date.parse((DATA_THROUGH||eps[eps.length-1][1])+'T00:00:00Z');
   const span = Math.max(1, end-start);
   const W=320,H=30, x = t => ((Date.parse(t+'T00:00:00Z')-start)/span)*W;
-  const maxC = Math.max(...eps.map(e=>e[2]));
-  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="none">`;
-  svg += `<line x1="0" y1="${H-3}" x2="${W}" y2="${H-3}" stroke="#1d2737"/>`;
-  eps.forEach(([s,e,c])=>{
-    const x1=x(s), x2=Math.max(x(e),x1+2), h=4+(c/maxC)*(H-9);
-    svg += `<rect x="${x1.toFixed(1)}" y="${(H-3-h).toFixed(1)}" width="${(x2-x1).toFixed(1)}" height="${h.toFixed(1)}" rx="1.5" fill="${col}" opacity="0.9"/>`;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="none" aria-label="Reported activity over time">`;
+  svg += `<line x1="0" y1="15" x2="${W}" y2="15" stroke="#273244" stroke-width="3"/>`;
+  eps.forEach(([s,e])=>{
+    const x1=x(s), x2=Math.max(x(e),x1+3);
+    svg += `<rect x="${x1.toFixed(1)}" y="10" width="${(x2-x1).toFixed(1)}" height="10" rx="3" fill="${col}" opacity="0.9"/>`;
   });
   svg += `</svg>`;
   el.innerHTML = svg + `<div class="sl-ax"><span>${eps[0][0].slice(0,7)}</span><span>${eps.length} episode${eps.length>1?'s':''}</span><span>now</span></div>`;
+}
+
+function fmtCost(n){
+  n=Number(n)||0;
+  if(n>=1000) return '~$'+(n>=10000?Math.round(n/1000):(n/1000).toFixed(1).replace('.0',''))+'k';
+  return '~$'+Math.round(n);
+}
+function fmtCostRange(i){
+  const b=i&&i.response_labor;
+  return b ? fmtCost(b.low)+'-'+fmtCost(b.planning).replace(/^~/,'') : fmtCost(i&&i.estimated_cost);
+}
+function caseTitle(i){
+  const days=Math.max(1,Number(i.current_days)||1);
+  if(i.status!=='active') return `${TYPES[i.type].label} reports at this block have gone quiet.`;
+  if(i.type==='Encampment') return `An encampment has been reported on this block for ${fmt(days)} days straight.`;
+  if(i.type==='Drug Activity') return `Drug activity has been reported on this block for ${fmt(days)} days straight.`;
+  if(i.type==='Panhandling') return `Panhandling has been reported on this block for ${fmt(days)} days straight.`;
+  return `Requests for homeless assistance have continued on this block for ${fmt(days)} days.`;
 }
 
 function openCard(i){
@@ -737,45 +781,55 @@ function openCard(i){
   const rd = (i.avg_return_days!=null) ? i.avg_return_days : null;
   const rdTxt = rd==null ? null : (rd < 1 ? 'the same day' : (rd < 1.5 ? '1 day' : rd+' days'));
   if(window.pulse) window.pulse('issue_open',{type:i.type,id:i.id,reports:i.n});
+  const addr=esc((i.addr||'Approximate block location').replace(/\s+/g,' ').trim());
+  const nothing=Number(i.nothing_found)||0;
   document.getElementById('cardBody').innerHTML = `
-    <span class="badge" style="background:${t.c}">${t.label}</span>
-    <div class="addr">${(i.addr||'Unknown location').replace(/\s+/g,' ').trim()}</div>
-    <div class="sub">${i.borough||''} · ${i.agency||'NYC'} · Council District ${i.council||'—'} · CB ${i.board||'—'} · ~1 block area</div>
-    ${i.headline?`<div class="damning">${esc(i.headline)}${i.score!=null?`<span class="sc">score ${i.score}</span>`:''}</div>`:''}
-
-    <div class="status ${PAT[i.pattern].cls}">
-      <span class="sdot"></span>${PAT[i.pattern].label}
-      <span class="sm">${statusLine(i)}</span>
-      ${i.episode_count>1?`<span class="rec">flared up ${i.episode_count}×</span>`:''}
+    <div class="case-kicker" style="--type:${t.c}"><span class="case-type">${esc(t.label)}</span><span>·</span><span class="case-live">${i.status==='active'?'<i></i>Active now':'Historical record'}</span></div>
+    <div class="case-title">${esc(caseTitle(i))}</div>
+    <div class="case-place">${addr}${i.borough?` · ${esc(i.borough)}`:''} · Council District ${esc(i.council||'—')} · approximate block</div>
+    <div class="case-facts">
+      <div class="case-fact"><b>${fmt(i.n)}</b><span>311 reports</span></div>
+      <div class="case-fact"><b class="hot">${fmt(i.closed_n)}</b><span>city closures</span></div>
+      <div class="case-fact"><b class="hot">${fmtCostRange(i)}</b><span>response labor range</span></div>
     </div>
-    <div class="spark" id="spark"></div>
-    <div class="predict">${predictLine(i)}</div>
+    <div class="case-est">From deduplicated response-days: one worker for 30 minutes to two workers for one hour, using NYPD published starting pay as the labor reference. Excludes cleanup, vehicles, overhead, shelter, and medical care. Not an audited bill.</div>
+    <div class="case-indictment">${i.headline?esc(i.headline):`First reported ${esc(i.first_seen)}.`}${nothing?` The city marked <b>${fmt(nothing)}</b> closures “nothing found.”`:''}${i.returned_n?` The same block was reported again after <b>${fmt(i.returned_n)}</b> closures.`:''}</div>
 
-    ${i.status==='active'?`<div class="clock" id="clock" data-first="${i.first_seen}">
-      <div class="clock-top"><span class="clock-days" id="clkD">—</span><span class="clock-unit">days the city hasn't fixed this</span></div>
-      <div class="clock-tick" id="clkT">—</div>
-      <div class="clock-sub">First reported ${i.first_seen}. Closed <b>${fmt(i.closed_n)}×</b> since — every closure is a tick on the clock, not a stop.</div>
-      ${i.impossible_closures>0?`<div class="clock-flag">⚠ ${fmt(i.impossible_closures)} ${i.impossible_closures==1?'closure was':'closures were'} timestamped <b>before</b> the report was even filed.</div>`:''}
-    </div>`:''}
-
-    <div class="sect city">
-      <div class="sect-h">🏛 The city’s story</div>
-      <div class="cityline">Reported <b>${fmt(i.n)}×</b> since ${i.first_seen}. Marked
-        <b>“resolved” ${fmt(i.closed_n)}×</b>. It came back <b>${fmt(i.returned_n)}×</b>${rdTxt?` — ${rdTxt} after they closed it`:''}.</div>
-      <div class="cite">their numbers, not the truth ↓</div>
+    <div class="vote-row">
+      <button class="vote-btn" id="seenBtn" type="button" onclick="seeOften()"><span class="up">▲</span><span>Confirm</span><span class="count" id="voteCount">${fmt(i.seen||0)}</span></button>
+      <div class="vote-copy"><b>See this here now?</b><br>One confirmation per person.</div>
     </div>
-    ${i.disparity?`<div class="disp-badge ${dispCls(i.disparity)}" onclick="openDisparity('${i.type.replace(/'/g,"\\'")}')">${dispBadgeText(i)}</div>`:''}
 
     <div class="sect truth">
-      <div class="sect-h">What’s actually there</div>
+      <div class="sect-h">What neighbors confirm</div>
       <div id="verdict" class="verdict none">checking the block…</div>
       <div id="thread" class="thread"></div>
     </div>
 
     <div class="acts">
-      <button class="seen-btn" id="seenBtn" onclick="seeOften()">I see this often</button>
-      <button class="add-btn" onclick="toggleForm()">Add what you see →</button>
+      <button class="add-btn" onclick="toggleForm()">Add what you see</button>
     </div>
+    <details class="record-details">
+      <summary>Full city record</summary>
+      <div class="status ${PAT[i.pattern].cls}">
+        <span class="sdot"></span>${PAT[i.pattern].label}
+        <span class="sm">${statusLine(i)}</span>
+        ${i.episode_count>1?`<span class="rec">${i.episode_count} periods of activity</span>`:''}
+      </div>
+      <div class="spark" id="spark"></div>
+      <div class="predict">${predictLine(i)}</div>
+      ${i.status==='active'?`<div class="clock" id="clock" data-first="${esc(i.first_seen)}">
+        <div class="clock-top"><span class="clock-days" id="clkD">—</span><span class="clock-unit">days since the first report</span></div>
+        <div class="clock-tick" id="clkT">—</div>
+        <div class="clock-sub">First reported ${esc(i.first_seen)}. Closed <b>${fmt(i.closed_n)}×</b> since. A closure ends a ticket, not this public record.</div>
+        ${i.impossible_closures>0?`<div class="clock-flag">${fmt(i.impossible_closures)} ${i.impossible_closures==1?'closure was':'closures were'} timestamped before the report was filed.</div>`:''}
+      </div>`:''}
+      <div class="sect city">
+        <div class="sect-h">The city’s record</div>
+        <div class="cityline">Reported <b>${fmt(i.n)}×</b> since ${esc(i.first_seen)}. Marked <b>resolved ${fmt(i.closed_n)}×</b>. Reported again after <b>${fmt(i.returned_n)} closures</b>${rdTxt?` — typically ${rdTxt} later`:''}.</div>
+      </div>
+      ${i.disparity?`<div class="disp-badge ${dispCls(i.disparity)}" onclick="openDisparity('${i.type.replace(/'/g,"\\'")}')">${dispBadgeText(i)}</div>`:''}
+    </details>
     <a class="receipt-link" href="${i.campaign?'/c':'/i'}?t=${encodeURIComponent(i.type)}&id=${encodeURIComponent(i.id)}" target="_blank" rel="noopener" onclick="window.pulse&&window.pulse('receipt_open',{type:i.type,id:i.id})">${i.campaign?'Active campaign - join it &rarr;':'&#128196; Get the public receipt - names who&#39;s accountable, built to post &rarr;'}</a>
     <div class="pform" id="pform" hidden>
       <textarea id="ptext" maxlength="500" placeholder="What do you actually see here right now? (anonymous)"></textarea>
@@ -906,16 +960,21 @@ function renderThread(t){
 function syncSeen(t){
   const it = ALL.find(x=>x.type===current.type && x.id===current.id);
   if(it) it.seen = t.corrob;
+  const count=document.getElementById('voteCount'); if(count) count.textContent=fmt(t.corrob||0);
+  draw();
 }
 
 async function seeOften(){
   const i = current, btn = document.getElementById('seenBtn');
-  btn.disabled = true; btn.classList.add('done'); btn.textContent = '✓ Seen';
+  btn.disabled = true; btn.classList.add('done');
   if(window.pulse) window.pulse('see_often',{type:i.type,id:i.id});
   try{
     const r = await fetch('/api/seen',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:i.type,id:i.id})});
-    const t = await r.json(); renderThread(t); syncSeen(t);
-  }catch(e){}
+    const t = await r.json();
+    if(!r.ok) throw new Error(t.error||'Could not confirm');
+    renderThread(t); syncSeen(t);
+    btn.querySelector('span:nth-child(2)').textContent=t.duplicate?'Confirmed':'Confirmed';
+  }catch(e){ btn.disabled=false; btn.classList.remove('done'); }
 }
 
 async function submitPost(){
@@ -942,7 +1001,8 @@ async function submitPost(){
 function buildChips(){
   const c = document.getElementById('chips');
   Object.entries(TYPES).forEach(([k,v])=>{
-    const el = document.createElement('div');
+    const el = document.createElement('button');
+    el.type='button';
     el.className='chip on'; el.innerHTML=`<span class="dot" style="background:${v.c}"></span>${v.label}`;
     el.onclick=()=>{ if(active.has(k)){active.delete(k);el.classList.remove('on');}
       else{active.add(k);el.classList.add('on');} draw(); };
@@ -1300,6 +1360,12 @@ function routeFromLocation(){
     const it=ALL.find(i=>i.type===t && i.id===id);
     if(it){ focusIssue(it); return; }
   }
+  const focus=qs.get('focus');
+  if(focus){
+    const cut=focus.indexOf('|'), t=cut>=0?focus.slice(0,cut):'', id=cut>=0?focus.slice(cut+1):'';
+    const it=ALL.find(i=>i.type===t && i.id===id);
+    if(it){ focusIssue(it); return; }
+  }
   if(qs.get('geo')==='1'){ showMap(); locateMe(); return; }
   if(qs.get('boro')){ const slug=qs.get('boro'); showMap();
     const c=BORO_CENTER[slug]||[40.735,-73.98]; const go=()=>map.setView(c,13); mapBooted?go():setTimeout(go,150); return; }
@@ -1313,7 +1379,16 @@ function routeFromLocation(){
 
 (async function(){
   buildChips();
-  ALL = await (await fetch('/api/issues')).json();
+  try{
+    const response=await fetch('/api/issues');
+    if(!response.ok) throw new Error('issues unavailable');
+    ALL=await response.json();
+    if(!Array.isArray(ALL)||!ALL.length) throw new Error('empty issue set');
+  }catch(e){
+    document.getElementById('hint').textContent='The public record is temporarily unavailable. Retrying…';
+    setTimeout(()=>location.reload(),15000);
+    return;
+  }
   const reports = ALL.reduce((a,i)=>a+i.n,0);
   const closed = ALL.reduce((a,i)=>a+i.closed_n,0);
   const back = ALL.reduce((a,i)=>a+i.returned_n,0);

@@ -18,7 +18,8 @@ const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
 const crypto = require('crypto');
 
-const db = new DatabaseSync(path.join(__dirname, 'data', 'ugc.db'));
+const dataDir = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
+const db = new DatabaseSync(path.join(dataDir, 'ugc.db'));
 db.exec(`
   CREATE TABLE IF NOT EXISTS posts(
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,7 +37,9 @@ db.exec(`
 const cols = db.prepare(`PRAGMA table_info(posts)`).all().map(c => c.name);
 if (!cols.includes('photo')) db.exec(`ALTER TABLE posts ADD COLUMN photo TEXT`);
 if (!cols.includes('mod'))   db.exec(`ALTER TABLE posts ADD COLUMN mod TEXT NOT NULL DEFAULT 'pending'`);
+if (!cols.includes('ip_hash')) db.exec(`ALTER TABLE posts ADD COLUMN ip_hash TEXT`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_posts_mod ON posts(mod)`);
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_seen_ip ON posts(issue_key,ip_hash) WHERE kind='seen' AND ip_hash IS NOT NULL`);
 
 // ---- Campaign table ----
 // Day-N is NOT stored here — it derives at render from the issue's current episode start.
@@ -50,6 +53,16 @@ db.exec(`
     won_at     TEXT
   );
   CREATE UNIQUE INDEX IF NOT EXISTS idx_campaigns_key ON campaigns(issue_key);
+
+  CREATE TABLE IF NOT EXISTS campaign_organizers(
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    issue_key  TEXT NOT NULL,
+    email      TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    ip_hash    TEXT,
+    UNIQUE(issue_key, email)
+  );
+  CREATE INDEX IF NOT EXISTS idx_campaign_organizers_issue ON campaign_organizers(issue_key);
 `);
 // Forward migration: add won_at if missing on older DBs.
 {
@@ -68,11 +81,27 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_actions_issue ON actions(issue_key);
   CREATE INDEX IF NOT EXISTS idx_actions_ts ON actions(ts);
+
+  CREATE TABLE IF NOT EXISTS action_receipts(
+    token       TEXT PRIMARY KEY,
+    issue_key   TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    target      TEXT,
+    created_at  TEXT NOT NULL,
+    ip_hash     TEXT,
+    link_requests INTEGER NOT NULL DEFAULT 0,
+    first_link_request_at TEXT,
+    last_link_request_at TEXT,
+    sender_confirmed_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_action_receipts_issue ON action_receipts(issue_key);
 `);
 // Forward migration: add ip_hash if missing on older DBs.
 {
   const actCols = db.prepare(`PRAGMA table_info(actions)`).all().map(c => c.name);
   if (!actCols.includes('ip_hash')) db.exec(`ALTER TABLE actions ADD COLUMN ip_hash TEXT`);
+  const receiptCols = db.prepare(`PRAGMA table_info(action_receipts)`).all().map(c => c.name);
+  if (!receiptCols.includes('sender_confirmed_at')) db.exec(`ALTER TABLE action_receipts ADD COLUMN sender_confirmed_at TEXT`);
 }
 
 // ---- Areas table (shareable ZONE bundles — many issue-cells under one permalink) ----
@@ -142,14 +171,21 @@ const qCampInsert   = db.prepare(`INSERT OR IGNORE INTO campaigns(issue_key,star
 const qCampGet      = db.prepare(`SELECT * FROM campaigns WHERE issue_key=?`);
 const qCampSetStatus = db.prepare(`UPDATE campaigns SET status=?, won_at=? WHERE issue_key=?`);
 const qCampAll      = db.prepare(`SELECT * FROM campaigns`);
+const qOrganizerInsert = db.prepare(`INSERT OR IGNORE INTO campaign_organizers(issue_key,email,created_at,ip_hash) VALUES(?,?,?,?)`);
 
 // Action prepared statements.
 const qActInsert    = db.prepare(`INSERT INTO actions(issue_key,action_type,ts,ip_hash) VALUES(?,?,?,?)`);
 const qActByIssue   = db.prepare(`SELECT action_type, ts FROM actions WHERE issue_key=? ORDER BY id ASC`);
 const qActHas       = db.prepare(`SELECT 1 FROM actions WHERE issue_key=? AND action_type=? LIMIT 1`);
 const qActFirst     = db.prepare(`SELECT ts FROM actions WHERE issue_key=? AND action_type=? ORDER BY id ASC LIMIT 1`);
+const qReceiptInsert = db.prepare(`INSERT INTO action_receipts(token,issue_key,action_type,target,created_at,ip_hash) VALUES(?,?,?,?,?,?)`);
+const qReceiptGet = db.prepare(`SELECT * FROM action_receipts WHERE token=?`);
+const qReceiptClick = db.prepare(`UPDATE action_receipts SET link_requests=link_requests+1,
+  first_link_request_at=COALESCE(first_link_request_at,?), last_link_request_at=? WHERE token=?`);
+const qReceiptConfirm = db.prepare(`UPDATE action_receipts SET sender_confirmed_at=? WHERE token=? AND sender_confirmed_at IS NULL`);
 
-const qInsert  = db.prepare(`INSERT INTO posts(issue_key,ts,kind,text,status,photo,mod) VALUES(?,?,?,?,?,?,?)`);
+const qInsert  = db.prepare(`INSERT INTO posts(issue_key,ts,kind,text,status,photo,mod,ip_hash) VALUES(?,?,?,?,?,?,?,?)`);
+const qSeenInsert = db.prepare(`INSERT OR IGNORE INTO posts(issue_key,ts,kind,text,status,photo,mod,ip_hash) VALUES(?,?,'seen',NULL,'still_here',NULL,'approved',?)`);
 const qByIssue = db.prepare(`SELECT id,ts,kind,text,status,photo FROM posts WHERE issue_key=? AND mod='approved' ORDER BY id DESC LIMIT 80`);
 const qCounts  = db.prepare(`
   SELECT issue_key,
@@ -182,10 +218,15 @@ function thread(issueKey) {
   };
 }
 
-function addPost(issueKey, kind, text, status, photo) {
+function addPost(issueKey, kind, text, status, photo, ipHash) {
   const mod = kind === 'seen' ? 'approved' : 'pending';    // taps live; reports wait for Paul
-  qInsert.run(issueKey, new Date().toISOString(), kind, text || null, status || null, photo || null, mod);
+  qInsert.run(issueKey, new Date().toISOString(), kind, text || null, status || null, photo || null, mod, ipHash || null);
   return { ...thread(issueKey), pending: mod === 'pending' };
+}
+
+function addSeen(issueKey, ipHash) {
+  const result = qSeenInsert.run(issueKey, new Date().toISOString(), ipHash || null);
+  return { ...thread(issueKey), duplicate: Number(result.changes) === 0 };
 }
 
 function countsAll() {
@@ -225,6 +266,10 @@ function allCampaigns() {
   return qCampAll.all();
 }
 
+function addCampaignOrganizer(issueKey, email, ipHash) {
+  qOrganizerInsert.run(issueKey, email.trim().toLowerCase(), new Date().toISOString(), ipHash || null);
+}
+
 // ---- Action functions ----
 
 function logAction(issueKey, actionType, ipHash) {
@@ -261,8 +306,30 @@ function firstActionTs(issueKey, actionType) {
   return r ? r.ts : null;
 }
 
-module.exports = { addPost, thread, countsAll, pending, pendingCount, decide,
-  startCampaign, getCampaign, setCampaignStatus, allCampaigns,
+function createActionReceipt(issueKey, actionType, target, ipHash) {
+  const token = crypto.randomBytes(16).toString('hex');
+  qReceiptInsert.run(token, issueKey, actionType, target || null, new Date().toISOString(), ipHash || null);
+  return qReceiptGet.get(token);
+}
+
+function getActionReceipt(token) {
+  return qReceiptGet.get(token) || null;
+}
+
+function recordReceiptLinkRequest(token) {
+  const now = new Date().toISOString();
+  qReceiptClick.run(now, now, token);
+  return qReceiptGet.get(token) || null;
+}
+
+function confirmActionReceipt(token) {
+  const result = qReceiptConfirm.run(new Date().toISOString(), token);
+  return { receipt: qReceiptGet.get(token) || null, changed: Number(result.changes) === 1 };
+}
+
+module.exports = { addPost, addSeen, thread, countsAll, pending, pendingCount, decide,
+  startCampaign, getCampaign, setCampaignStatus, allCampaigns, addCampaignOrganizer,
   logAction, actionCounts, hasAction, firstActionTs,
+  createActionReceipt, getActionReceipt, recordReceiptLinkRequest, confirmActionReceipt,
   createArea, getArea, bumpAreaShare, bumpAreaView,
   upsertHotspot, listHotspots };

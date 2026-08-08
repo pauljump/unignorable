@@ -46,7 +46,6 @@
 </header>
 <div class="wrap" id="wrap"><div class="empty-state">Loading…</div></div>
 <script>
-const K = new URLSearchParams(location.search).get('k') || '';
 const STATUS_LABEL = {still_here:'Still here',worse:'Got worse',cleaned:'Cleaned up',gone:'Gone now'};
 const esc = s => (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function ago(ts){const s=(Date.now()-new Date(ts).getTime())/1000;
@@ -55,7 +54,7 @@ function ago(ts){const s=(Date.now()-new Date(ts).getTime())/1000;
 
 async function load(){
   let data;
-  try{ const r = await fetch(`/api/review?k=${encodeURIComponent(K)}`);
+  try{ const r = await fetch('/api/review');
        if(r.status===401){document.getElementById('wrap').innerHTML='<div class="err">Not authorized.</div>';return;}
        data = await r.json(); }
   catch(e){ document.getElementById('wrap').innerHTML='<div class="err">Could not load.</div>'; return; }
@@ -88,7 +87,7 @@ async function decide(id, action, btn){
   [...card.querySelectorAll('button')].forEach(b=>b.disabled=true);
   btn.textContent = action==='approve'?'Approving…':'Rejecting…';
   try{
-    const r = await fetch(`/api/review/decide?k=${encodeURIComponent(K)}`,{
+    const r = await fetch('/api/review/decide',{
       method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action})});
     const t = await r.json();
     if(t.ok){ card.style.transition='opacity .2s'; card.style.opacity='0';

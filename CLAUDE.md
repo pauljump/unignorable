@@ -11,26 +11,37 @@ Thesis proof (real data, 2026-06-18): NYC's #1 outcome for the 199,865 "Encampme
 ## How We Build Together
 
 Portfolio policy: `/Users/mini-home/Desktop/Monorepo/control-plane/AGENT-CORE.md`.
-## Architecture (v0 skeleton — "feel it" build)
+## Architecture
 
 ```
-~/unignorable/                 # OUT of the monorepo (stable dir, like jumpbank/rexair demos) — bridge worktrees reset
-  server.js                    # zero-dep Node http server. GET / , GET /api/issues , POST /api/seen
-  index.html                   # single-page Leaflet map (CARTO dark, no key) + Issue card + "I see this often"
+/Users/mini-home/Desktop/Monorepo/unignorable/
+  server.js                    # zero-dep Node HTTP server and server-rendered campaign/area pages
+  index.html                   # single-page Leaflet map, dossier card, trends, and disparity views
+  ugc.js                       # node:sqlite citizen reports, confirmations, campaigns, actions, areas
+  vendor/                      # self-hosted Leaflet 1.9.4 assets
+  scripts/build.js             # deterministic issue, narrative, cost, episode, trend, disparity build
+  scripts/refresh.sh           # daily Socrata ingest -> atomic build -> PM2 restart
+  tests/                       # client syntax and HTTP smoke tests
   data/
-    issues.json               # 12,232 pre-clustered Issues (3.1MB) — the moat output
-    seen.json                 # live "I see this often" tallies (persisted on POST)
+    issues.json                # generated; current issue payload
+    trends.json                # generated monthly trend payload
+    disparity.json             # generated district comparison payload
+    ugc.db                     # mutable production state; never commit or overwrite during deploy
+    photos/                    # moderated citizen proof; never commit
 ```
 
-- **Data source:** reuses sidewalk's `data/sidewalk.db` (510K 311 rows, 5-yr backfill) read-only. No re-ingest.
+- **Data source:** reuses `../sidewalk/data/sidewalk.db`; `refresh.sh` performs a daily incremental Socrata ingest before rebuilding.
 - **The clustering engine (the moat):** groups sr311 points by ~110m grid cell (`round(lat,3),round(lng,3)`) × complaint_type into Issues with: count, centroid, first/last seen, `nothing_found` count (city visited + closed "nothing found"), representative address, council district, community board.
 - **Types in v0:** Encampment, Drug Activity, Homeless Person Assistance, Panhandling (the 4 quality-of-life types sidewalk ingested).
 
-### Regenerate issues.json
+Runtime state defaults to `./data` and can be relocated with `DATA_DIR`. The source tree never assumes that code and mutable data must be deployed together.
+
+### Build and verify
 
 ```bash
-DB=/Users/mini-home/Desktop/Monorepo/sidewalk/data/sidewalk.db
-# see the SQL in the 2026-06-18 build (groups by type + rounded cell, HAVING n>=5)
+npm run verify
+node scripts/build.js
+bash scripts/refresh.sh
 ```
 
 ## Deploy
@@ -42,15 +53,18 @@ DB=/Users/mini-home/Desktop/Monorepo/sidewalk/data/sidewalk.db
 Cloudflare: ingress + DNS CNAME added via API (mini-dev tunnel). `unignorable.app` available — buy when ready.
 
 ```bash
-pm2 restart unignorable        # after editing server.js / index.html / issues.json
+pm2 start ecosystem.config.cjs --only unignorable
+pm2 restart unignorable
 ```
 
 ## Current State
 
-**Status:** LIVE skeleton (2026-06-18) at https://unignorable.polyfeeds.dev — pm2 `unignorable` :8000, pm2 save'd.
-
-**🚧 IN FLIGHT (2026-07-13) — MAJOR REDESIGN approved, handing off to Codex. READ [`REDESIGN.md`](REDESIGN.md) FIRST.**
-Reframe: stop rendering *what was reported*, render **what's confirmed here now, what it actually is, how long it's been ignored, what it's costing the city** — and let people **upvote** it. Full plan, audit anchors, the researched **cost model** (constants + formula, 335 2nd Ave = $18,130), prior-art patterns, and next steps all in `REDESIGN.md`. **Phase 0 is done:** 3 glanceable card mocks live at `/design/card-a-dossier`, `/design/card-b-vote`, `/design/card-c-cost` — **awaiting Paul's pick**, then map-treatment mock, then the Phase 1 build. Canonical plan file: `~/.claude/plans/okay-with-unignorable-i-sparkling-pudding.md`.
+**Status:** LIVE from the monorepo at https://unignorable.polyfeeds.dev; Campaign 001 is the launch front door.
+**Last updated:** 2026-08-02
+**What just shipped:** Campaign 001 now identifies the location as near 246 East 20th Street and separates approximate-block requests, address-specific evidence, agency observations/outreach, and a dated organizer observation. The daily build regenerates campaign evidence and an address-state model from raw 311 rows. A citywide proximity engine refreshes 7,400 K-12/childcare sites from NYC Planning's Facilities Database and reports literal counts/distances for every issue. The cost model now prices only deduplicated response-day/classes as a transparent labor range; it never infers cleanup from an episode. Verified District 2 actions, permanent action receipts, and tracked evidence links remain.
+**Product direction captured 2026-08-02:** Paul likes the CityTracker.ai posture: a map-first professional operating system, not an advocacy landing page. Translate that into "CityTracker for unresolved civic failures": dense map + ranked list + location dossier + campaign mode + watchlists/alerts + methodology/freshness surfaces. The differentiator is the action loop: facts -> impact -> accountable official -> human action -> receipts -> outcome. Avoid copying real-estate filter overload or hiding the core value behind account gates.
+**What's next:** add first-party organizer follow-up delivery and sender confirmation; then redesign around the CityTracker-style workspace. If Unignorable later sends email itself, record provider acceptance and tracking-pixel requests as separate weak signals; never label them proof of a human open.
+**What's blocking:** in-app browser control is unavailable in this Codex session, so visual screenshot QA remains a manual device pass; rendered HTML and HTTP interaction verification pass.
 
 **Shipped 2026-07-12 — AREA (ZONE) SHARE — the sharable bundle of many bubbles under one permalink (Phase 1 of 2) — LIVE:**
 - **Why:** every map bubble is one ~1-block cell with its own `/c` permalink + share counter, but a real-world story (e.g. the NY Post "12-block encampment near the Intrepid") is a *zone*. The app knew cells, not zones. This adds the zone object.
@@ -80,21 +94,17 @@ Reframe: stop rendering *what was reported*, render **what's confirmed here now,
 - **Data freshness pipeline** — `scripts/refresh.sh` = sidewalk incremental 311 ingest (free Socrata, no LLM) → `node scripts/build.js` (rebuild issues.json + trends.json) → `pm2 restart unignorable`, logged to `data/refresh.log`. Scheduled daily 06:30 via launchd `~/Library/LaunchAgents/com.pauljump.unignorable.refresh.plist` (calendar-only, RunAtLoad=false). Header shows a live "current through {date} · refreshed daily" stamp from max last_seen.
   - **⚠️ GOTCHA (fixed 2026-06-19, took the site down once):** the launchd job has NO TCC access to the Desktop-located `sidewalk.db`, so the `/usr/bin/sqlite3` CLI fails with "authorization denied". The Node binary DOES have access (the ingest proves it). So the builder MUST be Node (`build.js`, uses `node:sqlite`), never the sqlite3 CLI. `build.js` also writes ATOMICALLY (temp→rename) + refuses to write suspiciously small output — so a denied/failed run can never leave an empty issues.json and crash the server again. `build-issues.sh`/`build-trends.sh` are now thin wrappers → `build.js`.
 
-- **Temporal / episode model (Location › Episode › Report)** — fixes "listing every issue ever." Each location's report timeline is split into **episodes** (instances) via an **adaptive gap** `G* = clamp(4 × the location's own median inter-report gap, 21d, 90d)` — the spot defines its own "normal," silence beyond G* ends an episode / means resolved (sessionization; survival-analysis is the principled generalization). Two axes: **status** = active (silence ≤ G*) vs likely-resolved (silence > G*, confidence = silence/G*); **pattern** = persistent (current run ≥120d) / ongoing / emerging / resolved; **recurrence** = episode_count badge. Real distribution: 360 persistent, 3,721 ongoing, 22 emerging, **8,334 resolved (67% — the dilution Paul flagged)**, 4,103 active. Computed in `build.js` (daily, so status stays live). **Map defaults to active+chronic** (~4,100, persistent emphasized/bigger); resolved behind a "show resolved (history)" toggle (faded). Card shows: status banner, an **episode sparkline** (lazy via `/api/episodes`), and a **prediction claim** ("Model: likely resolved — silent 90d vs its 21d cadence; neighbors, is it gone?"). Params K/MIN/MAX/PERSIST tunable at top of build.js.
+- **Temporal models** — map cells retain the broad reporting-episode model `G* = clamp(4 × median inter-request gap, 21d, 90d)`. Configured campaign addresses additionally use `address-state-v1`: positive agency observations and outreach contacts anchor occupation support; `G* = clamp(4 × median address-report gap, 30d, 60d)`. Longer gaps between supporting observations are interruption candidates. A gap is "likely" only at `2 × G*`, or `1.5 × G*` with a negative-only inspection. Same-day positive/negative conflicts remain visible. The 0-100 continuity confidence weights report frequency first and is an evidence index, not a probability or proof of one unchanged object or cleanup.
 - **Commentary thread layer (UGC × 311, both first-class)** — every Issue card is now a public thread, not a stat. **City 311 data = the BAIT** ("🏛 The city's story: reported N×, marked 'resolved' M×, came back…"), **citizen commentary = the TRUTH** below it. Model: the Issue is a neutral spine; we seed from 311 now but it's ready for citizen-born issues later. **Citizen verdict defines "fixed"** (still_here / worse / cleaned / gone), overriding the city's "closed". Verdict shows the contradiction: "🚩 STILL HERE — the city calls this 'resolved.' the block says otherwise." UGC store = `ugc.js` + `data/ugc.db` via **built-in `node:sqlite`** (zero npm deps, no flag needed on node 22.22). Endpoints: GET `/api/thread`, POST `/api/post` (text + optional status), POST `/api/seen` (one-tap corroborate). All anonymous, no account.
 
 ## Refresh / keep data fresh
 ```bash
-bash ~/unignorable/scripts/refresh.sh      # manual full refresh (ingest + rebuild + reload)
-tail -f ~/unignorable/data/refresh.log     # watch the daily job
+bash /Users/mini-home/Desktop/Monorepo/unignorable/scripts/refresh.sh
+tail -f /Users/mini-home/Desktop/Monorepo/unignorable/data/refresh.log
 launchctl list | grep unignorable          # confirm the schedule is loaded
 ```
 
-**Durability follow-ups (NOT yet done — needed for a proper "land"):**
-- Add to repo `ecosystem.config.js` (zero-dep node entry) so it's in the canonical boot list
-- Add port 8000 row to `brain/playbooks/local-dev-deploy.md` registry
-- Register in dash (`dash/src/lib/config.ts` SUBDOMAINS) so it shows on dash.polyfeeds.dev
-- Mark `sidewalk/CLAUDE.md` consolidated (it still says "Status: live")
+**Durability follow-ups completed 2026-07-13:** canonical PM2 entry, port registry, dashboard registration, tracked launchd job, configurable runtime data path, and smoke-test gate.
 
 **Shipped 2026-06-23 — EXPERIENCE OVERHAUL ("The Record" landing + narrative engine + near-me + map perf) — LIVE:**
 - Built via a 13-agent background **Workflow** (scout → 3-direction design panel + judge → build → 5-dim audit → fix) in an isolated copy `/tmp/unig-build` (live site never touched mid-build), then **screenshot-verified + hand-corrected** before landing. Commit `6ee7e01`.
@@ -119,7 +129,7 @@ launchctl list | grep unignorable          # confirm the schedule is loaded
 - **Why this exists (Paul's framing):** our path is to **submit reports to 311 on the citizen's behalf**. NYC has *no public 311 submission API* (portal is MS Dynamics; reCAPTCHA at the end) — so per the `civic-311-assist-and-proof` playbook + muster, filing is **assisted: we pre-fill, a human taps Submit**, and that's also the smarter play (bot-clustered submissions are trivially detectable + easier for the city to dismiss). So before anything carries our name into 311, **Paul reviews it personally.** The actual 311-filing flow is the *next* phase ("eventually"); this session built the gate it hangs off.
 - **Report lifecycle:** `pending` → `approved` (public + queued for 311) → *(filed w/ SR# — the deferred assisted-311 build)* → *(tracked via Socrata proof loop, already solved in muster)*.
 - **Moderation model:** a REPORT (`kind='comment'` — photo and/or written description, the thing we'd file to 311) lands `mod='pending'`, invisible to the public until approved. A TAP (`kind='seen'` — "I see this often") is live corroboration, not a filing, so it stays instant. Clean line: **content waits for Paul, taps stay live.** Public read paths (thread/counts/verdict) only ever reflect `mod='approved'`.
-- **Paul's review surface:** token-gated mobile page **`/review?k=<KEY>`** (dark UI matching the app). Each pending card shows the photo (big), description, status, and the Issue's location/type/council (the 311-relevant context), with **Approve** (publish + queue) / **Reject** (discard + delete photo file). Key: `process.env.REVIEW_KEY` else a once-generated secret in `data/admin-key` (gitignored); printed to pm2 logs at boot (`review queue → /review?k=…`). `GET /api/review`, `POST /api/review/decide` both 401 without the key.
+- **Paul's review surface:** token-gated mobile page **`/review?k=<KEY>`** (dark UI matching the app). The bootstrap URL immediately exchanges the key for an HttpOnly, Secure, SameSite=Strict cookie and redirects to clean `/review`, keeping the secret out of browser history and API URLs. Each pending card shows the photo, description, status, and Issue context, with **Approve** / **Reject**. Key: `process.env.REVIEW_KEY` else `data/admin-key` (gitignored). The review APIs return 401 without the cookie.
 - **Submitter honesty:** form button is now "Submit for review" + a note ("A person reviews every report before it's published — and before we file it to the city on your behalf"); after submit they get a "pending review" acknowledgment, never a fake "it's live."
 - DB: `posts.mod` column (migrated; index created *after* the ALTER — an index-before-column ordering bug crashed the boot once, fixed). Verified end-to-end over the live tunnel (submit→hidden→queue→approve→public; reject→photo deleted→stays hidden; wrong key→401). **Awaiting Paul's on-device QA of the review page.**
 
@@ -130,8 +140,8 @@ launchctl list | grep unignorable          # confirm the schedule is loaded
 - **`POST /api/act`** — momentum tracking (append-only, ip_hash stored never rendered, existing 12/5min rate limit, allowlist rejects coming/unknown types 400) → momentum feed on the page ("N neighbors acted this week"). Prepared actions log on tap-to-open; the app PREPARES, a human always SENDS (mailto/X-intent only — zero autonomous sends).
 - **Escalation ladder = computed state** (`ladderState()`): Day 0 email official → Day 7 CB agenda → Day 14 press tip → Day 21 public card; recurrence (new episode after campaign start) re-fires it. Page prompts the ONE next action.
 - **`/c` campaign page** (aliases `/i`, `/issue`, `/campaign` — same render, receipt preserved as the evidence block): Day-N hero, severity rank computed live "by severity score" (the 6/25 session's "#7 citywide/#3 district" numbers do NOT hold against current data — never hardcode ranks), THE ASK, action rail, momentum feed, UGC thread. Map cards flag `campaign:true` issues → "Active campaign - join it".
-- **Campaign #1 seeded (the canary):** `Encampment|40.736,-73.983` = **335 2nd Ave**, the encampment across from Paul's kids' school. Real numbers: **189 reports, 169 closures, 44 "nothing found", 9 episodes, current episode unbroken since 2025-09-09** (Day 297 at ship). District 2 = **Harvey Epstein** (took the seat Jan 2026 → all copy is PRESENT-TENSE "who can act today", so "I just got here" isn't a dodge). ⚠️ The old demo used the WRONG cell (`-73.985`); there's also a decoy `-73.982` — match `40.736,-73.983` exactly.
-- **THE ONE RULE (locked, load-bearing):** name PUBLIC OFFICIALS in their OFFICIAL capacity with the city's OWN data — NEVER name/describe/characterize the people experiencing homelessness. Every ask is service-first: DHS outreach list + connect people to services + durable prevention (the post-Mamdani reality: sweeps paused Jan 2026, DHS outreach-first since Mar 11; Sheepshead Bay = the one durable clearance, council-member-convened + fenced). Law block stays Encampment-only (§16-122) — conservative = un-rebuttable.\n- **CF gotcha (fixed):** Cloudflare Email Obfuscation rewrote every `mailto:` into `/cdn-cgi/l/email-protection` JS-decoded links — the core action button was hostage to CF's script. Fixed with a scoped config rule (zone polyfeeds.dev, phase `http_config_settings`): `http.host eq "unignorable.polyfeeds.dev"` → `email_obfuscation: false`. Rest of the fleet untouched.
+- **Campaign #1 seeded (the canary):** `Encampment|40.736,-73.983`, displayed as **near 246 East 20th Street**. The address-specific state model currently supports continuous occupation from **2026-03-18**, after a likely inactive interval following **2026-01-25** and renewed support on March 18. This is a modeled interruption/return, not a documented cleanup. District 2 = **Harvey Epstein**. The old demo used the wrong cell (`-73.985`); there is also a decoy `-73.982`, so match `40.736,-73.983` exactly.
+- **THE ONE RULE (locked, load-bearing):** name PUBLIC OFFICIALS in their OFFICIAL capacity with the city's OWN data — NEVER name/describe/characterize the people experiencing homelessness. Every ask is service-first: connect people to DHS services, restore pedestrian access, assign agency ownership, and verify durable follow-up. School proximity raises the urgency of the city's response failure; it is never used to characterize a person as dangerous. Law block stays Encampment-only (§16-122) — conservative = un-rebuttable.\n- **CF gotcha (fixed):** Cloudflare Email Obfuscation rewrote every `mailto:` into `/cdn-cgi/l/email-protection` JS-decoded links — the core action button was hostage to CF's script. Fixed with a scoped config rule (zone polyfeeds.dev, phase `http_config_settings`): `http.host eq "unignorable.polyfeeds.dev"` → `email_obfuscation: false`. Rest of the fleet untouched.
 - **Gitignore trap (fixed):** `data/*.json` is gitignored (correct for generated issues/trends) but silently excluded the CONFIG registries — action_types/community_boards/press_tips/officials are now force-added (`git add -f`). New config files in data/ must be force-added or they aren't backed up.
 - **Human verification still needed:** CB6 district-manager email in `community_boards.json` (`mcb6@cb.nyc.gov`) is a plausible placeholder — confirm before real CB use (degrades to CAU if wrong, never auto-sends). Minor known wart: Day-N hero (live calendar days) vs the evidence block's "Unbroken for N days" (data-window days) can differ by ~2 — pre-existing narrative-engine property, self-adjusts daily.
 
@@ -139,7 +149,7 @@ launchctl list | grep unignorable          # confirm the schedule is loaded
 - Built from `brain/research/unignorable/2026-07-06-spec-inaction-clock-disparity-engine.md`. Staged in `/tmp/unig-disparity` (live never touched mid-build), screenshot-verified headless, landed + `pm2 restart`, verified live. All compute in `build.js` (daily, no LLM, `node:sqlite`); two new read-only endpoints.
 - **DISPARITY ENGINE** — the district-level "whose block does the city write off?" wedge. **Key finding: close-TIME does NOT discriminate** for these NYPD-handled types — they're closed in ~0.1 days citywide, everywhere. The metric that varies (and is on-thesis: closure ≠ resolution) is the **dismissal rate** = share of a district's closed complaints the city marked "nothing found / could not locate," from the city's OWN `resolution_description`. Encampment ranges **37% (D2/D3 Manhattan) → 91% (D51 Staten Island)** = a real 2.5× gap. Computed **per complaint TYPE** (apples-to-apples), and **only for types with a genuine signal** — Encampment (48%) + Homeless Person Assistance (44%); Drug Activity/Panhandling resolutions don't use that language (~0%) so they're **excluded to avoid manufacturing a false pattern** (legal-guardrail #3). Output `data/disparity.json` (gitignored, regenerated daily) → `/api/disparity` (gzipped). Surfaces: new **Disparity view** (Map/Trends/Disparity toggle, type chips, ranked worst-first district bars, cited headline accusation) + **per-Issue badge** on the card (honest about direction — a district can be better OR worse than citywide; badge is red/neutral/green accordingly). 10,203 issues stamped with `i.disparity`.
 - **INACTION CLOCK** — per-Issue live-ticking counter: days since first report, HH:MM:SS ticking, "every closure is a tick on the clock, not a stop." **Gated to `status==='active'` only** (honesty fix caught in QA: don't tell a likely-resolved block "the city hasn't fixed this" while the episode model predicts it's gone). **Fabricated-closure flag**: `impossible_closures` = closures timestamped strictly BEFORE their triggering report existed (conservative, un-rebuttable — the "20% addressed before submitted" pathology the Council data documents) + `phantom_closure_score` (0–100, blends impossible + nothing-found + fast-return). Copy cites the record, never asserts intent.
-- **Decisions made (were open in the spec):** granularity = council district primary (borough roll-up in payload); phantom window = conservative (closed strictly before created); headline = disparity runs ALONGSIDE "67% came back," not replacing it. **Data note for copy:** worst-Encampment-dismissal district = **D51 Staten Island (91%)**; campaign #1's block (335 2nd Ave, D2 Manhattan) sits in the LEAST-dismissed district (37%) — its power is persistence, not disparity (the badge says so honestly).
+- **Decisions made (were open in the spec):** granularity = council district primary (borough roll-up in payload); phantom window = conservative (closed strictly before created); headline = disparity runs alongside recurrence, not replacing it. Campaign #1's power is address-level frequency, agency observations, outreach, and proximity impact; never hardcode changing citywide rank statistics in copy.
 - **NOT done (deferred from the spec's step 3):** corroboration→escalation auto-advance (when "I see this often" taps cross a threshold, auto-advance the campaign ladder per the Schiff collective-signal evidence). Touches campaign/ladder mutation state — left for a focused follow-up. Also deferred: a citywide disparity share-card, and surfacing the clock on the `/c` campaign page (currently map-card only).
 
 **NEXT SESSION — pick up here (open threads, in priority order):**
@@ -152,5 +162,5 @@ launchctl list | grep unignorable          # confirm the schedule is loaded
 4. The repo housekeeping batch above (ecosystem/registry/dash/sidewalk-CLAUDE) — all live stuff works without it; it's about boot-canonical + visibility.
 5. Maybe-later: share card per Issue (populus OG-card pattern → travels to X/press/council); fold in muster as the voice report path; bounties marketplace (the old `snitch` idea).
 
-**Backup:** this dir is git-backed at the `unignorable` GitHub repo (last recorded push 2026-06-19). Commit intentionally scoped changes locally; push only when the current task authorizes publication.
+**Backup:** source now lives in the monorepo. Mutable `data/` needs filesystem backup; it is intentionally gitignored.
 ```

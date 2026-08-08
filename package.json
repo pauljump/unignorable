@@ -1,0 +1,16 @@
+{
+  "name": "unignorable",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NYC 311 accountability map and public issue record",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check ugc.js && node --check scripts/build.js && node --check scripts/refresh-sensitive-sites.js && node tests/check-client.js",
+    "refresh:sites": "node scripts/refresh-sensitive-sites.js",
+    "test": "node --test tests/smoke.test.js",
+    "verify": "npm run check && npm test"
+  }
+}
