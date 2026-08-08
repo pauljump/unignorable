@@ -10,7 +10,7 @@ Thesis proof (real data, 2026-06-18): NYC's #1 outcome for the 199,865 "Encampme
 
 ## How We Build Together
 
-Monorepo collaboration protocol. Main by default; branch + PR only when Paul asks.
+Monorepo collaboration protocol. Use the repository workflow recorded in `brain/control-plane/repo-ownership.json`; keep branch/PR choices explicit.
 
 ## Architecture
 
