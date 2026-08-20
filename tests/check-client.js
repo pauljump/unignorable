@@ -18,7 +18,8 @@ for (const [index, source] of scripts.entries()) {
 for (const id of ['forecast-card', 'forecast-title', 'forecast-window', 'forecast-route', 'forecast-verify', 'forecast-check', 'forecast-evidence']) {
   if (!html.includes(`id="${id}"`)) throw new Error(`prediction-first control is missing: ${id}`);
 }
-if (!html.includes("enabled:new Set(['homelessness'])")) throw new Error('the default map should foreground forecastable civic conditions');
+if (!html.includes('enabled:new Set()')) throw new Error('the default map should keep supporting layers out of the foreground');
+if (!html.includes('width:calc(100vw - 16px);max-width:calc(100vw - 16px)')) throw new Error('the mobile forecast shell must fit inside the viewport');
 if (!html.includes("feature?.local_time_window||nowcast.local_time_window")) throw new Error('the client must accept the nested forecast time-window contract');
 if (!html.includes('nowcast.uncalibrated_score') || !html.includes('nowcast.score_range')) throw new Error('the client must prefer the explicit uncalibrated score contract');
 if (!html.includes("'Historical reports most often arrived'")) throw new Error('historical report timing must not be presented as an exact future prediction');
