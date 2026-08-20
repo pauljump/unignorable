@@ -1,0 +1,38 @@
+{
+  "meta": {
+    "generated_at": "2026-08-09T12:00:00.000Z",
+    "fixture": true,
+    "sources": {
+      "alpr": { "ok": true, "count": 3, "refreshed_at": "2026-08-09T12:00:00.000Z" },
+      "nyc311": { "ok": true, "count": 6, "refreshed_at": "2026-08-09T12:00:00.000Z" }
+    },
+    "layer_freshness": {
+      "alpr": { "status": "fresh", "refreshed_at": "2026-08-09T12:00:00.000Z" },
+      "homelessness": { "status": "fresh", "refreshed_at": "2026-08-09T12:00:00.000Z" },
+      "drugs": { "status": "fresh", "refreshed_at": "2026-08-09T12:00:00.000Z" },
+      "dumping": { "status": "fresh", "refreshed_at": "2026-08-09T12:00:00.000Z" },
+      "sidewalk": { "status": "fresh", "refreshed_at": "2026-08-09T12:00:00.000Z" },
+      "street": { "status": "fresh", "refreshed_at": "2026-08-09T12:00:00.000Z" },
+      "signals": { "status": "fresh", "refreshed_at": "2026-08-09T12:00:00.000Z" }
+    },
+    "chronic_definition": { "min_reports": 5, "min_span_days": 30, "recent_days": 180, "lookback_years": 5 },
+    "caveats": [
+      "Mapped ALPR locations are public observations, not a complete or live inventory.",
+      "Flock Safety is named only when manufacturer tags identify it.",
+      "311 clusters require recurrence and recent activity; a report is not proof a condition is present now."
+    ]
+  },
+  "layers": {
+    "alpr": [
+      { "id": "osm-node-1", "layer": "alpr", "lat": 40.7505, "lng": -73.9936, "manufacturer": "Flock Safety", "manufacturer_raw": "Flock Safety", "operator": "NYPD", "observed_at": "2026-07-01", "source": "OpenStreetMap", "source_url": "https://www.openstreetmap.org/node/1" },
+      { "id": "osm-node-2", "layer": "alpr", "lat": 40.7395, "lng": -73.9751, "manufacturer": null, "manufacturer_raw": null, "operator": null, "observed_at": null, "source": "OpenStreetMap", "source_url": "https://www.openstreetmap.org/node/2" },
+      { "id": "osm-node-3", "layer": "alpr", "lat": 40.7266, "lng": -73.9576, "manufacturer": "Motorola Solutions", "manufacturer_raw": "Vigilant", "operator": null, "observed_at": null, "source": "OpenStreetMap", "source_url": "https://www.openstreetmap.org/node/3" }
+    ],
+    "homelessness": [{ "id": "311-encampment-1", "layer": "homelessness", "subject_type": "encampment", "lat": 40.746, "lng": -73.987, "count": 22, "complaint_type": "Encampment", "descriptor": "Likely encampment present", "first_seen": "2024-01-01T00:00:00.000", "last_seen": "2026-08-01T00:00:00.000", "location_uncertainty_m": 35, "condition": { "classification": "likely_present", "label": "Likely encampment present", "presence_probability": 0.84, "probability_range": [0.70, 0.98], "routing_level": "hard", "hard_exclusion": true, "last_observed_at": "2026-08-01T12:00:00.000Z", "method_version": "encampment-presence-v2" }, "responses": { "nypd_responded": 9, "nypd_observed_encampment": 3, "arrests": 0, "summonses": 0, "dhs_outreach": 5 }, "source": "NYC 311", "source_url": "https://data.cityofnewyork.us/d/erm2-nwe9" }],
+    "drugs": [{ "id": "311-drugs-1", "layer": "drugs", "lat": 40.741, "lng": -73.979, "count": 15, "complaint_type": "Drug Activity", "descriptor": "Use Outside", "first_seen": "2024-03-01T00:00:00.000", "last_seen": "2026-08-02T00:00:00.000", "responses": { "nypd_responded": 8, "nypd_observed_encampment": 0, "arrests": 1, "summonses": 2, "dhs_outreach": 0 }, "source": "NYC 311", "source_url": "https://data.cityofnewyork.us/d/erm2-nwe9" }],
+    "dumping": [{ "id": "311-dumping-1", "layer": "dumping", "lat": 40.744, "lng": -73.984, "count": 38, "complaint_type": "Illegal Dumping", "descriptor": "Chronic Dumping", "first_seen": "2022-01-01T00:00:00.000", "last_seen": "2026-07-30T00:00:00.000", "source": "NYC 311", "source_url": "https://data.cityofnewyork.us/d/erm2-nwe9" }],
+    "sidewalk": [{ "id": "311-sidewalk-1", "layer": "sidewalk", "lat": 40.736, "lng": -73.976, "count": 17, "complaint_type": "Sidewalk Condition", "descriptor": "Broken Sidewalk", "first_seen": "2023-01-01T00:00:00.000", "last_seen": "2026-07-29T00:00:00.000", "source": "NYC 311", "source_url": "https://data.cityofnewyork.us/d/erm2-nwe9" }],
+    "street": [{ "id": "311-street-1", "layer": "street", "lat": 40.731, "lng": -73.968, "count": 26, "complaint_type": "Street Condition", "descriptor": "Pothole", "first_seen": "2021-01-01T00:00:00.000", "last_seen": "2026-08-01T00:00:00.000", "source": "NYC 311", "source_url": "https://data.cityofnewyork.us/d/erm2-nwe9" }],
+    "signals": [{ "id": "311-signals-1", "layer": "signals", "lat": 40.725, "lng": -73.96, "count": 11, "complaint_type": "Traffic Signal Condition", "descriptor": "Pedestrian Signal", "first_seen": "2024-01-01T00:00:00.000", "last_seen": "2026-08-02T00:00:00.000", "source": "NYC 311", "source_url": "https://data.cityofnewyork.us/d/erm2-nwe9" }]
+  }
+}

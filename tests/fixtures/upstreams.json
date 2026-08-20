@@ -1,0 +1,26 @@
+{
+  "geocode": {
+    "penn station": [{ "name": "Penn Station, Manhattan, NY", "lat": 40.7506, "lng": -73.9935 }],
+    "williamsburg": [{ "name": "Williamsburg, Brooklyn, NY", "lat": 40.7189, "lng": -73.9582 }]
+  },
+  "routes": {
+    "driving": [
+      { "distance": 7200, "duration": 1320, "geometry": { "type": "LineString", "coordinates": [[-73.9935,40.7506],[-73.984,40.744],[-73.9751,40.7395],[-73.968,40.731],[-73.9582,40.7189]] }, "steps": [{ "instruction": "Head east", "distance": 7200, "duration": 1320, "type": "depart" }] },
+      { "distance": 8300, "duration": 1500, "geometry": { "type": "LineString", "coordinates": [[-73.9935,40.7506],[-73.987,40.746],[-73.968,40.731],[-73.9582,40.7189]] }, "steps": [{ "instruction": "Head southeast", "distance": 8300, "duration": 1500, "type": "depart" }] }
+    ],
+    "walking": [
+      { "distance": 6500, "duration": 5100, "geometry": { "type": "LineString", "coordinates": [[-73.9935,40.7506],[-73.984,40.744],[-73.9751,40.7395],[-73.9582,40.7189]] }, "steps": [{ "instruction": "Walk east", "distance": 6500, "duration": 5100, "type": "depart" }] },
+      { "distance": 6900, "duration": 5400, "geometry": { "type": "LineString", "coordinates": [[-73.9935,40.7506],[-73.987,40.746],[-73.968,40.731],[-73.9582,40.7189]] }, "steps": [{ "instruction": "Walk southeast", "distance": 6900, "duration": 5400, "type": "depart" }] }
+    ]
+  },
+  "avoided_routes": {
+    "driving": [
+      { "distance": 9100, "duration": 1710, "geometry": { "type": "LineString", "coordinates": [[-73.9935,40.7506],[-73.982,40.762],[-73.946,40.746],[-73.9582,40.7189]] }, "steps": [{ "instruction": "Take the avoidance route", "distance": 9100, "duration": 1710, "type": "depart" }] },
+      { "distance": 9400, "duration": 1800, "geometry": { "type": "LineString", "coordinates": [[-73.9935,40.7506],[-74.006,40.738],[-73.971,40.704],[-73.9582,40.7189]] }, "steps": [{ "instruction": "Take the alternate avoidance route", "distance": 9400, "duration": 1800, "type": "depart" }] }
+    ],
+    "walking": [
+      { "distance": 7600, "duration": 6100, "geometry": { "type": "LineString", "coordinates": [[-73.9935,40.7506],[-73.982,40.762],[-73.946,40.746],[-73.9582,40.7189]] }, "steps": [{ "instruction": "Walk the avoidance route", "distance": 7600, "duration": 6100, "type": "depart" }] },
+      { "distance": 7900, "duration": 6350, "geometry": { "type": "LineString", "coordinates": [[-73.9935,40.7506],[-74.006,40.738],[-73.971,40.704],[-73.9582,40.7189]] }, "steps": [{ "instruction": "Walk the alternate avoidance route", "distance": 7900, "duration": 6350, "type": "depart" }] }
+    ]
+  }
+}

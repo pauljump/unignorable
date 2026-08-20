@@ -7,6 +7,9 @@ const path = require('path');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const ugc = require('./ugc');
+const { pointInGeoJSON, routeHitFeatures, scoreRoute, featureRadius, featureRisk, plausibleRoutes, chooseRecommended, exportUrls, simplifyWalkingSteps, LAYER_RADII } = require('./map-core');
+const { routingLevel } = require('./condition-model');
+const { buildHB295Checklist } = require('./hb295-evidence');
 
 // --- Geocode (OpenStreetMap Nominatim), proxied + cached server-side. NYC-bounded. ---
 // Nominatim usage policy requires a descriptive User-Agent and an identifiable contact; bounded
@@ -14,7 +17,8 @@ const ugc = require('./ugc');
 const NYC_VIEWBOX = '-74.2591,40.9176,-73.7004,40.4774'; // left,top,right,bottom
 const GEO_UA = 'unignorable/1.0 (NYC 311 accountability map; +https://unignorable.polyfeeds.dev)';
 const geoCache = new Map(); // LRU: query → JSON string of [{name,lat,lng}]
-function geocode(q) {
+let geocodeQueue = Promise.resolve(), lastGeocodeAt = 0;
+function fetchGeocode(q) {
   return new Promise((resolve, reject) => {
     const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=5&addressdetails=0'
       + '&countrycodes=us&bounded=1&viewbox=' + encodeURIComponent(NYC_VIEWBOX)
@@ -23,6 +27,7 @@ function geocode(q) {
       let b = ''; r.on('data', c => b += c);
       r.on('end', () => {
         try {
+          if (r.statusCode < 200 || r.statusCode >= 300) throw new Error(`geocode status ${r.statusCode}`);
           const arr = JSON.parse(b);
           const out = (Array.isArray(arr) ? arr : []).slice(0, 5).map(x => ({
             name: x.display_name, lat: +x.lat, lng: +x.lon,
@@ -36,9 +41,37 @@ function geocode(q) {
   });
 }
 
+function geocode(q) {
+  const fixture = UPSTREAM_FIXTURES && UPSTREAM_FIXTURES.geocode && UPSTREAM_FIXTURES.geocode[q.toLowerCase()];
+  if (fixture) return Promise.resolve(JSON.stringify(fixture));
+  const run = async () => {
+    const wait = Math.max(0, 1050 - (Date.now() - lastGeocodeAt));
+    if (wait) await new Promise(resolve => setTimeout(resolve, wait));
+    lastGeocodeAt = Date.now();
+    return fetchGeocode(q);
+  };
+  const queued = geocodeQueue.then(run, run);
+  geocodeQueue = queued.catch(() => {});
+  return queued;
+}
+
 const DIR = __dirname;
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(DIR, 'data'));
 const PORT = process.env.PORT || 8000;
+const HOST = process.env.HOST || '0.0.0.0';
+const NYC_BOUNDARY = JSON.parse(fs.readFileSync(path.join(DIR, 'config', 'nyc-boroughs.geojson'), 'utf8'));
+const JURISDICTIONS = new Map();
+try {
+  const jurisdictionDir = path.join(DIR, 'config', 'jurisdictions');
+  for (const name of fs.readdirSync(jurisdictionDir).filter(file => file.endsWith('.json'))) {
+    const config = JSON.parse(fs.readFileSync(path.join(jurisdictionDir, name), 'utf8'));
+    if (config && config.id) JURISDICTIONS.set(config.id, config);
+  }
+} catch {}
+let UPSTREAM_FIXTURES = null;
+if (process.env.UPSTREAM_FIXTURES) {
+  try { UPSTREAM_FIXTURES = JSON.parse(fs.readFileSync(path.resolve(process.env.UPSTREAM_FIXTURES), 'utf8')); } catch {}
+}
 const ISSUES = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'issues.json'), 'utf8'));
 const TRENDS = fs.readFileSync(path.join(DATA_DIR, 'trends.json'));
 // Disparity engine output (the city's own dismissal-rate gap between districts). Degrades to empty
@@ -62,6 +95,37 @@ try { PRESS_TIPS = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'press_tips.js
 let CAMPAIGN_CONTEXT = {}, CAMPAIGN_EVIDENCE = {};
 try { CAMPAIGN_CONTEXT = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'campaign_context.json'), 'utf8')); } catch {}
 try { CAMPAIGN_EVIDENCE = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'campaign_evidence.json'), 'utf8')); } catch {}
+
+let MAP_LAYERS = null;
+try { MAP_LAYERS = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'map-layers.json'), 'utf8')); } catch {}
+const MAP_LAYERS_RAW = MAP_LAYERS ? Buffer.from(JSON.stringify(MAP_LAYERS)) : null;
+const MAP_LAYERS_GZ = MAP_LAYERS_RAW ? zlib.gzipSync(MAP_LAYERS_RAW) : null;
+const MAP_FEATURE_BY_ID = new Map(Object.values(MAP_LAYERS?.layers || {}).flat()
+  .filter(feature => feature?.id).map(feature => [feature.id, feature]));
+
+// Live discovery is intentionally separate from the durable civic-map artifact. These are
+// public, customer-facing availability signals, cached briefly and never stored as trip history.
+const liveDiscoveryCache = new Map();
+async function cachedLiveJson(key, url, maxAgeMs) {
+  const cached = liveDiscoveryCache.get(key);
+  if (cached && Date.now() - cached.at < maxAgeMs) return cached.value;
+  const response = await fetch(url, { headers: { 'user-agent': GEO_UA, accept: 'application/json' }, signal: AbortSignal.timeout(5000) });
+  if (!response.ok) throw new Error(`live source status ${response.status}`);
+  const value = await response.json(); liveDiscoveryCache.set(key, { at: Date.now(), value }); return value;
+}
+async function nearbyCitiBike(lat, lng) {
+  const [info, status] = await Promise.all([
+    cachedLiveJson('citibike-info', 'https://gbfs.citibikenyc.com/gbfs/en/station_information.json', 24 * 60 * 60 * 1000),
+    cachedLiveJson('citibike-status', 'https://gbfs.citibikenyc.com/gbfs/en/station_status.json', 20 * 1000),
+  ]);
+  const byId = new Map((status.data?.stations || []).map(item => [item.station_id, item]));
+  return (info.data?.stations || []).map(station => {
+    const current = byId.get(station.station_id) || {}, distance = distanceMeters(lat, lng, Number(station.lat), Number(station.lon));
+    return { id: station.station_id, name: station.name, lat: Number(station.lat), lng: Number(station.lon),
+      bikes: Number(current.num_bikes_available || 0), docks: Number(current.num_docks_available || 0), distance: Math.round(distance) };
+  }).filter(station => Number.isFinite(station.lat) && Number.isFinite(station.lng) && station.distance <= 1800 && (station.bikes || station.docks))
+    .sort((a, b) => a.distance - b.distance).slice(0, 70);
+}
 
 // Action type registry — DATA, not code. Actions are addable as a row with no server rebuild.
 let ACTION_TYPES = [];
@@ -102,15 +166,31 @@ const MIME = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
 // Basic per-IP write limiter — first guard on the open, anonymous post path (full moderation still TODO).
 const WINDOW_MS = 5 * 60 * 1000, MAX_WRITES = 12;
 const hits = new Map();
-const clientIp = (req) =>
-  req.headers['cf-connecting-ip'] ||
-  (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
-  req.socket.remoteAddress || 'unknown';
+// Trust Cloudflare's connecting-IP header only when the deployment guarantees that requests can
+// reach this process through the trusted proxy and the proxy overwrites the incoming header.
+// Direct/local runs deliberately ignore all caller-supplied forwarding headers.
+const TRUST_PROXY_HEADERS = process.env.TRUST_PROXY_HEADERS === '1';
+const clientIp = (req) => TRUST_PROXY_HEADERS
+  ? (req.headers['cf-connecting-ip'] || req.socket.remoteAddress || 'unknown')
+  : (req.socket.remoteAddress || 'unknown');
 function rateLimited(req) {
   const ip = clientIp(req), now = Date.now();
   const recent = (hits.get(ip) || []).filter(t => now - t < WINDOW_MS);
   if (recent.length >= MAX_WRITES) { hits.set(ip, recent); return true; }
   recent.push(now); hits.set(ip, recent);
+  return false;
+}
+
+// Route changes are automatic UI reads, not user-authored writes. A separate, more generous
+// limiter prevents ordinary typing, mode switches, and filter exploration from locking routing
+// for five minutes while still bounding abuse of the shared public router.
+const ROUTE_WINDOW_MS = 60 * 1000, MAX_ROUTES = 60;
+const routeHits = new Map();
+function routeRateLimited(req) {
+  const ip = clientIp(req), now = Date.now();
+  const recent = (routeHits.get(ip) || []).filter(t => now - t < ROUTE_WINDOW_MS);
+  if (recent.length >= MAX_ROUTES) { routeHits.set(ip, recent); return true; }
+  recent.push(now); routeHits.set(ip, recent);
   return false;
 }
 
@@ -137,6 +217,196 @@ const sendMaybeGzip = (req, res, body, type) => {
   }
   return send(res, 200, body, type);
 };
+
+const NYC_POINT = point => pointInGeoJSON(point, NYC_BOUNDARY);
+const VALHALLA_URL = process.env.VALHALLA_URL || 'https://valhalla1.openstreetmap.de/route';
+const ROUTE_CACHE_TTL_MS = 45 * 1000;
+const routeCache = new Map();
+function routeCacheKey(origin, destination, via, profile, selected) {
+  const point = value => value ? `${Number(value.lat).toFixed(5)},${Number(value.lng).toFixed(5)}` : '-';
+  return [point(origin), point(destination), point(via), profile, selected.slice().sort().join(',')].join('|');
+}
+function cachedRoute(key) {
+  const item = routeCache.get(key);
+  if (!item || Date.now() - item.storedAt > ROUTE_CACHE_TTL_MS) { routeCache.delete(key); return null; }
+  routeCache.delete(key); routeCache.set(key, item);
+  return item.payload;
+}
+function storeRoute(key, payload) {
+  routeCache.set(key, { storedAt: Date.now(), payload });
+  if (routeCache.size > 160) routeCache.delete(routeCache.keys().next().value);
+}
+function exclusionPolygon(area) {
+  // Public 311 points are rounded to roughly a block. A compact exclusion closes the nearest
+  // affected streets without cutting an entire neighborhood out of the pedestrian/road graph;
+  // the returned route is still verified against the wider disclosed scoring radius.
+  // The extra margin is intentional: a route that merely skirts the hard polygon must not still
+  // count as a selected crossing under the wider evidence buffer used by the verifier.
+  const radius = Math.min(Number(area.radius || 110) + 25, 145);
+  const latScale = radius / 110540;
+  const lngScale = radius / (111320 * Math.cos(Number(area.lat) * Math.PI / 180));
+  const ring = [];
+  for (let index = 0; index < 8; index++) {
+    const angle = index * Math.PI / 4;
+    ring.push([Number(area.lng) + Math.cos(angle) * lngScale, Number(area.lat) + Math.sin(angle) * latScale]);
+  }
+  ring.push(ring[0]);
+  return ring;
+}
+
+const ROUTE_STRATEGIES = Object.freeze({
+  driving: [
+    { name: 'fastest', options: { use_ferry: 0 } },
+    { name: 'shortest', options: { use_ferry: 0, shortest: true } },
+  ],
+  walking: [
+    { name: 'walkable', options: { use_ferry: 0, walkway_factor: 0.85, alley_factor: 2.4, driveway_factor: 5 } },
+    { name: 'shortest', options: { use_ferry: 0, shortest: true, walkway_factor: 0.9, alley_factor: 2.2, driveway_factor: 5 } },
+  ],
+});
+
+// A public router is shared infrastructure. Keep each interactive update bounded: one ordinary
+// route request (with Valhalla alternates) and, when needed, one focused avoidance request. The
+// old portfolio + beam fan-out could produce ten concurrent requests for a single map update.
+const PRIMARY_ROUTE_STRATEGY = Object.freeze({ driving: ROUTE_STRATEGIES.driving[0], walking: ROUTE_STRATEGIES.walking[0] });
+function directionSteps(route, profile) {
+  const steps = route && route.legs && route.legs.flatMap(leg => leg.steps || []) || [];
+  const normalized = steps.map(step => ({
+    instruction: step.maneuver && step.maneuver.instruction,
+    distance: Number(step.distance) || 0,
+    duration: Number(step.duration) || 0,
+    type: step.maneuver && step.maneuver.type || 'continue',
+    modifier: step.maneuver && step.maneuver.modifier || null,
+    location: Array.isArray(step.maneuver && step.maneuver.location) && step.maneuver.location.length >= 2
+      ? { lng: Number(step.maneuver.location[0]), lat: Number(step.maneuver.location[1]) } : null,
+  })).filter(step => step.instruction).slice(0, 80);
+  return profile === 'walking' ? simplifyWalkingSteps(normalized) : normalized;
+}
+
+function routeSignature(route) {
+  const coordinates = route.geometry && route.geometry.coordinates || [];
+  if (!coordinates.length) return `${Math.round(Number(route.distance) || 0)}|empty`;
+  const indexes = [...new Set([0, Math.floor(coordinates.length * 0.25), Math.floor(coordinates.length * 0.5), Math.floor(coordinates.length * 0.75), coordinates.length - 1])];
+  return `${Math.round(Number(route.distance) || 0)}|${indexes.map(index => (coordinates[index] || []).map(value => Number(value).toFixed(4)).join(',')).join(';')}`;
+}
+
+async function routeAlternatives(origin, destination, profile, excludeAreas = [], via = null) {
+  if (UPSTREAM_FIXTURES) {
+    const fixtureSet = excludeAreas.length ? UPSTREAM_FIXTURES.avoided_routes : UPSTREAM_FIXTURES.routes;
+    const fixtureRoutes = Array.isArray(fixtureSet) ? fixtureSet : fixtureSet && fixtureSet[profile];
+    if (Array.isArray(fixtureRoutes)) return { routes: fixtureRoutes.map(route => ({ ...route, strategy: 'fixture' })), source: 'deterministic fixture', cached: false, fixture: true };
+  }
+  const costing = profile === 'walking' ? 'pedestrian' : 'auto';
+  const strategy = PRIMARY_ROUTE_STRATEGY[profile] || PRIMARY_ROUTE_STRATEGY.driving;
+  const requestOne = async alternates => {
+    const payload = {
+      locations: [
+        { lat: Number(origin.lat), lon: Number(origin.lng), type: 'break' },
+        ...(via ? [{ lat: Number(via.lat), lon: Number(via.lng), type: 'break' }] : []),
+        { lat: Number(destination.lat), lon: Number(destination.lng), type: 'break' },
+      ],
+      costing, alternates, format: 'osrm', shape_format: 'geojson',
+      costing_options: { [costing]: strategy.options },
+      directions_options: { units: 'miles', directions_type: 'instructions' },
+    };
+    if (excludeAreas.length) {
+      // Use both primitives. The polygon handles a street corridor; the point exclusion protects
+      // the snapped edge itself when an engine's polygon index only sees ring crossings.
+      payload.exclude_polygons = excludeAreas.map(exclusionPolygon);
+      payload.exclude_locations = excludeAreas.map(area => ({ lat: Number(area.lat), lon: Number(area.lng), radius: Math.min(Number(area.radius || 110), 150) }));
+    }
+    const response = await fetch(VALHALLA_URL, {
+      method: 'POST', headers: { 'user-agent': GEO_UA, accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify(payload), signal: AbortSignal.timeout(6000),
+    });
+    if (!response.ok) throw Object.assign(new Error('route service unavailable'), { statusCode: 503 });
+    const result = await response.json();
+    if (result.code !== 'Ok' || !Array.isArray(result.routes) || !result.routes.length) {
+      throw Object.assign(new Error(`no plausible ${profile} ${strategy.name} route found`), { statusCode: 422 });
+    }
+    return result.routes.slice(0, 3).map(route => ({
+      distance: route.distance, duration: route.duration, geometry: route.geometry, strategy: strategy.name,
+      steps: directionSteps(route, profile),
+    }));
+  };
+  // Alternates offer the rider a choice without multiplying public-router load. If that optional
+  // work times out, retry once with the core route only instead of failing the entire trip.
+  let routes;
+  try { routes = await requestOne(2); }
+  catch { routes = await requestOne(0); }
+  if (!routes.length) throw Object.assign(new Error(`no plausible ${profile} route found`), { statusCode: 422 });
+  const unique = [], seen = new Set();
+  for (const route of routes) {
+    const signature = routeSignature(route);
+    if (seen.has(signature)) continue;
+    seen.add(signature); unique.push(route);
+  }
+  return { routes: unique, source: `Valhalla public routing service (${strategy.name})`, cached: false, fixture: false };
+}
+
+function scoreAlternatives(routes, layers, selected, pass, profile) {
+  return routes.map((route, index) => ({
+    ...scoreRoute({ id: `route-${pass}-${index + 1}`, distance: Number(route.distance), duration: Number(route.duration), geometry: route.geometry,
+      strategy: route.strategy, steps: profile === 'walking' ? simplifyWalkingSteps(route.steps) : (Array.isArray(route.steps) ? route.steps : []) }, layers, selected),
+    avoidance_generated: pass > 0,
+    avoidance_pass: pass,
+  }));
+}
+
+function newAvoidanceAreas(route, layers, selected, existing, origin, destination, via = null, limit = 4) {
+  const byLayer = routeHitFeatures(route, layers, selected);
+  // Uncertain observations can influence candidate ranking, but only high-confidence current
+  // conditions become hard graph exclusions. Cleared/absent observations never close a street.
+  const hits = selected.flatMap(layer => (byLayer[layer] || [])
+    .filter(feature => routingLevel(feature) === 'hard')
+    .map(feature => ({ feature, risk: featureRisk(feature) })))
+    .sort((a, b) => b.risk - a.risk || Number(b.feature.count || 0) - Number(a.feature.count || 0));
+  const out = [];
+  for (const { feature, risk } of hits) {
+    if (out.length >= limit) break;
+    const area = { lat: Number(feature.lat), lng: Number(feature.lng), radius: featureRadius(feature), layer: feature.layer, risk };
+    if (distanceMeters(area.lat, area.lng, Number(origin.lat), Number(origin.lng)) <= area.radius + 35) continue;
+    if (distanceMeters(area.lat, area.lng, Number(destination.lat), Number(destination.lng)) <= area.radius + 35) continue;
+    if (via && distanceMeters(area.lat, area.lng, Number(via.lat), Number(via.lng)) <= area.radius + 35) continue;
+    if ([...existing, ...out].some(point => distanceMeters(area.lat, area.lng, point.lat, point.lng) <= Math.max(area.radius, point.radius || 0))) continue;
+    out.push(area);
+  }
+  return out;
+}
+
+async function avoidanceRoutes(origin, destination, profile, layers, selected, via = null) {
+  let upstream = await routeAlternatives(origin, destination, profile, [], via);
+  const candidates = scoreAlternatives(upstream.routes, layers, selected, 0, profile);
+  const intersections = route => Number(route.selectedIntersections || 0);
+  const baselineIndex = chooseRecommended(candidates, profile);
+  const baselineRoute = candidates[baselineIndex];
+  const baselineIntersections = intersections(baselineRoute);
+  const baselineRisk = Number(baselineRoute?.riskScore || 0);
+  const excluded = [];
+  if (!selected.length) return { upstream, routes: candidates, excluded, passes: 0, baselineIntersections: 0, baselineRisk: 0, generatedCandidates: 0 };
+  const best = candidates[chooseRecommended(candidates, profile)];
+  const additions = newAvoidanceAreas(best, layers, selected, excluded, origin, destination, via, 3);
+  let passes = 0;
+  if (additions.length) {
+    // One compact batch gives the router a clear hard constraint without sending it into a slow
+    // neighborhood-scale search. On failure we deliberately retain the already-verified base route.
+    try {
+      upstream = await routeAlternatives(origin, destination, profile, additions, via);
+      candidates.push(...scoreAlternatives(upstream.routes, layers, selected, 1, profile));
+      excluded.push(...additions); passes = 1;
+    } catch {}
+  }
+  const seen = new Set();
+  const routes = plausibleRoutes(candidates, profile)
+    .sort((a, b) => (Number(a.riskScore ?? a.awarenessScore) || 0) - (Number(b.riskScore ?? b.awarenessScore) || 0) || a.duration - b.duration)
+    .filter(route => {
+      const signature = routeSignature(route);
+      if (seen.has(signature)) return false;
+      seen.add(signature); return true;
+    })
+    .slice(0, 3);
+  return { upstream, routes, excluded, passes, baselineIntersections, baselineRisk, generatedCandidates: candidates.filter(route => route.avoidance_generated).length };
+}
 
 // --- SEVERITY RANK PRECOMPUTATION ---
 // Two sorted-index maps keyed by issue_key:
@@ -192,7 +462,12 @@ function issuesPayload() {
   const out = ISSUES.map(({ episodes, headline_kind, ...i }) =>
     ({ ...i, seen: counts[key(i.type, i.id)] || 0, campaign: campaignKeys.has(key(i.type, i.id)) }));
   const raw = Buffer.from(JSON.stringify(out));
-  ISSUES_CACHE = { sig, raw, gz: zlib.gzipSync(raw) };
+  const compactRaw = Buffer.from(JSON.stringify(out.filter(i => i.status === 'active').map(i => ({
+    type:i.type,id:i.id,n:i.n,lat:i.lat,lng:i.lng,addr:i.addr,borough:i.borough,status:i.status,
+    pattern:i.pattern,score:i.score,current_days:i.current_days,last_seen:i.last_seen,headline:i.headline,
+    seen:i.seen,closed_n:i.closed_n,returned_n:i.returned_n
+  }))));
+  ISSUES_CACHE = { sig, raw, gz: zlib.gzipSync(raw), compactRaw, compactGz: zlib.gzipSync(compactRaw) };
   return ISSUES_CACHE;
 }
 const BODY_MAX = 3_000_000;
@@ -223,6 +498,73 @@ function authed(req, u) {
   const token = reviewToken(req, u);
   if (!REVIEW_KEY || token.length !== REVIEW_KEY.length) return false;
   return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(REVIEW_KEY));
+}
+
+// Route access is the paid product; browsing every public map layer stays free. Checkout is
+// user-triggered and uses inline Stripe price data, so there are no hidden product/price objects to
+// keep in sync. The signed pass is intentionally stateless and scoped to this browser.
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const ROUTE_PAYWALL_BYPASS = process.env.ROUTE_PAYWALL_BYPASS === '1';
+const ACCESS_COOKIE = 'unig_route_access';
+const ACCESS_PLANS = Object.freeze({
+  day: { amount: 100, seconds: 86400, label: '24-hour route pass' },
+  year: { amount: 2500, seconds: 365 * 86400, label: 'one-year route pass' },
+});
+const accessSecret = crypto.createHash('sha256').update(`unignorable-route-access\0${process.env.ACCESS_SIGNING_KEY || REVIEW_KEY}`).digest();
+function cookies(req) {
+  return Object.fromEntries((req.headers.cookie || '').split(';').map(value => value.trim()).filter(Boolean).map(value => {
+    const at = value.indexOf('=');
+    return at < 0 ? [value, ''] : [value.slice(0, at), decodeURIComponent(value.slice(at + 1))];
+  }));
+}
+function signAccess(payload) {
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto.createHmac('sha256', accessSecret).update(body).digest('base64url');
+  return `${body}.${signature}`;
+}
+function readAccess(req) {
+  if (ROUTE_PAYWALL_BYPASS) return { active: true, plan: 'bypass', expires_at: null };
+  const token = cookies(req)[ACCESS_COOKIE] || '';
+  const [body, signature] = token.split('.');
+  if (!body || !signature) return { active: false };
+  const expected = crypto.createHmac('sha256', accessSecret).update(body).digest();
+  let actual;
+  try { actual = Buffer.from(signature, 'base64url'); } catch { return { active: false }; }
+  if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) return { active: false };
+  try {
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    if (!ACCESS_PLANS[payload.plan] || !Number.isFinite(payload.exp) || payload.exp <= Math.floor(Date.now() / 1000)) return { active: false };
+    return { active: true, plan: payload.plan, expires_at: new Date(payload.exp * 1000).toISOString() };
+  } catch { return { active: false }; }
+}
+async function stripeRequest(pathname, params) {
+  if (!STRIPE_SECRET_KEY) throw Object.assign(new Error('Checkout is being connected. Please try again shortly.'), { statusCode: 503 });
+  const response = await fetch(`https://api.stripe.com/v1${pathname}`, {
+    method: params ? 'POST' : 'GET',
+    headers: { authorization: `Bearer ${STRIPE_SECRET_KEY}`, ...(params ? { 'content-type': 'application/x-www-form-urlencoded' } : {}) },
+    body: params ? params.toString() : undefined,
+    signal: AbortSignal.timeout(15000),
+  });
+  const payload = await response.json();
+  if (!response.ok) throw Object.assign(new Error(payload.error?.message || 'Checkout is temporarily unavailable.'), { statusCode: 502 });
+  return payload;
+}
+async function createRouteCheckout(planName) {
+  const plan = ACCESS_PLANS[planName];
+  if (!plan) throw Object.assign(new Error('Unknown access pass.'), { statusCode: 400 });
+  const params = new URLSearchParams({
+    mode: 'payment', customer_creation: 'always',
+    success_url: `${PUBLIC_ORIGIN}/access/complete?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${PUBLIC_ORIGIN}/?checkout=cancelled`,
+    'line_items[0][price_data][currency]': 'usd',
+    'line_items[0][price_data][unit_amount]': String(plan.amount),
+    'line_items[0][price_data][product_data][name]': `Unignorable ${plan.label}`,
+    'line_items[0][price_data][product_data][description]': 'Unlimited NYC avoidance routes on this browser during the access period.',
+    'line_items[0][quantity]': '1',
+    'metadata[product]': 'unignorable-route-access',
+    'metadata[plan]': planName,
+  });
+  return stripeRequest('/checkout/sessions', params);
 }
 
 // A report attaches to a city Issue; that Issue carries the location/type a 311 filing needs.
@@ -1539,7 +1881,32 @@ async function handleRequest(req, res) {
   const u = new URL(req.url, 'http://x');
 
   if (u.pathname === '/healthz') {
-    return send(res, 200, JSON.stringify({ ok: true, issues: ISSUES.length, dataThrough: ISSUES.reduce((a, i) => i.last_seen > a ? i.last_seen : a, '') }), 'application/json', { 'Cache-Control': 'no-store' });
+    return send(res, 200, JSON.stringify({ ok: true, issues: ISSUES.length, paywall: !ROUTE_PAYWALL_BYPASS, checkout: Boolean(STRIPE_SECRET_KEY), dataThrough: ISSUES.reduce((a, i) => i.last_seen > a ? i.last_seen : a, '') }), 'application/json', { 'Cache-Control': 'no-store' });
+  }
+
+  if (u.pathname === '/api/access' && req.method === 'GET') {
+    return send(res, 200, JSON.stringify({ ...readAccess(req), prices: { day: 100, year: 2500 }, currency: 'usd' }), 'application/json', { 'Cache-Control': 'no-store' });
+  }
+
+  if (u.pathname === '/api/checkout' && req.method === 'POST') {
+    if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
+    const body = await readBody(req);
+    const session = await createRouteCheckout(body.plan);
+    return send(res, 200, JSON.stringify({ ok: true, url: session.url }), 'application/json', { 'Cache-Control': 'no-store' });
+  }
+
+  if (u.pathname === '/access/complete' && req.method === 'GET') {
+    const sessionId = (u.searchParams.get('session_id') || '').slice(0, 160);
+    if (!/^cs_(test_|live_)?[A-Za-z0-9]+$/.test(sessionId)) return send(res, 400, 'Invalid checkout session.', 'text/plain');
+    const session = await stripeRequest(`/checkout/sessions/${encodeURIComponent(sessionId)}`);
+    const planName = session.metadata?.product === 'unignorable-route-access' ? session.metadata?.plan : null;
+    const plan = ACCESS_PLANS[planName];
+    if (!plan || session.payment_status !== 'paid') return send(res, 402, 'Payment is not complete.', 'text/plain');
+    const exp = Number(session.created) + plan.seconds;
+    const token = signAccess({ plan: planName, exp, checkout: session.id });
+    res.writeHead(303, { ...SECURITY_HEADERS, Location: '/?paid=1', 'Cache-Control': 'no-store',
+      'Set-Cookie': `${ACCESS_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${Math.max(0, exp - Math.floor(Date.now() / 1000))}` });
+    return res.end();
   }
 
   const trackedMatch = u.pathname.match(/^\/r\/([a-f0-9]{32})$/);
@@ -1575,11 +1942,110 @@ async function handleRequest(req, res) {
     return sendMaybeGzip(req, res, DISPARITY, 'application/json');
   }
 
+  if (u.pathname === '/api/jurisdiction' && req.method === 'GET') {
+    const id = String(u.searchParams.get('city') || u.searchParams.get('id') || 'atlanta').toLowerCase();
+    const jurisdiction = JURISDICTIONS.get(id);
+    if (!jurisdiction) return send(res, 404, JSON.stringify({ ok: false, error: 'unknown jurisdiction' }), 'application/json');
+    return send(res, 200, JSON.stringify({ ok: true, jurisdiction, checklist_schema: {
+      statute: 'O.C.G.A. § 36-60-34',
+      builder: 'buildHB295Checklist',
+      example: buildHB295Checklist({ local_government: 'city_of_atlanta' }),
+    } }), 'application/json', { 'Cache-Control': 'public, max-age=300' });
+  }
+
+  if (u.pathname === '/api/map-layers') {
+    if (!MAP_LAYERS_RAW) {
+      return send(res, 503, '{"ok":false,"error":"map data unavailable; run the public map refresh"}', 'application/json', { 'Cache-Control': 'no-store' });
+    }
+    const ae = req.headers['accept-encoding'] || '';
+    if (/\bgzip\b/.test(ae)) {
+      res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'application/json', 'Content-Encoding': 'gzip',
+        'Vary': 'Accept-Encoding', 'Cache-Control': 'public, max-age=300' });
+      return res.end(MAP_LAYERS_GZ);
+    }
+    return send(res, 200, MAP_LAYERS_RAW, 'application/json', { 'Cache-Control': 'public, max-age=300' });
+  }
+
+  if (u.pathname === '/api/condition-observations' && req.method === 'POST') {
+    if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
+    const body = await readBody(req);
+    const feature = MAP_FEATURE_BY_ID.get(String(body.feature_id || ''));
+    const state = ['present', 'absent', 'uncertain'].includes(body.state) ? body.state : null;
+    const lat = Number(body.lat), lng = Number(body.lng);
+    if (!feature || feature.layer !== 'homelessness' || feature.subject_type !== 'encampment') {
+      return send(res, 400, '{"ok":false,"error":"unknown encampment site"}', 'application/json');
+    }
+    if (!state || !NYC_POINT({ lat, lng })) {
+      return send(res, 400, '{"ok":false,"error":"a valid nearby observation is required"}', 'application/json');
+    }
+    const distance = distanceMeters(lat, lng, Number(feature.lat), Number(feature.lng));
+    const allowedDistance = Math.max(120, Number(feature.location_uncertainty_m || 0) + 75);
+    if (!Number.isFinite(distance) || distance > allowedDistance) {
+      return send(res, 400, JSON.stringify({ ok: false, error: `You must be within ${Math.round(allowedDistance)} meters to verify this location.` }), 'application/json');
+    }
+    const observerHash = crypto.createHmac('sha256', accessSecret).update(clientIp(req)).digest('hex').slice(0, 24);
+    const stored = ugc.addConditionObservation({
+      featureId: feature.id, state, observedAt: new Date(), observerHash, distance: Math.round(distance),
+      modelProbability: Number(feature.condition?.presence_probability), modelVersion: feature.condition?.method_version,
+    });
+    return send(res, 200, JSON.stringify({ ok: true, ...stored, distance_m: Math.round(distance),
+      summary: ugc.conditionObservationSummary(feature.id) }), 'application/json', { 'Cache-Control': 'no-store' });
+  }
+
+  if (u.pathname === '/api/walk-opportunities' && req.method === 'POST') {
+    if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
+    const body = await readBody(req);
+    const feature = MAP_FEATURE_BY_ID.get(String(body.feature_id || ''));
+    const lat = Number(body.lat), lng = Number(body.lng);
+    if (!feature || feature.layer !== 'homelessness' || feature.subject_type !== 'encampment') return send(res, 400, '{"ok":false,"error":"unknown encampment site"}', 'application/json');
+    if (!NYC_POINT({ lat, lng })) return send(res, 400, '{"ok":false,"error":"a valid nearby walk location is required"}', 'application/json');
+    const distance = distanceMeters(lat, lng, Number(feature.lat), Number(feature.lng));
+    const allowedDistance = Math.max(120, Number(feature.location_uncertainty_m || 0) + 75);
+    if (!Number.isFinite(distance) || distance > allowedDistance) return send(res, 400, JSON.stringify({ ok: false, error: `You must be within ${Math.round(allowedDistance)} meters to record a walk opportunity.` }), 'application/json');
+    // Coordinates are intentionally not persisted. This is never presence/absence model evidence.
+    const observerHash = crypto.createHmac('sha256', accessSecret).update(clientIp(req)).digest('hex').slice(0, 24);
+    const distanceBucket = distance <= 25 ? '0-25m' : distance <= 60 ? '26-60m' : '61m+';
+    const model = feature.nowcast || feature.condition || {};
+    const stored = ugc.addWalkOpportunity({ featureId: feature.id, observedAt: new Date(), observerHash, distanceBucket,
+      modelProbability: Number(model.live_probability ?? model.presence_probability), modelVersion: model.method_version });
+    return send(res, 200, JSON.stringify({ ok: true, ...stored, distance_m: Math.round(distance), summary: ugc.walkOpportunitySummary(feature.id) }), 'application/json', { 'Cache-Control': 'no-store' });
+  }
+
+  if (u.pathname === '/api/walk-friction' && req.method === 'POST') {
+    if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
+    const body = await readBody(req);
+    const feature = MAP_FEATURE_BY_ID.get(String(body.feature_id || ''));
+    const lat = Number(body.lat), lng = Number(body.lng);
+    const allowed = { proximity: ['0-25m', '26-60m', '61-120m'], speed: ['slower', 'steady', 'faster', 'unknown'], clearance: ['closer_than_plan', 'as_planned', 'farther_than_plan', 'unknown'], dwell: ['under_20s', '20-60s', 'over_60s'] };
+    if (!feature || feature.layer !== 'homelessness' || feature.subject_type !== 'encampment') return send(res, 400, '{"ok":false,"error":"unknown encampment site"}', 'application/json');
+    if (!NYC_POINT({ lat, lng }) || !allowed.proximity.includes(body.proximity_bucket) || !allowed.speed.includes(body.speed_change_bucket) || !allowed.clearance.includes(body.clearance_delta_bucket) || !allowed.dwell.includes(body.dwell_bucket)) return send(res, 400, '{"ok":false,"error":"invalid walk-friction event"}', 'application/json');
+    const distance = distanceMeters(lat, lng, Number(feature.lat), Number(feature.lng));
+    const allowedDistance = Math.max(120, Number(feature.location_uncertainty_m || 0) + 75);
+    if (!Number.isFinite(distance) || distance > allowedDistance) return send(res, 400, JSON.stringify({ ok: false, error: `You must be within ${Math.round(allowedDistance)} meters to record walking friction.` }), 'application/json');
+    // The supplied coordinate proves proximity and is discarded. This data never updates presence.
+    const observerHash = crypto.createHmac('sha256', accessSecret).update(clientIp(req)).digest('hex').slice(0, 24);
+    const model = feature.nowcast || feature.condition || {};
+    const stored = ugc.addWalkFrictionEvent({ featureId: feature.id, observedAt: new Date(), observerHash,
+      proximityBucket: body.proximity_bucket, speedChangeBucket: body.speed_change_bucket, clearanceDeltaBucket: body.clearance_delta_bucket,
+      dwellBucket: body.dwell_bucket, sampleCount: Math.min(40, Math.max(1, Number(body.sample_count) || 1)),
+      modelProbability: Number(model.live_probability ?? model.presence_probability), modelVersion: model.method_version });
+    return send(res, 200, JSON.stringify({ ok: true, ...stored, distance_m: Math.round(distance), summary: ugc.walkFrictionSummary(feature.id) }), 'application/json', { 'Cache-Control': 'no-store' });
+  }
+
+  if (u.pathname === '/api/discover/citibike') {
+    const lat = Number(u.searchParams.get('lat')), lng = Number(u.searchParams.get('lng'));
+    if (!NYC_POINT({ lat, lng })) return send(res, 400, '{"ok":false,"error":"map center must be in New York City"}', 'application/json');
+    try {
+      const stations = await nearbyCitiBike(lat, lng);
+      return send(res, 200, JSON.stringify({ ok: true, refreshed_at: new Date().toISOString(), stations }), 'application/json', { 'Cache-Control': 'public, max-age=15' });
+    } catch { return send(res, 503, '{"ok":false,"error":"live Citi Bike availability is temporarily unavailable"}', 'application/json', { 'Cache-Control': 'no-store' }); }
+  }
+
   // Address geocode — server-side proxy to OpenStreetMap Nominatim so the UA + referer policy and
   // a small LRU cache live here (Nominatim demands a descriptive UA, ~1 req/sec, no heavy use; a
   // shared tunnel IP would get rate-limited if every client called it directly). NYC viewbox-bounded.
   if (u.pathname === '/api/geocode') {
-    const q = (u.searchParams.get('q') || '').trim();
+    const q = (u.searchParams.get('q') || '').trim().slice(0, 180);
     if (q.length < 3) return send(res, 200, '[]', 'application/json');
     const ckey = q.toLowerCase();
     const cached = geoCache.get(ckey);
@@ -1590,6 +2056,58 @@ async function handleRequest(req, res) {
       if (geoCache.size > 400) geoCache.delete(geoCache.keys().next().value); // LRU evict oldest
       return send(res, 200, out, 'application/json');
     } catch { return send(res, 200, '[]', 'application/json'); }
+  }
+
+  if (u.pathname === '/api/routes' && req.method === 'POST') {
+    if (routeRateLimited(req)) return send(res, 429, '{"ok":false,"error":"Too many route changes at once. Wait a moment and try again."}', 'application/json');
+    if (!MAP_LAYERS) return send(res, 503, '{"ok":false,"error":"map data unavailable"}', 'application/json');
+    const access = readAccess(req);
+    if (!access.active) return send(res, 402, JSON.stringify({ ok: false, error: 'route access required', payment_required: true, prices: { day: 100, year: 2500 } }), 'application/json', { 'Cache-Control': 'no-store' });
+    const body = await readBody(req);
+    const origin = body.origin, destination = body.destination, via = body.via || null;
+    if (!NYC_POINT(origin) || !NYC_POINT(destination) || (via && !NYC_POINT(via))) {
+      return send(res, 400, '{"ok":false,"error":"origin, destination, and optional stop must be in New York City"}', 'application/json');
+    }
+    const profile = body.profile === 'walking' ? 'walking' : 'driving';
+    const allowed = ['alpr', 'homelessness', 'drugs', 'dumping', 'sidewalk', 'street', 'signals'];
+    const selected = Array.isArray(body.filters) ? [...new Set(body.filters.filter(name => allowed.includes(name)))] : ['alpr'];
+    const cacheKey = routeCacheKey(origin, destination, via, profile, selected);
+    const cached = cachedRoute(cacheKey);
+    if (cached) return send(res, 200, JSON.stringify({ ...cached, cache_hit: true }), 'application/json', { 'Cache-Control': 'private, max-age=30' });
+    const designed = await avoidanceRoutes(origin, destination, profile, MAP_LAYERS.layers || {}, selected, via);
+    const recommended = chooseRecommended(designed.routes, profile);
+    const routes = designed.routes.map((route, index) => ({
+      ...route,
+      recommended: index === recommended,
+      selected_intersections: Number(route.selectedIntersections || 0),
+      selected_risk: Math.round((Number(route.riskScore || 0)) * 100) / 100,
+      export: exportUrls(origin, destination, route.geometry.coordinates, profile, via),
+    }));
+    const recommendedRoute = routes[recommended];
+    const responsePayload = {
+      ok: true, profile, selected, via, source: designed.upstream.source, cached: designed.upstream.cached, cache_hit: false, fixture: designed.upstream.fixture,
+      routing_method: 'valhalla-bounded-avoidance-v4',
+      directions_method: profile === 'walking' ? 'human-decision-summary-v1' : 'router-maneuvers',
+      strategy_portfolio: [(PRIMARY_ROUTE_STRATEGY[profile] || PRIMARY_ROUTE_STRATEGY.driving).name],
+      avoidance: {
+        requested: selected.length > 0,
+        excluded_areas: designed.excluded.length,
+        passes: designed.passes,
+        generated_candidates: designed.generatedCandidates,
+        baseline_intersections: designed.baselineIntersections,
+        baseline_risk: Math.round((Number(designed.baselineRisk || 0)) * 100) / 100,
+        remaining_intersections: recommendedRoute?.selected_intersections || 0,
+        remaining_risk: recommendedRoute?.selected_risk || 0,
+        improved: (recommendedRoute?.selected_intersections || 0) < designed.baselineIntersections
+          || (recommendedRoute?.selected_risk || 0) < (Number(designed.baselineRisk || 0)),
+      },
+      radii_meters: LAYER_RADII,
+      recommendation_policy: selected.length ? 'Selected locations are sent in one compact hard-exclusion batch where possible; the original route is retained if that avoidance search cannot return a plausible corridor. Returned lines are ranked by selected crossings, evidence-weighted risk, then time and distance.' : 'fastest route',
+      caveat: 'Selected locations are sent as hard exclusion polygons where possible and every returned line is rechecked against the wider evidence buffer. Map observations do not show whether a camera captured you or whether a reported condition is present now. The in-app line and GPX preserve the generated route. Google and Apple Maps receive the intentional stop plus a bounded set of shaping waypoints, but may recalculate.',
+      routes,
+    };
+    storeRoute(cacheKey, responsePayload);
+    return send(res, 200, JSON.stringify(responsePayload), 'application/json', { 'Cache-Control': 'private, max-age=30' });
   }
 
   if (u.pathname === '/api/campaign/nearby') {
@@ -1674,6 +2192,16 @@ async function handleRequest(req, res) {
       return res.end(c.gz);
     }
     return send(res, 200, c.raw, 'application/json');
+  }
+
+  if (u.pathname === '/api/report-issues') {
+    const c = issuesPayload();
+    const ae = req.headers['accept-encoding'] || '';
+    if (/\bgzip\b/.test(ae)) {
+      res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'application/json', 'Content-Encoding': 'gzip', 'Vary': 'Accept-Encoding' });
+      return res.end(c.compactGz);
+    }
+    return send(res, 200, c.compactRaw, 'application/json');
   }
 
   // Episode timeline for one issue (the sparkline) — lazy-loaded on card open.
@@ -1879,13 +2407,21 @@ async function handleRequest(req, res) {
     return send(res, 200, renderCampaign(issue), 'text/html; charset=utf-8');
   }
 
-  // Launch front door: Campaign 001 proves the playbook. The citywide map remains the discovery
-  // surface, and every campaign carries a self-service path for another resident to start one.
-  if (u.pathname === '/' || u.pathname === '/index.html') {
-    res.writeHead(302, { ...SECURITY_HEADERS, Location: CANARY_URL, 'Cache-Control': 'no-store' });
+  // Reporting now opens as a contextual mode on the same route map. Keep the former full records
+  // board at /issues for research and historical deep links.
+  if (u.pathname === '/report') {
+    const params = new URLSearchParams(u.searchParams);
+    params.set('mode', 'report');
+    res.writeHead(302, { ...SECURITY_HEADERS, Location: `/?${params}`, 'Cache-Control': 'no-store' });
     return res.end();
   }
-  if (u.pathname === '/map') {
+  if (u.pathname === '/report.html' || u.pathname === '/issues') {
+    return send(res, 200, fs.readFileSync(path.join(DIR, 'report.html')), 'text/html; charset=utf-8');
+  }
+
+  // The NYC awareness map is the product front door. Legacy campaign and accountability routes
+  // remain directly addressable while the rebuilt first viewport stays focused on map + routing.
+  if (u.pathname === '/' || u.pathname === '/index.html' || u.pathname === '/map') {
     return send(res, 200, fs.readFileSync(path.join(DIR, 'index.html')), 'text/html; charset=utf-8');
   }
 
@@ -1901,8 +2437,8 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`unignorable on :${PORT} — ${ISSUES.length} issues`);
+server.listen(PORT, HOST, () => {
+  console.log(`unignorable on ${HOST}:${PORT} — ${ISSUES.length} issues`);
   console.log('review queue ready');
 });
 

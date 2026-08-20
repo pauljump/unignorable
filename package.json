@@ -2,15 +2,17 @@
   "name": "unignorable",
   "version": "1.0.0",
   "private": true,
-  "description": "NYC 311 accountability map and public issue record",
+  "description": "NYC public-data map with driving and walking avoidance routes",
   "engines": {
     "node": ">=22.5"
   },
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check ugc.js && node --check scripts/build.js && node --check scripts/refresh-sensitive-sites.js && node tests/check-client.js",
+    "check": "node --check server.js && node --check ugc.js && node --check condition-model.js && node --check map-core.js && node --check hb295-evidence.js && node --check scripts/build.js && node --check scripts/refresh-sensitive-sites.js && node --check scripts/refresh-map-data.js && node --check scripts/evaluate-condition-model.js && node tests/check-client.js",
+    "refresh:map": "node scripts/refresh-map-data.js",
+    "evaluate:condition": "node scripts/evaluate-condition-model.js",
     "refresh:sites": "node scripts/refresh-sensitive-sites.js",
-    "test": "node --test tests/smoke.test.js",
+    "test": "node --test tests/*.test.js",
     "verify": "npm run check && npm test"
   }
 }

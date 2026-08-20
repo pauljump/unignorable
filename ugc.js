@@ -41,6 +41,90 @@ if (!cols.includes('ip_hash')) db.exec(`ALTER TABLE posts ADD COLUMN ip_hash TEX
 db.exec(`CREATE INDEX IF NOT EXISTS idx_posts_mod ON posts(mod)`);
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_seen_ip ON posts(issue_key,ip_hash) WHERE kind='seen' AND ip_hash IS NOT NULL`);
 
+// Proximity-verified field observations calibrate the latent encampment model. No name, raw IP,
+// trip, or free text is stored. One observer can contribute one state per site per UTC day.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS condition_observations(
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    feature_id        TEXT NOT NULL,
+    state             TEXT NOT NULL,
+    observed_at       TEXT NOT NULL,
+    observation_day   TEXT NOT NULL,
+    submitted_at      TEXT NOT NULL,
+    observer_hash     TEXT NOT NULL,
+    distance_m        REAL NOT NULL,
+    model_probability REAL,
+    model_version     TEXT
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_condition_observer_day
+    ON condition_observations(feature_id,observer_hash,observation_day);
+  CREATE INDEX IF NOT EXISTS idx_condition_feature_time
+    ON condition_observations(feature_id,observed_at);
+`);
+const qConditionInsert = db.prepare(`INSERT OR IGNORE INTO condition_observations(
+  feature_id,state,observed_at,observation_day,submitted_at,observer_hash,distance_m,model_probability,model_version
+) VALUES(?,?,?,?,?,?,?,?,?)`);
+const qConditionSummary = db.prepare(`SELECT state,count(*) observations,count(distinct observer_hash) observers,
+  max(observed_at) last_observed_at FROM condition_observations
+  WHERE feature_id=? AND observed_at>=? GROUP BY state`);
+
+// A walk opportunity is deliberately not an observation. It records only that an opted-in
+// navigator passed a mapped site closely enough to have had an opportunity to see it. The raw
+// coordinate is checked by the server and discarded; these rows are for sampling and calibration
+// coverage, never a positive or negative input to the presence model.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS walk_opportunities(
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    feature_id        TEXT NOT NULL,
+    observed_at       TEXT NOT NULL,
+    observation_day   TEXT NOT NULL,
+    submitted_at      TEXT NOT NULL,
+    observer_hash     TEXT NOT NULL,
+    distance_bucket   TEXT NOT NULL,
+    model_probability REAL,
+    model_version     TEXT
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_walk_opportunity_observer_day
+    ON walk_opportunities(feature_id,observer_hash,observation_day);
+  CREATE INDEX IF NOT EXISTS idx_walk_opportunity_feature_time
+    ON walk_opportunities(feature_id,observed_at);
+`);
+const qOpportunityInsert = db.prepare(`INSERT OR IGNORE INTO walk_opportunities(
+  feature_id,observed_at,observation_day,submitted_at,observer_hash,distance_bucket,model_probability,model_version
+) VALUES(?,?,?,?,?,?,?,?)`);
+const qOpportunitySummary = db.prepare(`SELECT count(*) opportunities,count(distinct observer_hash) observers,
+  max(observed_at) last_observed_at FROM walk_opportunities WHERE feature_id=? AND observed_at>=?`);
+
+// Coarse, opt-in walking-friction aggregates. These are behavioral signals, not observations of
+// a civic condition. There is no stored route, coordinate, heading, or per-sample timestamp.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS walk_friction_events(
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    feature_id             TEXT NOT NULL,
+    observation_day        TEXT NOT NULL,
+    hour_bucket            INTEGER NOT NULL,
+    observer_hash          TEXT NOT NULL,
+    proximity_bucket       TEXT NOT NULL,
+    speed_change_bucket    TEXT NOT NULL,
+    clearance_delta_bucket TEXT NOT NULL,
+    dwell_bucket           TEXT NOT NULL,
+    sample_count           INTEGER NOT NULL,
+    model_probability      REAL,
+    model_version          TEXT,
+    submitted_at           TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_walk_friction_observer_day
+    ON walk_friction_events(feature_id,observer_hash,observation_day);
+  CREATE INDEX IF NOT EXISTS idx_walk_friction_feature_day
+    ON walk_friction_events(feature_id,observation_day);
+`);
+const qFrictionInsert = db.prepare(`INSERT OR IGNORE INTO walk_friction_events(
+  feature_id,observation_day,hour_bucket,observer_hash,proximity_bucket,speed_change_bucket,
+  clearance_delta_bucket,dwell_bucket,sample_count,model_probability,model_version,submitted_at
+) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`);
+const qFrictionSummary = db.prepare(`SELECT count(*) events,count(distinct observer_hash) observers
+  FROM walk_friction_events WHERE feature_id=? AND observation_day>=?`);
+
 // ---- Campaign table ----
 // Day-N is NOT stored here — it derives at render from the issue's current episode start.
 // started_at is when THIS campaign was created (used for escalation ladder age).
@@ -235,6 +319,40 @@ function countsAll() {
   return m;
 }
 
+function addConditionObservation({ featureId, state, observedAt, observerHash, distance, modelProbability, modelVersion }) {
+  const timestamp = new Date(observedAt).toISOString();
+  const result = qConditionInsert.run(featureId, state, timestamp, timestamp.slice(0, 10), new Date().toISOString(),
+    observerHash, Number(distance), Number.isFinite(modelProbability) ? modelProbability : null, modelVersion || null);
+  return { accepted: Number(result.changes) === 1, duplicate: Number(result.changes) === 0 };
+}
+
+function conditionObservationSummary(featureId, days = 30) {
+  const since = new Date(Date.now() - Math.max(1, days) * 86400000).toISOString();
+  return qConditionSummary.all(featureId, since);
+}
+
+function addWalkOpportunity({ featureId, observedAt, observerHash, distanceBucket, modelProbability, modelVersion }) {
+  const timestamp = new Date(observedAt).toISOString();
+  const result = qOpportunityInsert.run(featureId, timestamp, timestamp.slice(0, 10), new Date().toISOString(), observerHash, distanceBucket, Number.isFinite(modelProbability) ? modelProbability : null, modelVersion || null);
+  return { accepted: Number(result.changes) === 1, duplicate: Number(result.changes) === 0 };
+}
+
+function walkOpportunitySummary(featureId, days = 30) {
+  const since = new Date(Date.now() - Math.max(1, days) * 86400000).toISOString();
+  return qOpportunitySummary.get(featureId, since) || { opportunities: 0, observers: 0, last_observed_at: null };
+}
+
+function addWalkFrictionEvent({ featureId, observedAt, observerHash, proximityBucket, speedChangeBucket, clearanceDeltaBucket, dwellBucket, sampleCount, modelProbability, modelVersion }) {
+  const timestamp = new Date(observedAt);
+  const result = qFrictionInsert.run(featureId, timestamp.toISOString().slice(0, 10), timestamp.getUTCHours(), observerHash, proximityBucket, speedChangeBucket, clearanceDeltaBucket, dwellBucket, Math.max(1, Math.floor(Number(sampleCount) || 1)), Number.isFinite(modelProbability) ? modelProbability : null, modelVersion || null, new Date().toISOString());
+  return { accepted: Number(result.changes) === 1, duplicate: Number(result.changes) === 0 };
+}
+
+function walkFrictionSummary(featureId, days = 30) {
+  const since = new Date(Date.now() - Math.max(1, days) * 86400000).toISOString().slice(0, 10);
+  return qFrictionSummary.get(featureId, since) || { events: 0, observers: 0 };
+}
+
 // --- Review queue (Paul's gate) ---
 function pending()      { return qPending.all(); }
 function pendingCount() { return qPendCount.get().n; }
@@ -328,6 +446,8 @@ function confirmActionReceipt(token) {
 }
 
 module.exports = { addPost, addSeen, thread, countsAll, pending, pendingCount, decide,
+  addConditionObservation, conditionObservationSummary, addWalkOpportunity, walkOpportunitySummary,
+  addWalkFrictionEvent, walkFrictionSummary,
   startCampaign, getCampaign, setCampaignStatus, allCampaigns, addCampaignOrganizer,
   logAction, actionCounts, hasAction, firstActionTs,
   createActionReceipt, getActionReceipt, recordReceiptLinkRequest, confirmActionReceipt,

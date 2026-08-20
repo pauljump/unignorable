@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unignorable for iPhone — Walk Smarter in NYC</title>
+<meta name="description" content="Unignorable for iPhone builds avoidance-aware walking routes across NYC. See what's ahead, confirm what's there, and hold the city accountable.">
+<meta property="og:title" content="Unignorable for iPhone — Walk Smarter in NYC">
+<meta property="og:description" content="Avoidance-aware walking routes, civic accountability, and community-verified conditions — all on one map.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://unignorable.polyfeeds.dev/design/ios-demo">
+<meta property="og:image" content="https://unignorable.polyfeeds.dev/photos/logo.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Unignorable for iPhone">
+<meta name="twitter:description" content="Walk smarter in NYC. Avoidance-aware routes, real-time civic conditions, and community verification.">
+<meta name="twitter:image" content="https://unignorable.polyfeeds.dev/photos/logo.jpg">
+<style>
+:root {
+  --bg: #080b11;
+  --panel: #0e1420;
+  --raised: #16202f;
+  --line: #1d2737;
+  --ink: #eaf0fb;
+  --muted: #9aa6bd;
+  --coral: #ff5a47;
+  --amber: #ffc24b;
+  --mint: #4ad6c8;
+  --purple: #c77dff;
+  --gradient-start: #0e1420;
+  --gradient-end: #1a0a2e;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+a { color: var(--coral); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ─── NAV ─── */
+.top-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(8, 11, 17, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--line);
+  padding: 0 24px;
+  height: 56px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-brand {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 700; font-size: 18px; color: var(--ink);
+}
+.nav-brand img { width: 32px; height: 32px; border-radius: 8px; }
+.nav-links { display: flex; gap: 24px; }
+.nav-links a { color: var(--muted); font-size: 14px; font-weight: 500; transition: color 0.2s; }
+.nav-links a:hover { color: var(--ink); text-decoration: none; }
+.nav-cta {
+  background: var(--coral); color: white; padding: 8px 18px;
+  border-radius: 20px; font-weight: 600; font-size: 14px;
+  transition: transform 0.2s, opacity 0.2s;
+}
+.nav-cta:hover { transform: scale(1.04); opacity: 0.92; text-decoration: none; }
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+}
+
+/* ─── HERO ─── */
+.hero {
+  min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center;
+  padding: 120px 24px 80px;
+  background: radial-gradient(ellipse at 50% 30%, rgba(255,90,71,0.08), transparent 70%),
+              radial-gradient(ellipse at 70% 80%, rgba(74,214,200,0.06), transparent 60%),
+              var(--bg);
+}
+.hero-logo { width: 96px; height: 96px; border-radius: 22px; margin-bottom: 24px; box-shadow: 0 8px 40px rgba(255,90,71,0.2); }
+.hero h1 { font-size: clamp(36px, 6vw, 64px); font-weight: 800; line-height: 1.1; margin-bottom: 16px; }
+.hero h1 .accent { color: var(--coral); }
+.hero .subtitle {
+  font-size: clamp(16px, 2.5vw, 22px); color: var(--muted);
+  max-width: 640px; margin: 0 auto 32px;
+}
+.hero-badges { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; margin-bottom: 40px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--raised); border: 1px solid var(--line);
+  border-radius: 20px; padding: 6px 14px;
+  font-size: 13px; color: var(--muted); font-weight: 500;
+}
+.badge .dot { width: 8px; height: 8px; border-radius: 50%; }
+.badge .dot.coral { background: var(--coral); }
+.badge .dot.mint { background: var(--mint); }
+.badge .dot.amber { background: var(--amber); }
+.badge .dot.purple { background: var(--purple); }
+.hero-cta {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: var(--coral); color: white;
+  padding: 16px 36px; border-radius: 14px;
+  font-size: 18px; font-weight: 700;
+  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 24px rgba(255,90,71,0.3);
+}
+.hero-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 40px rgba(255,90,71,0.4); text-decoration: none; }
+.hero-cta svg { width: 22px; height: 22px; }
+
+/* ─── SECTIONS ─── */
+.section {
+  padding: 100px 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.section-tag {
+  display: inline-block;
+  font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--coral); margin-bottom: 12px;
+}
+.section h2 {
+  font-size: clamp(28px, 4vw, 44px); font-weight: 800; line-height: 1.15;
+  margin-bottom: 16px;
+}
+.section .lead {
+  font-size: 18px; color: var(--muted); max-width: 680px; margin-bottom: 48px;
+}
+
+/* ─── FEATURE GRID ─── */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+}
+.feature-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 32px 28px;
+  transition: transform 0.2s, border-color 0.3s;
+  position: relative;
+}
+.feature-card:hover { transform: translateY(-4px); border-color: var(--coral); }
+.feature-icon {
+  width: 48px; height: 48px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; margin-bottom: 16px;
+}
+.feature-icon.coral-bg { background: rgba(255,90,71,0.15); }
+.feature-icon.mint-bg { background: rgba(74,214,200,0.15); }
+.feature-icon.amber-bg { background: rgba(255,194,75,0.15); }
+.feature-icon.purple-bg { background: rgba(199,125,255,0.15); }
+.feature-icon.blue-bg { background: rgba(100,149,237,0.15); }
+.feature-card h3 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+.feature-card p { font-size: 15px; color: var(--muted); line-height: 1.55; }
+
+/* ─── SHARE BAR ─── */
+.share-bar {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 16px; padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.share-bar .share-label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-right: 4px; }
+.share-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--raised); border: 1px solid var(--line);
+  color: var(--muted); font-size: 14px;
+  cursor: pointer; transition: all 0.2s;
+  text-decoration: none;
+}
+.share-btn:hover { background: var(--coral); color: white; border-color: var(--coral); text-decoration: none; }
+.share-btn svg { width: 16px; height: 16px; fill: currentColor; }
+
+/* ─── SECTION-LEVEL SHARE ─── */
+.section-share {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 48px; padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.section-share .share-label { font-size: 13px; color: var(--muted); font-weight: 600; }
+.section-share .share-btn { width: 36px; height: 36px; border-radius: 10px; }
+
+/* ─── HOW IT WORKS ─── */
+.steps {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 32px; counter-reset: step;
+}
+.step { position: relative; counter-increment: step; }
+.step::before {
+  content: counter(step);
+  display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--coral); color: white;
+  font-weight: 800; font-size: 18px; margin-bottom: 16px;
+}
+.step h3 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+.step p { font-size: 14px; color: var(--muted); }
+
+/* ─── LAYERS SHOWCASE ─── */
+.layer-list { display: flex; flex-direction: column; gap: 16px; }
+.layer-item {
+  display: flex; align-items: center; gap: 16px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; padding: 16px 20px;
+  transition: border-color 0.2s;
+}
+.layer-item:hover { border-color: var(--coral); }
+.layer-dot {
+  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+  box-shadow: 0 0 8px currentColor;
+}
+.layer-item .layer-name { font-weight: 600; font-size: 15px; }
+.layer-item .layer-desc { font-size: 13px; color: var(--muted); }
+
+/* ─── ACCOUNTABILITY ─── */
+.accountability-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+.stat-card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 16px; padding: 28px;
+  text-align: center;
+}
+.stat-card .stat-value {
+  font-size: 48px; font-weight: 800;
+  background: linear-gradient(135deg, var(--coral), var(--amber));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.stat-card .stat-label { font-size: 14px; color: var(--muted); margin-top: 4px; }
+
+/* ─── PHONE MOCKUP ─── */
+.phone-mockup-section {
+  display: flex; align-items: center; gap: 64px;
+  padding: 100px 24px;
+  max-width: 1100px; margin: 0 auto;
+}
+.phone-mockup-section .text-side { flex: 1; }
+.phone-mockup-section .phone-side { flex: 0 0 300px; }
+@media (max-width: 768px) {
+  .phone-mockup-section { flex-direction: column; gap: 40px; }
+  .phone-mockup-section .phone-side { flex: none; width: 260px; }
+}
+.phone-frame {
+  background: var(--panel); border: 3px solid var(--line);
+  border-radius: 36px; padding: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+}
+.phone-screen {
+  background: var(--raised); border-radius: 26px;
+  padding: 20px 16px;
+  min-height: 520px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.phone-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.phone-header .ph-label { font-size: 14px; font-weight: 700; }
+.phone-header .ph-brand { font-size: 10px; font-weight: 700; color: var(--muted); }
+.mock-map {
+  background: linear-gradient(135deg, #1a2332, #0f1922);
+  border-radius: 14px; height: 200px; position: relative; overflow: hidden;
+}
+.mock-map::after {
+  content: '';
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 40% 45%, var(--coral) 3px, transparent 3px),
+    radial-gradient(circle at 55% 55%, var(--coral) 2.5px, transparent 2.5px),
+    radial-gradient(circle at 30% 60%, var(--amber) 2px, transparent 2px),
+    radial-gradient(circle at 65% 35%, var(--purple) 2px, transparent 2px),
+    radial-gradient(circle at 50% 70%, var(--mint) 2px, transparent 2px);
+}
+.mock-route {
+  position: absolute; top: 30%; left: 20%; right: 25%;
+  height: 3px; background: var(--coral); border-radius: 2px;
+  transform: rotate(-15deg);
+  box-shadow: 0 0 8px var(--coral);
+}
+.mock-input {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.mock-dot { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 9px; font-weight: 800; }
+.mock-dot.green { background: #34c759; }
+.mock-dot.red { background: #ff3b30; }
+.mock-text { font-size: 12px; color: var(--muted); }
+.mock-btn {
+  background: var(--coral); color: white;
+  border-radius: 10px; padding: 10px;
+  text-align: center; font-weight: 700; font-size: 13px;
+}
+.mock-chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.mock-chip {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 5px 10px;
+  font-size: 10px; color: var(--muted);
+}
+
+/* ─── CAMPAIGN SHOWCASE ─── */
+.campaign-preview {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 20px; padding: 32px;
+  max-width: 600px;
+}
+.campaign-preview .cp-status {
+  font-size: 11px; font-weight: 700; color: var(--coral);
+  letter-spacing: 1.5px; text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.campaign-preview .cp-address { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+.campaign-preview .cp-borough { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+.cp-stats { display: flex; gap: 24px; margin-bottom: 20px; }
+.cp-stat .cp-val { font-size: 24px; font-weight: 800; }
+.cp-stat .cp-lbl { font-size: 11px; color: var(--muted); }
+.cp-confirm-btn {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--coral); color: white;
+  border-radius: 12px; padding: 12px 20px;
+  font-weight: 700; font-size: 15px;
+  width: 100%; justify-content: center;
+  margin-bottom: 12px;
+}
+.cp-verdict { font-size: 13px; font-weight: 700; color: var(--coral); }
+
+/* ─── ESCALATION ─── */
+.escalation-ladder {
+  display: flex; flex-direction: column; gap: 16px;
+  margin-top: 32px;
+}
+.escalation-step {
+  display: flex; align-items: flex-start; gap: 16px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; padding: 20px;
+}
+.es-day {
+  flex-shrink: 0; width: 52px; height: 52px;
+  background: var(--raised); border-radius: 12px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.es-day .day-n { font-size: 18px; font-weight: 800; color: var(--coral); }
+.es-day .day-l { font-size: 9px; color: var(--muted); text-transform: uppercase; font-weight: 600; }
+.es-content h4 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.es-content p { font-size: 13px; color: var(--muted); }
+
+/* ─── CTA BOTTOM ─── */
+.cta-section {
+  text-align: center;
+  padding: 100px 24px;
+  background: radial-gradient(ellipse at 50% 50%, rgba(255,90,71,0.06), transparent 70%);
+}
+.cta-section h2 { font-size: clamp(28px, 4vw, 44px); font-weight: 800; margin-bottom: 16px; }
+.cta-section p { font-size: 18px; color: var(--muted); margin-bottom: 32px; max-width: 540px; margin-left: auto; margin-right: auto; }
+
+/* ─── FOOTER ─── */
+footer {
+  border-top: 1px solid var(--line);
+  padding: 40px 24px;
+  text-align: center;
+  color: var(--muted); font-size: 13px;
+}
+footer a { color: var(--muted); }
+
+/* ─── ANIMATIONS ─── */
+.fade-in {
+  opacity: 0; transform: translateY(24px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.fade-in.visible { opacity: 1; transform: translateY(0); }
+
+/* ─── SEPARATOR ─── */
+.separator {
+  max-width: 1100px; margin: 0 auto;
+  border: none; border-top: 1px solid var(--line);
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="top-nav">
+  <div class="nav-brand">
+    <img src="/photos/logo.jpg" alt="Unignorable">
+    <span>Unignorable</span>
+  </div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how-it-works">How It Works</a>
+    <a href="#layers">Map Layers</a>
+    <a href="#accountability">Accountability</a>
+    <a href="#community">Community</a>
+  </div>
+  <a href="https://unignorable.polyfeeds.dev" class="nav-cta">Open Web App →</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <img class="hero-logo" src="/photos/logo.jpg" alt="Unignorable logo">
+  <h1>Walk smarter.<br><span class="accent">Walk safer.</span></h1>
+  <p class="subtitle">Unignorable for iPhone builds avoidance-aware walking routes across NYC — around encampments, drug activity, broken sidewalks, and surveillance cameras. Then lets you hold the city accountable for what it keeps ignoring.</p>
+  <div class="hero-badges">
+    <span class="badge"><span class="dot coral"></span>Walking Routes</span>
+    <span class="badge"><span class="dot mint"></span>Live Conditions</span>
+    <span class="badge"><span class="dot amber"></span>7 Map Layers</span>
+    <span class="badge"><span class="dot purple"></span>Civic Accountability</span>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 32px;">
+    <span style="color: var(--amber); font-weight: 600; font-size: 1.1rem; letter-spacing: 0.5px;">iOS app coming soon</span>
+    <a href="https://forms.gle/kQyL5LmQQEyM4bWv9" class="hero-cta" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v6l4 2"/></svg>
+      Sign up for Beta
+    </a>
+  </div>
+
+  <div class="section-share" style="margin-top: 48px; justify-content: center; border-top: none; padding-top: 0;">
+    <span class="share-label">Share</span>
+    <a class="share-btn" href="https://twitter.com/intent/tweet?text=Walk%20smarter%20in%20NYC%20with%20Unignorable%20%E2%80%94%20avoidance-aware%20walking%20routes%20and%20civic%20accountability&url=https://unignorable.polyfeeds.dev/design/ios-demo" target="_blank" rel="noopener" title="Share on X">
+      <svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+    </a>
+    <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo" target="_blank" rel="noopener" title="Share on Facebook">
+      <svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+    </a>
+    <a class="share-btn" href="https://www.linkedin.com/shareArticle?mini=true&url=https://unignorable.polyfeeds.dev/design/ios-demo&title=Unignorable%20for%20iPhone" target="_blank" rel="noopener" title="Share on LinkedIn">
+      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+    </a>
+    <a class="share-btn" href="mailto:?subject=Unignorable%20for%20iPhone&body=Check%20out%20Unignorable%20%E2%80%94%20avoidance-aware%20walking%20routes%20for%20NYC%3A%20https://unignorable.polyfeeds.dev/design/ios-demo" title="Share via Email">
+      <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+    </a>
+  </div>
+</section>
+
+<hr class="separator">
+
+<!-- HOW IT WORKS -->
+<section class="section fade-in" id="how-it-works">
+  <span class="section-tag">How It Works</span>
+  <h2>Four steps to a smarter walk</h2>
+  <p class="lead">Enter your addresses, choose what to avoid, and Unignorable builds a walking route that keeps you away from the conditions you care about.</p>
+
+  <div class="steps">
+    <div class="step">
+      <h3>Enter your route</h3>
+      <p>Type or say "Where from?" and "Where to?" — NYC-bounded address search finds your blocks instantly. Tap the GPS button to use your current location.</p>
+    </div>
+    <div class="step">
+      <h3>Choose what to avoid</h3>
+      <p>Toggle avoidance filters for encampments, drug activity, ALPR cameras, broken sidewalks, potholes, illegal dumping, and broken signals. All default off — you add only what matters to you.</p>
+    </div>
+    <div class="step">
+      <h3>Add a stop on the way</h3>
+      <p>Discover live Citi Bike stations near your route with real-time bike and dock counts. Tap any station to shape your walk past it without changing your destination.</p>
+    </div>
+    <div class="step">
+      <h3>Walk with confidence</h3>
+      <p>See your exact route on the map with turn-by-turn directions. One tap opens the route in Apple Maps or Google Maps in walking mode with your stop and shaping points.</p>
+    </div>
+  </div>
+
+  <div class="section-share">
+    <span class="share-label">Share this</span>
+    <a class="share-btn" href="https://twitter.com/intent/tweet?text=How%20Unignorable%20builds%20smarter%20walking%20routes%20in%20NYC%20%E2%80%94%20in%204%20steps&url=https://unignorable.polyfeeds.dev/design/ios-demo%23how-it-works" target="_blank" rel="noopener" title="Share on X"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+    <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23how-it-works" target="_blank" rel="noopener" title="Share on Facebook"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+    <a class="share-btn" href="https://www.linkedin.com/shareArticle?mini=true&url=https://unignorable.polyfeeds.dev/design/ios-demo%23how-it-works&title=How%20Unignorable%20Works" target="_blank" rel="noopener" title="Share on LinkedIn"><svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
+    <a class="share-btn" href="mailto:?subject=How%20Unignorable%20Works&body=Four%20steps%20to%20a%20smarter%20walk%20in%20NYC%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23how-it-works" title="Share via Email"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+  </div>
+</section>
+
+<hr class="separator">
+
+<!-- PHONE MOCKUP + ROUTE PLANNER -->
+<section class="phone-mockup-section fade-in" id="route-planner">
+  <div class="text-side">
+    <span class="section-tag">Route Planner</span>
+    <h2>Your walk, your rules</h2>
+    <p class="lead">The planner is an explicit walking flow. Enter both addresses, choose filters, optionally pick a Citi Bike station, then tap <strong>Create walking route</strong>.</p>
+    <ul style="list-style: none; display: flex; flex-direction: column; gap: 14px; margin-top: 24px;">
+      <li style="display: flex; align-items: flex-start; gap: 12px;">
+        <span style="color: var(--coral); font-size: 20px;">🗺️</span>
+        <div><strong>Apple MapKit canvas</strong><br><span style="color: var(--muted); font-size: 14px;">Native map with exact backend-generated route overlay, not Apple's recalculation.</span></div>
+      </li>
+      <li style="display: flex; align-items: flex-start; gap: 12px;">
+        <span style="color: var(--mint); font-size: 20px;">🔄</span>
+        <div><strong>Swap & reroute</strong><br><span style="color: var(--muted); font-size: 14px;">Swap origin ↔ destination, change filters, or pick a new stop — updates instantly.</span></div>
+      </li>
+      <li style="display: flex; align-items: flex-start; gap: 12px;">
+        <span style="color: var(--amber); font-size: 20px;">📍</span>
+        <div><strong>Smart suggestions</strong><br><span style="color: var(--muted); font-size: 14px;">Apple MKLocalSearchCompleter first, server geocoder as fallback. Fast, accurate, NYC-bounded.</span></div>
+      </li>
+      <li style="display: flex; align-items: flex-start; gap: 12px;">
+        <span style="color: var(--purple); font-size: 20px;">🚴</span>
+        <div><strong>Citi Bike integration</strong><br><span style="color: var(--muted); font-size: 14px;">Live availability near your route. Tap a station to add it as a waypoint.</span></div>
+      </li>
+    </ul>
+
+    <div class="section-share">
+      <span class="share-label">Share this</span>
+      <a class="share-btn" href="https://twitter.com/intent/tweet?text=Unignorable%20builds%20avoidance-aware%20walking%20routes%20in%20NYC%20with%20live%20Citi%20Bike%20integration&url=https://unignorable.polyfeeds.dev/design/ios-demo%23route-planner" target="_blank" rel="noopener" title="Share on X"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+      <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23route-planner" target="_blank" rel="noopener" title="Share on Facebook"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+      <a class="share-btn" href="mailto:?subject=Unignorable%20Route%20Planner&body=Check%20out%20the%20Unignorable%20walking%20route%20planner%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23route-planner" title="Share via Email"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+    </div>
+  </div>
+
+  <div class="phone-side">
+    <div class="phone-frame">
+      <div class="phone-screen">
+        <div class="phone-header">
+          <span class="ph-label">🚶 Walking route</span>
+          <span class="ph-brand">unignorable</span>
+        </div>
+        <div class="mock-input">
+          <span class="mock-dot green">A</span>
+          <span class="mock-text">335 2nd Ave</span>
+        </div>
+        <div class="mock-input">
+          <span class="mock-dot red">B</span>
+          <span class="mock-text">Union Square</span>
+        </div>
+        <div class="mock-chip-row">
+          <span class="mock-chip">🛡️ Avoid · 2 selected</span>
+          <span class="mock-chip">📍 Go by · Citi Bike</span>
+        </div>
+        <div class="mock-btn">Create walking route</div>
+        <div class="mock-map">
+          <div class="mock-route"></div>
+        </div>
+        <div style="display: flex; gap: 6px;">
+          <div style="flex:1; background: var(--coral); border-radius: 8px; padding: 8px; text-align: center; font-size: 11px; font-weight: 700; color: white;"> Apple Maps</div>
+          <div style="flex:1; background: #3478f6; border-radius: 8px; padding: 8px; text-align: center; font-size: 11px; font-weight: 700; color: white;">Google Maps</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="separator">
+
+<!-- FEATURES -->
+<section class="section fade-in" id="features">
+  <span class="section-tag">Core Features</span>
+  <h2>Everything you can do</h2>
+  <p class="lead">A walking-first civic intelligence app that combines avoidance routing, real-time conditions, community verification, and accountability — all on one map.</p>
+
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="feature-icon coral-bg">🛡️</div>
+      <h3>Avoidance Routing</h3>
+      <p>Routes are scored against selected map layers. High-confidence locations become hard exclusions; uncertain ones influence ranking. Walking mode enforces ferry avoidance and rejects routes over 30% time or 35% distance premium.</p>
+      <div class="share-bar">
+        <span class="share-label">Share</span>
+        <a class="share-btn" href="https://twitter.com/intent/tweet?text=Unignorable%20builds%20walking%20routes%20that%20avoid%20encampments%2C%20cameras%2C%20and%20broken%20sidewalks%20in%20NYC&url=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+        <a class="share-btn" href="mailto:?subject=Avoidance%20Routing&body=Unignorable%20builds%20walking%20routes%20that%20avoid%20what%20you%20select%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23features"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon mint-bg">🧭</div>
+      <h3>Turn-by-Turn Directions</h3>
+      <p>Real-street walking directions with SF Symbols maneuver icons. Small walkway transitions are folded out; real named-street decisions, stairs, ramps, and bridges are highlighted.</p>
+      <div class="share-bar">
+        <span class="share-label">Share</span>
+        <a class="share-btn" href="https://twitter.com/intent/tweet?text=Native%20turn-by-turn%20walking%20directions%20in%20Unignorable%20for%20iPhone&url=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+        <a class="share-btn" href="mailto:?subject=Walking%20Directions&body=Native%20turn-by-turn%20walking%20directions%20in%20Unignorable%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23features"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon amber-bg">📲</div>
+      <h3>Apple & Google Maps Export</h3>
+      <p>One-tap deep links open your generated route in Apple Maps or Google Maps in walking mode — with your intentional stop and up to three shaping waypoints baked in.</p>
+      <div class="share-bar">
+        <span class="share-label">Share</span>
+        <a class="share-btn" href="https://twitter.com/intent/tweet?text=Unignorable%20exports%20your%20custom%20walking%20route%20to%20Apple%20Maps%20or%20Google%20Maps%20with%20one%20tap&url=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+        <a class="share-btn" href="mailto:?subject=Maps%20Export&body=One-tap%20export%20to%20Apple%20or%20Google%20Maps%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23features"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon purple-bg">📍</div>
+      <h3>Condition Estimates</h3>
+      <p>Every map point shows estimated presence probability, uncertainty range, last agency check, last field observation, and routing impact. Bayesian model with 10-day evidence half-life.</p>
+      <div class="share-bar">
+        <span class="share-label">Share</span>
+        <a class="share-btn" href="https://twitter.com/intent/tweet?text=Probabilistic%20condition%20estimates%20for%20every%20NYC%20block%20in%20the%20Unignorable%20app&url=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+        <a class="share-btn" href="mailto:?subject=Condition%20Estimates&body=Probabilistic%20condition%20estimates%20for%20every%20NYC%20block%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23features"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon coral-bg">✅</div>
+      <h3>On-the-Ground Verification</h3>
+      <p>When you're physically near an encampment point, report "Still here," "Gone," or "Can't tell." Your proximity is GPS-checked and deduplicated. Two same-day observations become model evidence.</p>
+      <div class="share-bar">
+        <span class="share-label">Share</span>
+        <a class="share-btn" href="https://twitter.com/intent/tweet?text=Verify%20NYC%20conditions%20on%20the%20ground%20with%20GPS-checked%20proximity%20in%20Unignorable&url=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+        <a class="share-btn" href="mailto:?subject=Ground%20Verification&body=GPS-verified%20condition%20reports%20in%20Unignorable%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23features"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon blue-bg">📸</div>
+      <h3>Photo Evidence & Reporting</h3>
+      <p>Snap a photo, pick a status (Still here / Got worse / Cleaned up / Gone), and add a note. Photos are automatically downscaled. A person reviews every submission before it goes public.</p>
+      <div class="share-bar">
+        <span class="share-label">Share</span>
+        <a class="share-btn" href="https://twitter.com/intent/tweet?text=Citizens%20can%20submit%20photo%20evidence%20of%20chronic%20NYC%20civic%20failures%20through%20Unignorable&url=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+        <a class="share-btn" href="mailto:?subject=Photo%20Evidence&body=Submit%20photo%20evidence%20of%20civic%20failures%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23features"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon mint-bg">🚴</div>
+      <h3>Live Citi Bike Stops</h3>
+      <p>Toggle Citi Bike on the map to see stations near your route with real-time bike and dock counts. Tap any station to add it as an intermediate waypoint — your destination stays the same.</p>
+      <div class="share-bar">
+        <span class="share-label">Share</span>
+        <a class="share-btn" href="https://twitter.com/intent/tweet?text=Live%20Citi%20Bike%20availability%20built%20right%20into%20Unignorable%20walking%20routes&url=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+        <a class="share-btn" href="mailto:?subject=Citi%20Bike%20Integration&body=Live%20Citi%20Bike%20stops%20in%20Unignorable%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23features"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon amber-bg">⬆️</div>
+      <h3>Confirm & Upvote</h3>
+      <p>One tap to confirm "I see this." Corroboration counts drive severity ranking and map visual weight. Your confirmation feeds back into the condition model for the whole community.</p>
+      <div class="share-bar">
+        <span class="share-label">Share</span>
+        <a class="share-btn" href="https://twitter.com/intent/tweet?text=Confirm%20civic%20issues%20with%20one%20tap%20in%20Unignorable%20%E2%80%94%20your%20upvote%20drives%20severity%20ranking&url=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+        <a class="share-btn" href="mailto:?subject=Confirm%20%26%20Upvote&body=One-tap%20confirmation%20in%20Unignorable%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23features"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+      </div>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-icon purple-bg">📋</div>
+      <h3>Route Alternatives</h3>
+      <p>See multiple route options ranked by avoidance effectiveness. Each shows duration, distance, and how many high-confidence locations are crossed. Pick the one that fits.</p>
+      <div class="share-bar">
+        <span class="share-label">Share</span>
+        <a class="share-btn" href="https://twitter.com/intent/tweet?text=Compare%20multiple%20walking%20routes%20ranked%20by%20avoidance%20in%20Unignorable&url=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+        <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23features" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+        <a class="share-btn" href="mailto:?subject=Route%20Alternatives&body=Multiple%20avoidance-ranked%20routes%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23features"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="separator">
+
+<!-- MAP LAYERS -->
+<section class="section fade-in" id="layers">
+  <span class="section-tag">Map Layers</span>
+  <h2>Seven layers of city intelligence</h2>
+  <p class="lead">Each layer is sourced from public data — OpenStreetMap, NYC 311, and live GBFS feeds — refreshed daily and never stale.</p>
+
+  <div class="layer-list">
+    <div class="layer-item">
+      <span class="layer-dot" style="color: var(--amber); background: var(--amber);"></span>
+      <div><span class="layer-name">License plate cameras (ALPR)</span><br><span class="layer-desc">Community-maintained ALPR locations from OpenStreetMap. Shows manufacturer when tagged (e.g. Flock Safety). 45 m routing buffer.</span></div>
+    </div>
+    <div class="layer-item">
+      <span class="layer-dot" style="color: var(--coral); background: var(--coral);"></span>
+      <div><span class="layer-name">Encampment reports</span><br><span class="layer-desc">NYC 311 encampment clusters with probabilistic presence model. High-probability sites with recent corroboration are hard exclusions. 55 m buffer.</span></div>
+    </div>
+    <div class="layer-item">
+      <span class="layer-dot" style="color: var(--purple); background: var(--purple);"></span>
+      <div><span class="layer-name">Drug activity</span><br><span class="layer-desc">Indoor and outdoor drug activity 311 report clusters. Recurring clusters with 5+ reports at a site. 110 m buffer for broad clusters.</span></div>
+    </div>
+    <div class="layer-item">
+      <span class="layer-dot" style="color: orange; background: orange;"></span>
+      <div><span class="layer-name">Illegal dumping</span><br><span class="layer-desc">Repeat illegal dumping sites from 311 data. Shows recurrence pattern and agency response history.</span></div>
+    </div>
+    <div class="layer-item">
+      <span class="layer-dot" style="color: #f0e040; background: #f0e040;"></span>
+      <div><span class="layer-name">Broken sidewalks</span><br><span class="layer-desc">Hazardous sidewalk conditions from 311 reports. Especially relevant for accessibility and walking safety.</span></div>
+    </div>
+    <div class="layer-item">
+      <span class="layer-dot" style="color: #4a90d9; background: #4a90d9;"></span>
+      <div><span class="layer-name">Bad roads</span><br><span class="layer-desc">Potholes, cave-ins, and street conditions from 311 data. Shows how long the condition has persisted.</span></div>
+    </div>
+    <div class="layer-item">
+      <span class="layer-dot" style="color: var(--mint); background: var(--mint);"></span>
+      <div><span class="layer-name">Broken lights & signals</span><br><span class="layer-desc">Broken street lights and pedestrian signals. Critical for nighttime walking safety.</span></div>
+    </div>
+  </div>
+
+  <div class="section-share">
+    <span class="share-label">Share this</span>
+    <a class="share-btn" href="https://twitter.com/intent/tweet?text=Unignorable%20maps%207%20layers%20of%20NYC%20civic%20conditions%20%E2%80%94%20cameras%2C%20encampments%2C%20drugs%2C%20dumping%2C%20sidewalks%2C%20roads%2C%20and%20signals&url=https://unignorable.polyfeeds.dev/design/ios-demo%23layers" target="_blank" rel="noopener" title="Share on X"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+    <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23layers" target="_blank" rel="noopener" title="Share on Facebook"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+    <a class="share-btn" href="https://www.linkedin.com/shareArticle?mini=true&url=https://unignorable.polyfeeds.dev/design/ios-demo%23layers&title=7%20Map%20Layers" target="_blank" rel="noopener" title="Share on LinkedIn"><svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
+    <a class="share-btn" href="mailto:?subject=7%20Map%20Layers&body=Unignorable%20maps%207%20layers%20of%20NYC%20civic%20conditions%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23layers" title="Share via Email"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+  </div>
+</section>
+
+<hr class="separator">
+
+<!-- ACCOUNTABILITY -->
+<section class="section fade-in" id="accountability">
+  <span class="section-tag">Civic Accountability</span>
+  <h2>The city closes tickets.<br>The problem comes back.</h2>
+  <p class="lead">Unignorable tracks what the city marks "resolved" and shows when it recurs. 67% of 311 closures came back. Hold them accountable with data.</p>
+
+  <div class="accountability-grid">
+    <div class="stat-card">
+      <div class="stat-value">67%</div>
+      <div class="stat-label">of city closures recurred</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">12K+</div>
+      <div class="stat-label">clustered civic issues tracked</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value">$28/hr</div>
+      <div class="stat-label">transparent cost model baseline</div>
+    </div>
+  </div>
+
+  <div style="margin-top: 48px;">
+    <div class="campaign-preview">
+      <div class="cp-status">CHRONIC · Day 296</div>
+      <div class="cp-address">246 E 20th St</div>
+      <div class="cp-borough">Manhattan · Council District 2</div>
+      <div class="cp-stats">
+        <div class="cp-stat"><div class="cp-val">142</div><div class="cp-lbl">311 reports</div></div>
+        <div class="cp-stat"><div class="cp-val">67</div><div class="cp-lbl">city closures</div></div>
+        <div class="cp-stat"><div class="cp-val">48</div><div class="cp-lbl">came back</div></div>
+      </div>
+      <div class="cp-confirm-btn">✓ Confirm this is here now &nbsp;·&nbsp; 23</div>
+      <div class="cp-verdict">STILL HERE · 23 confirmations</div>
+      <div style="margin-top: 12px; font-size: 13px; color: var(--muted);">Estimated city cost: <strong style="color: var(--amber);">$831 — $3,323</strong></div>
+    </div>
+  </div>
+
+  <div class="section-share">
+    <span class="share-label">Share this</span>
+    <a class="share-btn" href="https://twitter.com/intent/tweet?text=67%25%20of%20NYC%20311%20closures%20came%20back.%20Unignorable%20tracks%20what%20the%20city%20keeps%20ignoring.&url=https://unignorable.polyfeeds.dev/design/ios-demo%23accountability" target="_blank" rel="noopener" title="Share on X"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+    <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23accountability" target="_blank" rel="noopener" title="Share on Facebook"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+    <a class="share-btn" href="https://www.linkedin.com/shareArticle?mini=true&url=https://unignorable.polyfeeds.dev/design/ios-demo%23accountability&title=Civic%20Accountability" target="_blank" rel="noopener" title="Share on LinkedIn"><svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
+    <a class="share-btn" href="mailto:?subject=67%25%20of%20NYC%20closures%20recurred&body=Unignorable%20tracks%20what%20the%20city%20keeps%20ignoring%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23accountability" title="Share via Email"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+  </div>
+</section>
+
+<hr class="separator">
+
+<!-- COMMUNITY -->
+<section class="section fade-in" id="community">
+  <span class="section-tag">Campaigns & Escalation</span>
+  <h2>From awareness to action</h2>
+  <p class="lead">Unignorable doesn't just show the problem — it gives you a playbook to escalate. Named officials, prefilled emails, permanent action receipts.</p>
+
+  <div class="escalation-ladder">
+    <div class="escalation-step">
+      <div class="es-day"><span class="day-n">0</span><span class="day-l">Day</span></div>
+      <div class="es-content">
+        <h4>Email your Council Member</h4>
+        <p>Prefilled email with evidence citations, cost data, and recurrence history. One tap to send from your device.</p>
+      </div>
+    </div>
+    <div class="escalation-step">
+      <div class="es-day"><span class="day-n">7</span><span class="day-l">Day</span></div>
+      <div class="es-content">
+        <h4>Community Board agenda request</h4>
+        <p>Request this issue be discussed at the next Community Board meeting. Evidence packaged and ready.</p>
+      </div>
+    </div>
+    <div class="escalation-step">
+      <div class="es-day"><span class="day-n">14</span><span class="day-l">Day</span></div>
+      <div class="es-content">
+        <h4>Tip local press</h4>
+        <p>Share the permanent record with local reporters. The data speaks: this has been ignored for months.</p>
+      </div>
+    </div>
+    <div class="escalation-step">
+      <div class="es-day"><span class="day-n">21</span><span class="day-l">Day</span></div>
+      <div class="es-content">
+        <h4>Public campaign share</h4>
+        <p>Share the campaign card to X, Facebook, or anywhere. Every share creates a permanent verified receipt.</p>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 40px;">
+    <h3 style="font-size: 18px; margin-bottom: 16px;">Also on the platform</h3>
+    <div class="feature-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
+      <div class="feature-card">
+        <div class="feature-icon coral-bg">🌐</div>
+        <h3>Shareable Area Zones</h3>
+        <p>Mint a permalink for any multi-block area with ranked issues, stats, and a mini map. Standing hotspots like Penn Station and Union Square always available.</p>
+        <div class="share-bar">
+          <span class="share-label">Share</span>
+          <a class="share-btn" href="https://twitter.com/intent/tweet?text=Share%20an%20area%20zone%20of%20NYC%20civic%20issues%20with%20a%20permalink%20on%20Unignorable&url=https://unignorable.polyfeeds.dev/design/ios-demo%23community" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+          <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23community" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+          <a class="share-btn" href="mailto:?subject=Area%20Zones&body=Share%20NYC%20civic%20issue%20zones%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23community"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon mint-bg">🏷️</div>
+        <h3>Hotspots Directory</h3>
+        <p>NYC's worst civic failure zones ranked by density and severity. Penn Station, Port Authority, Union Square, Atlantic-Barclays, and more.</p>
+        <div class="share-bar">
+          <span class="share-label">Share</span>
+          <a class="share-btn" href="https://twitter.com/intent/tweet?text=NYC%27s%20worst%20civic%20failure%20hotspots%20ranked%20by%20Unignorable&url=https://unignorable.polyfeeds.dev/hotspots" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+          <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/hotspots" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+          <a class="share-btn" href="mailto:?subject=NYC%20Hotspots&body=Ranked%20civic%20failure%20zones%3A%20https://unignorable.polyfeeds.dev/hotspots"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon amber-bg">🧾</div>
+        <h3>Action Receipts</h3>
+        <p>Every civic action creates a permanent, tamper-evident receipt. Emailed your Council Member? There's a receipt. Shared a campaign? Receipt. Permanent proof you acted.</p>
+        <div class="share-bar">
+          <span class="share-label">Share</span>
+          <a class="share-btn" href="https://twitter.com/intent/tweet?text=Permanent%20action%20receipts%20for%20every%20civic%20step%20you%20take%20in%20Unignorable&url=https://unignorable.polyfeeds.dev/design/ios-demo%23community" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+          <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23community" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+          <a class="share-btn" href="mailto:?subject=Action%20Receipts&body=Permanent%20receipts%20for%20civic%20actions%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23community"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+        </div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon purple-bg">📊</div>
+        <h3>Disparity Dashboard</h3>
+        <p>See how your Council District compares. Dismissal rates range from 37% to 91% across districts. Data visualization with trends from 2021 to 2026.</p>
+        <div class="share-bar">
+          <span class="share-label">Share</span>
+          <a class="share-btn" href="https://twitter.com/intent/tweet?text=NYC%20dismissal%20rates%20vary%20from%2037%25%20to%2091%25%20across%20Council%20Districts.%20See%20yours%20on%20Unignorable.&url=https://unignorable.polyfeeds.dev/issues" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+          <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/issues" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+          <a class="share-btn" href="mailto:?subject=Disparity%20Dashboard&body=See%20dismissal%20rates%20by%20district%3A%20https://unignorable.polyfeeds.dev/issues"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-share">
+    <span class="share-label">Share this</span>
+    <a class="share-btn" href="https://twitter.com/intent/tweet?text=From%20awareness%20to%20action%20%E2%80%94%20Unignorable%27s%20civic%20escalation%20ladder%20for%20NYC&url=https://unignorable.polyfeeds.dev/design/ios-demo%23community" target="_blank" rel="noopener" title="Share on X"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+    <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23community" target="_blank" rel="noopener" title="Share on Facebook"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+    <a class="share-btn" href="https://www.linkedin.com/shareArticle?mini=true&url=https://unignorable.polyfeeds.dev/design/ios-demo%23community&title=Civic%20Escalation" target="_blank" rel="noopener" title="Share on LinkedIn"><svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
+    <a class="share-btn" href="mailto:?subject=Civic%20Escalation&body=From%20awareness%20to%20action%20with%20Unignorable%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23community" title="Share via Email"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+  </div>
+</section>
+
+<hr class="separator">
+
+<!-- PRIVACY -->
+<section class="section fade-in" id="privacy">
+  <span class="section-tag">Privacy & Data</span>
+  <h2>What we don't collect</h2>
+  <p class="lead">Unignorable is built on public data and respects your privacy by default.</p>
+
+  <div class="feature-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
+    <div class="feature-card">
+      <div class="feature-icon mint-bg">🔒</div>
+      <h3>No Trip History</h3>
+      <p>The server does not store routes or trip history. Addresses persist only in your browser's local storage.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon amber-bg">📍</div>
+      <h3>GPS Optional</h3>
+      <p>Manual A→B entry works without geolocation permission. GPS is only requested for "use current location" and field observations.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon coral-bg">📡</div>
+      <h3>Public Sources Only</h3>
+      <p>All map data comes from public sources: OpenStreetMap, NYC 311, and GBFS feeds. No private or proprietary surveillance data.</p>
+    </div>
+  </div>
+
+  <div class="section-share">
+    <span class="share-label">Share this</span>
+    <a class="share-btn" href="https://twitter.com/intent/tweet?text=Unignorable%20respects%20your%20privacy%20%E2%80%94%20no%20trip%20history%2C%20GPS%20optional%2C%20public%20data%20only&url=https://unignorable.polyfeeds.dev/design/ios-demo%23privacy" target="_blank" rel="noopener" title="Share on X"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+    <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo%23privacy" target="_blank" rel="noopener" title="Share on Facebook"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+    <a class="share-btn" href="mailto:?subject=Privacy%20First&body=Unignorable%20respects%20your%20privacy%3A%20https://unignorable.polyfeeds.dev/design/ios-demo%23privacy" title="Share via Email"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+  </div>
+</section>
+
+<hr class="separator">
+
+<!-- BOTTOM CTA -->
+<section class="cta-section fade-in">
+  <h2>Start walking smarter today</h2>
+  <p>Try Unignorable on the web — no account needed. Open in any mobile browser for the full experience, or follow the iOS project on GitHub.</p>
+  <a href="https://unignorable.polyfeeds.dev" class="hero-cta">Open Unignorable →</a>
+
+  <div class="section-share" style="justify-content: center; margin-top: 40px; border-top: none; padding-top: 0;">
+    <span class="share-label">Share with a friend</span>
+    <a class="share-btn" href="https://twitter.com/intent/tweet?text=Walk%20smarter%20in%20NYC%20with%20Unignorable%20%E2%80%94%20avoidance-aware%20routes%20%2B%20civic%20accountability&url=https://unignorable.polyfeeds.dev/design/ios-demo" target="_blank" rel="noopener" title="Share on X"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
+    <a class="share-btn" href="https://www.facebook.com/sharer/sharer.php?u=https://unignorable.polyfeeds.dev/design/ios-demo" target="_blank" rel="noopener" title="Share on Facebook"><svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+    <a class="share-btn" href="https://www.linkedin.com/shareArticle?mini=true&url=https://unignorable.polyfeeds.dev/design/ios-demo&title=Unignorable%20for%20iPhone" target="_blank" rel="noopener" title="Share on LinkedIn"><svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></a>
+    <a class="share-btn" href="mailto:?subject=Unignorable%20for%20NYC&body=Walk%20smarter%20in%20NYC%20%E2%80%94%20avoidance-aware%20routes%20and%20civic%20accountability%3A%20https://unignorable.polyfeeds.dev/design/ios-demo" title="Share via Email"><svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg></a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p>Unignorable · NYC-only civic intelligence · Built on public data<br>
+  <a href="https://unignorable.polyfeeds.dev">unignorable.polyfeeds.dev</a></p>
+</footer>
+
+<!-- Scroll animation -->
+<script>
+const faders = document.querySelectorAll('.fade-in');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.1 });
+faders.forEach(el => observer.observe(el));
+</script>
+</body>
+</html>

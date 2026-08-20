@@ -1,0 +1,60 @@
+{
+  "id": "atlanta",
+  "name": "Atlanta",
+  "state": "GA",
+  "government": "City of Atlanta",
+  "status": "foundation",
+  "center": { "lat": 33.749, "lng": -84.388 },
+  "search": {
+    "viewbox": "-84.55,33.9,-84.25,33.6",
+    "source": "OpenStreetMap Nominatim"
+  },
+  "boundaries": {
+    "city_limits": {
+      "source": "City of Atlanta Department of City Planning GIS",
+      "url": "https://gis.atlantaga.gov/dpcd/rest/services/AdministrativeArea/GeopoliticalArea/MapServer/0",
+      "layer": 0
+    },
+    "council_districts": {
+      "source": "City of Atlanta Department of City Planning GIS",
+      "url": "https://gis.atlantaga.gov/dpcd/rest/services/AdministrativeArea/GeopoliticalArea/MapServer/4",
+      "layer": 4
+    }
+  },
+  "service_requests": {
+    "name": "ATL311",
+    "homepage": "https://www.atl311.com/",
+    "public_status": "case-status-search",
+    "notes": [
+      "ATL311 is the City of Atlanta customer-service front door for non-emergency requests.",
+      "The public portal does not currently expose a verified bulk historical feed in this project.",
+      "Do not treat the ATL311 Power Platform case system as a Socrata-compatible source until its public export and field semantics are verified."
+    ]
+  },
+  "legal_context": {
+    "statute": "O.C.G.A. § 36-60-34",
+    "bill": "GA HB 295 (2025-2026 Regular Session)",
+    "effective_date": "2026-07-01",
+    "source": "https://gov.georgia.gov/document/2026-signed-legislation/hb-295/download",
+    "covered_non_enforcement": [
+      "illegal public camping",
+      "loitering",
+      "obstructing public thoroughfares",
+      "panhandling",
+      "possession or use of controlled substances",
+      "shoplifting",
+      "public intoxication or public urination while trespassing on private property"
+    ],
+    "claim_requirements": {
+      "eligible_owner": "fee-simple owner or leaseholder",
+      "damage_election": [
+        "documented mitigation expenses",
+        "reduction in fair market value"
+      ],
+      "government_response_days": 30,
+      "frequency": "once per parcel per tax year",
+      "payment_cap": "ad valorem property taxes paid on the parcel and levied by that local government in the prior tax year"
+    },
+    "product_boundary": "Evidence organization only; not a legal conclusion, claim filing, valuation, or representation."
+  }
+}

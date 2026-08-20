@@ -1,5 +1,11 @@
 # unignorable
 
+## Current rebuild boundary — 2026-08-10
+
+Unignorable is now the surviving canonical NYC-only map product. The root experience is one full-screen map: saved regular-route planning, avoidance layers, accountability records, field reporting, and useful on-the-way stops all live on that same surface. There is no route/report mode switch. Public records are always native map annotations; tapping one opens its evidence and update sheet without replacing the planner or route, and the record can add its category directly to route avoidance. The web map uses Leaflet with direct public-data layers, reactive driving/walking avoidance routing, optional on-the-way stops, and evidence-based 311 condition states. The native SwiftUI iPhone client under `ios/` is deliberately walking-only: it has no driving mode and hard-codes walking at the API boundary. All optional native avoidance filters and supplemental map layers default off, including cameras; accountability/report annotations remain core map context rather than an avoidance default. Its route flow is addresses → Avoid / Go by preferences → explicit Create walking route; native MapKit address search leads with an API fallback, typed-but-unselected addresses are resolved when the button is pressed, and changing either address invalidates stale route geometry. It uses the same one-map state model in Apple MapKit and draws the exact Valhalla avoidance route, alternatives, tiny severity-outlined route/report markers, live Citi Bike stops, and human-scale walking directions as native UI. The directions layer collapses low-information OSM walkway/crosswalk graph transitions into highlighted-route summaries while retaining named-street decisions and safety-critical stairs, elevators, ramps, bridges, tunnels, transit, and arrival steps. Routing uses a bounded Valhalla exclusion pass plus evidence-weighted, crossing-first ranking and a short bounded response cache; Google and Apple unified Maps links receive the intentional stop plus a mobile-safe maximum of three total waypoints, while the in-app line and GPX preserve the generated route. Web route checkout is implemented at $1/24 hours and $25/year, but production stays in explicit bypass mode until a live-mode Stripe credential exists in the central vault. Native StoreKit products and server-side transaction entitlement remain a separate required release slice.
+
+Reusable ideas were ported from `/Users/mini-home/projects/consent-atlas` and `/Users/mini-home/Desktop/Monorepo/sidewalk`; those source repositories and histories remain untouched. New runtime map data is a compact generated artifact at `$DATA_DIR/map-layers.json`. Deterministic fixtures under `tests/fixtures/` isolate verification from Overpass, Socrata, Nominatim, and Valhalla availability. See `README.md` for the current architecture, commands, taxonomy, freshness model, buffers, privacy posture, and known limitations.
+
 ## What This Is
 
 Civic accountability map for NYC. Makes the city's own record of **chronic, ignored quality-of-life issues** impossible to look away from. 311 is a private 1:1 routing tool with no memory and no public — so one encampment gets reported thousands of times and closed thousands of times, invisibly. unignorable assembles those scattered tickets into one persistent **Issue** with a city-inaction timeline, and adds an **"I see this often"** corroboration signal.
@@ -15,7 +21,7 @@ Portfolio policy: `/Users/mini-home/Desktop/Monorepo/control-plane/AGENT-CORE.md
 ## Architecture
 
 ```
-/Users/mini-home/unignorable/
+/Users/mini-home/projects/unignorable/
   server.js                    # zero-dep Node HTTP server and server-rendered campaign/area pages
   index.html                   # single-page Leaflet map, dossier card, trends, and disparity views
   ugc.js                       # node:sqlite citizen reports, confirmations, campaigns, actions, areas
@@ -100,7 +106,7 @@ pm2 restart unignorable-canonical
 
 ## Refresh / keep data fresh
 ```bash
-bash /Users/mini-home/unignorable/scripts/refresh.sh
+bash /Users/mini-home/projects/unignorable/scripts/refresh.sh
 tail -f /Users/mini-home/.local/share/unignorable/refresh.log
 launchctl list | grep unignorable          # confirm the schedule is loaded
 ```

@@ -1,0 +1,20 @@
+{
+  "type": "Encampment",
+  "id": "40.736,-73.983",
+  "sensitive_sites": [
+    { "id": "6c415aac6d623c529c0a39ed917f839d", "name": "PS OF THE ARTS", "address": "337 2 AVENUE", "category": "childcare", "type": "DAY CARE", "lat": 40.7358868135, "lng": -73.9828053738, "source_record": "dohmh_daycare", "distance_ft": 93 },
+    { "id": "dfdae275781c458f4a265af74bdde5d1", "name": "LEARNINGSPRING SCHOOL", "address": "247 EAST 20 STREET", "category": "school", "type": "ELEMENTARY SCHOOL - NON-PUBLIC", "lat": 40.7362911238, "lng": -73.9824439076, "source_record": "nysed_activeinstitutions", "distance_ft": 151 },
+    { "id": "1654cfffbec2687bc9d4a2e79f4e8657", "name": "P.S. 040 AUGUSTUS SAINT-GAUDENS", "address": "319 EAST 19 STREET", "category": "childcare", "type": "DOE UNIVERSAL PRE-K", "lat": 40.7353266046, "lng": -73.9815457443, "source_record": "doe_universalprek", "distance_ft": 482 },
+    { "id": "b6cb289993a8e6f71b3945eea60eddd8", "name": "P.S. 040 AUGUSTUS SAINT-GAUDENS", "address": "320 EAST 20 STREET", "category": "school", "type": "ELEMENTARY SCHOOL - PUBLIC", "lat": 40.7353266046, "lng": -73.9815457443, "source_record": "doe_lcgms", "distance_ft": 482 },
+    { "id": "b6e6b38f861c22a77b4fd0b9e062d3fd", "name": "M.S. 255 SALK SCHOOL OF SCIENCE", "address": "320 EAST 20 STREET", "category": "school", "type": "JUNIOR HIGH-INTERMEDIATE-MIDDLE SCHOOL - PUBLIC", "lat": 40.7353266046, "lng": -73.9815457443, "source_record": "doe_lcgms", "distance_ft": 482 }
+  ],
+  "sensitive_site_summary": {
+    "radius_ft": 500,
+    "school_count": 3,
+    "childcare_count": 2,
+    "nearest_school_ft": 151,
+    "nearest_childcare_ft": 93,
+    "source": "https://data.cityofnewyork.us/City-Government/Facilities-Database/ji82-xba5",
+    "source_refreshed_at": "2026-08-09T10:30:05.940Z"
+  }
+}

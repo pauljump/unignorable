@@ -17,26 +17,41 @@ fs.copyFileSync(
   path.join(project, 'tests', 'fixtures', 'campaign_evidence.json'),
   path.join(dataDir, 'campaign_evidence.json')
 );
+fs.copyFileSync(
+  path.join(project, 'tests', 'fixtures', 'map-layers.json'),
+  path.join(dataDir, 'map-layers.json')
+);
+const proximity = JSON.parse(fs.readFileSync(path.join(project, 'tests', 'fixtures', 'campaign-issue-proximity.json')));
+const fixtureIssuesPath = path.join(dataDir, 'issues.json');
+const fixtureIssues = JSON.parse(fs.readFileSync(fixtureIssuesPath));
+const canary = fixtureIssues.find(item => item.type === proximity.type && item.id === proximity.id);
+if (!canary) throw new Error('Campaign 001 fixture issue is missing');
+canary.sensitive_sites = proximity.sensitive_sites;
+canary.sensitive_site_summary = proximity.sensitive_site_summary;
+fs.writeFileSync(fixtureIssuesPath, JSON.stringify(fixtureIssues));
 
 const port = 18080 + Math.floor(Math.random() * 1000);
 const origin = `http://127.0.0.1:${port}`;
 const reviewKey = 'test-only-review-key';
 const child = spawn(process.execPath, ['server.js'], {
   cwd: project,
-  env: { ...process.env, PORT: String(port), DATA_DIR: dataDir, PUBLIC_ORIGIN: origin, REVIEW_KEY: reviewKey },
+  env: { ...process.env, PORT: String(port), DATA_DIR: dataDir, PUBLIC_ORIGIN: origin, REVIEW_KEY: reviewKey,
+    TRUST_PROXY_HEADERS: '1', ROUTE_PAYWALL_BYPASS: '1', UPSTREAM_FIXTURES: path.join(project, 'tests', 'fixtures', 'upstreams.json') },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 
-async function waitForServer() {
+async function waitForOrigin(targetOrigin) {
   for (let i = 0; i < 50; i++) {
     try {
-      const response = await fetch(`${origin}/healthz`);
+      const response = await fetch(`${targetOrigin}/healthz`);
       if (response.ok) return;
     } catch {}
     await new Promise(resolve => setTimeout(resolve, 100));
   }
   throw new Error('test server did not start');
 }
+
+const waitForServer = () => waitForOrigin(origin);
 
 test.before(waitForServer);
 test.after(() => {
@@ -51,8 +66,59 @@ test('health and public assets are available with security headers', async () =>
   assert.equal(health.headers.get('x-content-type-options'), 'nosniff');
 
   const root = await fetch(origin, { redirect: 'manual' });
-  assert.equal(root.status, 302);
-  assert.match(root.headers.get('location'), /^\/c\?t=Encampment/);
+  assert.equal(root.status, 200);
+  const rootHtml = await root.text();
+  assert.match(rootHtml, /Where to\?/);
+  assert.match(rootHtml, /Selected locations become street exclusions/);
+  assert.match(rootHtml, /Homeless \/ encampment reports/);
+  assert.match(rootHtml, /Drug activity/);
+  assert.match(rootHtml, /Download exact route \(GPX\)/);
+  assert.match(rootHtml, /aria-autocomplete="list"/);
+  assert.match(rootHtml, /routes are \$1\/day or \$25\/year/);
+  assert.match(rootHtml, /id="report-link" type="button">Report nearby<\/button>/);
+  assert.doesNotMatch(rootHtml, /id="report-panel"/);
+  assert.doesNotMatch(rootHtml, /report-mode/);
+  assert.match(rootHtml, /Public record \+ field updates/);
+  assert.match(rootHtml, /fetch\('\/api\/report-issues'\)/);
+  assert.match(rootHtml, /data-report-confirm/);
+  assert.match(rootHtml, /map\.on\('contextmenu'/);
+  assert.match(rootHtml, /--paper:#080b11/);
+  assert.match(rootHtml, /basemaps\.cartocdn\.com\/dark_all/);
+  assert.match(rootHtml, /radius:cluster\?3:2\.5/);
+  assert.match(rootHtml, /FULL_DETAIL_ZOOM=14/);
+  assert.match(rootHtml, /Outline shows severity|Severity outline legend/);
+  assert.match(rootHtml, /Choose each address from the list/);
+  assert.doesNotMatch(rootHtml, /Build avoidance route/);
+  assert.match(rootHtml, /OpenStreetMap Nominatim/);
+  assert.match(rootHtml, /public Valhalla/);
+  assert.match(rootHtml, /regular-route settings are saved only in this browser/);
+  assert.match(rootHtml, /id="filter-card"/);
+  assert.match(rootHtml, /id="layers-toggle"/);
+  assert.match(rootHtml, /Selected layers show on the map and shape the route/);
+  assert.match(rootHtml, /map\.on\('zoomend',\(\)=>\{syncLayers\(\);drawReportIssues\(\);\}\)/);
+  assert.match(rootHtml, /else loadReportIssues\(\)/);
+  assert.match(rootHtml, /\.legend\{display:none\}/);
+  assert.match(rootHtml, /id="swap-route"/);
+  assert.match(rootHtml, /id="discover-toggle"/);
+  assert.match(rootHtml, /Live Citi Bike/);
+  assert.match(rootHtml, /api\/discover\/citibike/);
+  assert.match(rootHtml, /L\.circleMarker\(\[state\.endpoints\.origin/);
+  assert.match(rootHtml, /Turn-by-turn · \$\{steps\.length\} steps/);
+  assert.match(rootHtml, /Finding your \$\{state\.profile\} route/);
+  assert.match(rootHtml, /leaflet-tile-pane\{filter:brightness\(1\.22\)/);
+  assert.doesNotMatch(rootHtml, /pulse\.polyfeeds/);
+
+  const atlanta = await fetch(`${origin}/api/jurisdiction?city=atlanta`);
+  assert.equal(atlanta.status, 200);
+  const atlantaData = await atlanta.json();
+  assert.equal(atlantaData.jurisdiction.id, 'atlanta');
+  assert.equal(atlantaData.jurisdiction.legal_context.statute, 'O.C.G.A. § 36-60-34');
+  assert.equal(atlantaData.jurisdiction.legal_context.effective_date, '2026-07-01');
+  assert.equal(atlantaData.checklist_schema.example.attorney_review_ready, false);
+
+  const access = await fetch(`${origin}/api/access`);
+  assert.equal(access.status, 200);
+  assert.equal((await access.json()).active, true);
 
   const map = await fetch(`${origin}/map`);
   assert.equal(map.status, 200);
@@ -60,9 +126,161 @@ test('health and public assets are available with security headers', async () =>
   assert.match(html, /\/vendor\/leaflet\.js/);
   assert.doesNotMatch(html, /name="robots" content="noindex"/);
 
+  const reportRedirect = await fetch(`${origin}/report?lat=40.736&lng=-73.983`, { redirect: 'manual' });
+  assert.equal(reportRedirect.status, 302);
+  assert.match(reportRedirect.headers.get('location'), /^\/?\?(?=.*mode=report)(?=.*lat=40\.736)(?=.*lng=-73\.983)/);
+
+  const report = await fetch(`${origin}/issues`);
+  assert.equal(report.status, 200);
+  const reportHtml = await report.text();
+  assert.match(reportHtml, /Report an NYC issue/);
+  assert.match(reportHtml, /href="\/map">Routes<\/a>/);
+  assert.match(reportHtml, /Find your block/);
+  assert.match(reportHtml, /I see this often/);
+  assert.match(reportHtml, /fetch\('\/api\/post'/);
+  assert.match(reportHtml, /URLSearchParams\(location\.search\).*app-shell/);
+  assert.match(reportHtml, /radius:cluster\?3:2\.5/);
+  assert.match(reportHtml, /leaflet-tile-pane\{filter:brightness\(1\.22\)/);
+  assert.doesNotMatch(reportHtml, /function radius\(/);
+
   const vendor = await fetch(`${origin}/vendor/leaflet.js`);
   assert.equal(vendor.status, 200);
   assert.match(vendor.headers.get('cache-control'), /immutable/);
+});
+
+test('missing runtime map data fails closed instead of serving fixtures', async () => {
+  const missingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unignorable-no-map-'));
+  for (const name of ['issues.json', 'trends.json', 'disparity.json']) {
+    fs.copyFileSync(path.join(dataDir, name), path.join(missingDir, name));
+  }
+  const missingPort = port + 2000;
+  const missingOrigin = `http://127.0.0.1:${missingPort}`;
+  const missingChild = spawn(process.execPath, ['server.js'], {
+    cwd: project,
+    env: { ...process.env, PORT: String(missingPort), DATA_DIR: missingDir, PUBLIC_ORIGIN: missingOrigin, REVIEW_KEY: reviewKey,
+      UPSTREAM_FIXTURES: path.join(project, 'tests', 'fixtures', 'upstreams.json') },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  try {
+    await waitForOrigin(missingOrigin);
+    const layers = await fetch(`${missingOrigin}/api/map-layers`);
+    assert.equal(layers.status, 503);
+    assert.match((await layers.json()).error, /map data unavailable/i);
+    const routes = await fetch(`${missingOrigin}/api/routes`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ origin: { lat: 40.7506, lng: -73.9935 }, destination: { lat: 40.7189, lng: -73.9582 } }),
+    });
+    assert.equal(routes.status, 503);
+  } finally {
+    missingChild.kill('SIGTERM');
+    fs.rmSync(missingDir, { recursive: true, force: true });
+  }
+});
+
+test('free map layers and deterministic route comparison are available', async () => {
+  const layerResponse = await fetch(`${origin}/api/map-layers`);
+  assert.equal(layerResponse.status, 200);
+  const layerData = await layerResponse.json();
+  assert.equal(layerData.layers.alpr.length, 3);
+  assert.equal(layerData.layers.homelessness.length, 1);
+  assert.equal(layerData.layers.drugs.length, 1);
+  assert.equal(layerData.layers.homelessness[0].responses.nypd_responded, 9);
+  assert.equal(layerData.layers.drugs[0].responses.arrests, 1);
+  assert.equal(layerData.layers.alpr.filter(item => item.manufacturer === 'Flock Safety').length, 1);
+  assert.match(layerData.meta.caveats.join(' '), /not a complete or live inventory/i);
+
+  const reportIssuesResponse = await fetch(`${origin}/api/report-issues`);
+  assert.equal(reportIssuesResponse.status, 200);
+  const reportIssues = await reportIssuesResponse.json();
+  assert.ok(reportIssues.length > 0);
+  assert.deepEqual(
+    Object.keys(reportIssues[0]).sort(),
+    ['addr','borough','closed_n','current_days','headline','id','last_seen','lat','lng','n','pattern','returned_n','score','seen','status','type'].sort()
+  );
+  assert.equal('episodes' in reportIssues[0], false);
+
+  const geocode = await fetch(`${origin}/api/geocode?q=penn%20station`);
+  assert.equal(geocode.status, 200);
+  assert.equal((await geocode.json())[0].name, 'Penn Station, Manhattan, NY');
+
+  const routes = await fetch(`${origin}/api/routes`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      origin: { lat: 40.7506, lng: -73.9935 }, destination: { lat: 40.7189, lng: -73.9582 },
+      via: { name: 'Citi Bike stop', lat: 40.735, lng: -73.98 },
+      filters: ['alpr', 'street', 'homelessness'],
+    }),
+  });
+  assert.equal(routes.status, 200);
+  const payload = await routes.json();
+  assert.equal(payload.fixture, true);
+  assert.equal(payload.profile, 'driving');
+  assert.match(payload.recommendation_policy, /hard-exclusion batch/i);
+  assert.deepEqual(payload.selected, ['alpr', 'street', 'homelessness']);
+  assert.equal(payload.via.name, 'Citi Bike stop');
+  assert.ok(payload.avoidance.excluded_areas > 0);
+  assert.ok(payload.avoidance.passes > 0);
+  assert.equal(payload.routes.length, 3);
+  assert.equal(payload.routes.filter(route => route.recommended).length, 1);
+  assert.equal(payload.avoidance.improved, true);
+  assert.equal(payload.routing_method, 'valhalla-bounded-avoidance-v4');
+  assert.deepEqual(payload.strategy_portfolio, ['fastest']);
+  assert.ok(payload.routes.some(route => route.avoidance_generated));
+  assert.ok(payload.routes.every(route => Number.isFinite(route.metrics.alpr)));
+  assert.ok(payload.routes.every(route => Array.isArray(route.steps) && route.steps.length > 0));
+  assert.equal(typeof payload.routes[0].steps[0].instruction, 'string');
+  assert.match(payload.caveat, /do not show whether a camera captured you/i);
+  assert.equal(payload.radii_meters.alpr, 45);
+  assert.equal(payload.radii_meters.street, 110);
+  assert.match(payload.routes[0].export.google, /^https:\/\/www\.google\.com\/maps\/dir\//);
+  assert.match(payload.routes[0].export.apple, /^https:\/\/maps\.apple\.com\//);
+  assert.ok(payload.routes[0].export.shapingWaypoints > 0);
+  assert.equal(payload.routes[0].export.includesVia, true);
+  assert.match(new URL(payload.routes[0].export.google).searchParams.get('waypoints'), /^40\.735000,-73\.980000/);
+
+  const walkingResponse = await fetch(`${origin}/api/routes`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      origin: { lat: 40.7506, lng: -73.9935 }, destination: { lat: 40.7189, lng: -73.9582 },
+      profile: 'walking', filters: ['drugs'],
+    }),
+  });
+  assert.equal(walkingResponse.status, 200);
+  const walking = await walkingResponse.json();
+  assert.equal(walking.profile, 'walking');
+  assert.equal(walking.directions_method, 'human-decision-summary-v1');
+  assert.ok(walking.routes.every(route => route.steps.length > 0));
+  assert.equal(new URL(walking.routes[0].export.google).searchParams.get('travelmode'), 'walking');
+  assert.equal(new URL(walking.routes[0].export.apple).searchParams.get('mode'), 'walking');
+  assert.ok(new URL(walking.routes[0].export.apple).searchParams.getAll('waypoint').length > 0);
+
+  const fastestOnly = await fetch(`${origin}/api/routes`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ origin: { lat: 40.7506, lng: -73.9935 }, destination: { lat: 40.7189, lng: -73.9582 }, filters: [] }),
+  });
+  const fastestPayload = await fastestOnly.json();
+  assert.deepEqual(fastestPayload.selected, []);
+  assert.equal(fastestPayload.recommendation_policy, 'fastest route');
+  assert.equal(fastestPayload.routes.find(route => route.recommended).duration, 1320);
+
+  const outOfBounds = await fetch(`${origin}/api/routes`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ origin: { lat: 34, lng: -118 }, destination: { lat: 40.7189, lng: -73.9582 } }),
+  });
+  assert.equal(outOfBounds.status, 400);
+
+  const jerseyCity = await fetch(`${origin}/api/routes`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ origin: { lat: 40.7178, lng: -74.0431 }, destination: { lat: 40.7189, lng: -73.9582 } }),
+  });
+  assert.equal(jerseyCity.status, 400);
+
+  const limitedHeaders = { 'content-type': 'application/json', 'cf-connecting-ip': '198.51.100.77' };
+  const limitedBody = JSON.stringify({ origin: { lat: 40.7506, lng: -73.9935 }, destination: { lat: 40.7189, lng: -73.9582 }, filters: [] });
+  for (let index = 0; index < 60; index++) {
+    assert.equal((await fetch(`${origin}/api/routes`, { method: 'POST', headers: limitedHeaders, body: limitedBody })).status, 200);
+  }
+  assert.equal((await fetch(`${origin}/api/routes`, { method: 'POST', headers: limitedHeaders, body: limitedBody })).status, 429);
 });
 
 test('residents can start or join a city-backed campaign', async () => {
@@ -103,6 +321,25 @@ test('residents can start or join a city-backed campaign', async () => {
   assert.match(campaignHtml, /Your block can be next/);
   assert.match(campaignHtml, /pulse\.polyfeeds\.dev\/api\/ingest/);
   assert.doesNotMatch(campaignHtml, /organizer@example\.com/);
+});
+
+test('nearby field observations are deduplicated and distant submissions are rejected', async () => {
+  const body = { feature_id: '311-encampment-1', state: 'present', lat: 40.746, lng: -73.987 };
+  const first = await fetch(`${origin}/api/condition-observations`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '198.51.100.44' }, body: JSON.stringify(body),
+  });
+  assert.equal(first.status, 200);
+  assert.equal((await first.json()).accepted, true);
+  const duplicate = await fetch(`${origin}/api/condition-observations`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '198.51.100.44' }, body: JSON.stringify(body),
+  });
+  assert.equal(duplicate.status, 200);
+  assert.equal((await duplicate.json()).duplicate, true);
+  const far = await fetch(`${origin}/api/condition-observations`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '198.51.100.45' },
+    body: JSON.stringify({ ...body, lat: 40.72, lng: -74.01 }),
+  });
+  assert.equal(far.status, 400);
 });
 
 test('Campaign 001 separates reporting evidence from observation and issues permanent action receipts', async () => {
@@ -176,7 +413,7 @@ test('issues include production card fields', async () => {
 test('confirmation validates issue and deduplicates by source', async () => {
   const issues = await (await fetch(`${origin}/api/issues`)).json();
   const issue = issues[0];
-  const headers = { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.9' };
+  const headers = { 'content-type': 'application/json', 'cf-connecting-ip': '203.0.113.9' };
   const body = JSON.stringify({ type: issue.type, id: issue.id });
 
   const first = await fetch(`${origin}/api/seen`, { method: 'POST', headers, body });
@@ -197,7 +434,7 @@ test('confirmation validates issue and deduplicates by source', async () => {
 
 test('malformed JSON is rejected and deep links resolve', async () => {
   const bad = await fetch(`${origin}/api/seen`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: '{',
+    method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '198.51.100.88' }, body: '{',
   });
   assert.equal(bad.status, 400);
 

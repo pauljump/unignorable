@@ -1,1427 +1,498 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="NYC's public record of chronic quality-of-life complaints the city keeps closing while the same blocks are reported again.">
-<meta property="og:title" content="unignorable — the record that doesn't forget">
-<meta property="og:description" content="See what is active near you, how long it has persisted, and what NYC's own 311 record says happened.">
-<meta property="og:type" content="website">
-<meta property="og:url" content="https://unignorable.polyfeeds.dev/">
-<title>unignorable — the city's own record of what it keeps ignoring</title>
-<link rel="stylesheet" href="/vendor/leaflet.css">
-<script src="/vendor/leaflet.js"></script>
-<style>
-  :root{
-    --bg:#080b11; --panel:#0e1420; --line:#1d2737; --ink:#eaf0fb; --dim:#9aa6bd;
-    --red:#ff5a47; --amber:#ffc24b;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%;overflow-x:hidden;background:var(--bg);color:var(--ink);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
-  #app{display:flex;flex-direction:column;height:100%}
-  header{padding:8px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0c111b,#080b11)}
-  /* Map-first: heavy header chrome (tag, stat strip, freshness, history toggle) hidden via the
-     rules below so the map is the majority of the screen. Kept in markup for the full redesign. */
-  .topline{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
-  .views{display:flex;gap:3px;background:#0b111c;border:1px solid var(--line);border-radius:999px;padding:3px;flex:none}
-  .vbtn{font:inherit;font-size:12.5px;padding:5px 14px;border:0;border-radius:999px;color:var(--dim);background:transparent;cursor:pointer;user-select:none}
-  .vbtn.on{background:#1a2535;color:var(--ink)}
-  #trends,#disparity{position:absolute;inset:0;background:var(--bg);overflow:auto;display:none;z-index:800}
-  #trends.show,#disparity.show{display:block}
-  .tpad{padding:22px 20px 44px;max-width:920px;margin:0 auto}
-  #trends h2,#disparity h2{font-size:19px;font-weight:800;margin:0 0 4px;letter-spacing:-.3px}
-  .tsub{font-size:13px;color:var(--dim);margin:0 0 18px}
-  #chart{background:#0a0f18;border:1px solid var(--line);border-radius:12px;padding:8px}
-  .tlegend{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;font-size:12.5px;color:var(--dim)}
-  .tlegend span{display:flex;align-items:center;gap:6px}
-  .tlegend i{width:11px;height:11px;border-radius:3px;display:inline-block}
-  /* Disparity engine view */
-  .dhead{background:#0a0f18;border:1px solid var(--line);border-radius:12px;padding:16px 16px 14px;margin-bottom:16px}
-  .dbig{font-size:15px;line-height:1.5;font-weight:600}
-  .dbig b{color:var(--red);font-weight:800}
-  .dtypes{display:flex;gap:8px;margin:14px 0 6px;flex-wrap:wrap}
-  .dtype{font-size:12px;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:#0b111c;color:var(--dim);cursor:pointer;user-select:none}
-  .dtype.on{color:var(--ink);border-color:#3a4d6b;background:#141f30}
-  .dcap{font-size:12px;color:var(--dim);margin:2px 0 14px}
-  .drow{display:grid;grid-template-columns:150px 1fr 62px;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid #101827}
-  .drow .dl{font-size:12.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .drow .dl span{color:var(--dim);font-size:11px}
-  .dbar{height:16px;border-radius:4px;background:linear-gradient(90deg,#3a1116,#e0525f);min-width:2px}
-  .drow.best .dbar{background:linear-gradient(90deg,#12261a,#3fae6b)}
-  .drow .dv{font-size:12.5px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
-  .drow.me{background:#12203a;border-radius:6px}
-  .drow.me .dl{font-weight:800}
-  /* The Inaction Clock (per-issue card) */
-  .clock{background:linear-gradient(180deg,#160c0e,#0c0a10);border:1px solid #3a1c22;border-radius:12px;padding:14px 15px;margin:12px 0}
-  .clock-top{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}
-  .clock-days{font-size:34px;font-weight:800;letter-spacing:-1px;color:#ff6b76;line-height:1;font-variant-numeric:tabular-nums}
-  .clock-unit{font-size:12.5px;color:#e2a7ac;font-weight:600}
-  .clock-tick{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;color:#ffb3ba;margin-top:6px;letter-spacing:.5px}
-  .clock-tick span{font-family:inherit;font-size:11px;color:#8a6a6e;letter-spacing:0}
-  .clock-sub{font-size:12px;color:var(--dim);margin-top:8px;line-height:1.45}
-  .clock-flag{font-size:12px;color:#ffd27a;margin-top:8px;background:#241a08;border:1px solid #453410;border-radius:7px;padding:7px 9px;line-height:1.45}
-  .disp-badge{font-size:12.5px;line-height:1.5;color:var(--ink);background:#0c1420;border:1px solid #24405f;border-radius:10px;padding:11px 13px;margin:12px 0 4px;cursor:pointer}
-  .disp-badge b{font-weight:800}
-  .disp-badge.bad{background:#170d10;border-color:#5a2530}
-  .disp-badge.bad b{color:#ff6b76}
-  .disp-badge.ok{background:#0b1510;border-color:#1f4a34}
-  .disp-badge:active{opacity:.7}
-  .brand{display:flex;align-items:baseline;gap:10px}
-  .brand h1{margin:0;font-size:18px;font-weight:800;letter-spacing:-.5px}
-  .brand h1 b{color:var(--red)}
-  .brand .tag{font-size:12.5px;color:var(--dim);display:none}
-  .strip{display:none;gap:22px;margin-top:10px;flex-wrap:wrap}
-  .stat{display:flex;flex-direction:column}
-  .stat .v{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
-  .stat .l{font-size:10.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px}
-  .stat .v.warn{color:var(--amber)}
-  .fresh{margin-top:9px;font-size:10.5px;color:#8a96ad;letter-spacing:.3px;display:none;align-items:center;gap:6px}
-  .fresh .ok{width:6px;height:6px;border-radius:50%;background:#36c98a;display:inline-block}
-  .chips{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
-  .chip{font-size:12px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);
-    background:#0b111c;color:var(--dim);cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
-  .chip .dot{width:8px;height:8px;border-radius:50%}
-  .chip.on{color:var(--ink);border-color:#2c3a52;background:#121b2b}
-  main{flex:1;position:relative}
-  #map{position:absolute;inset:0;background:#0a0f17}
-  .leaflet-container{background:#0a0f17}
-  /* Issue card */
-  #card{position:absolute;right:0;top:0;bottom:0;width:360px;max-width:88vw;background:var(--panel);
-    border-left:1px solid var(--line);transform:translateX(100%);transition:transform .22s ease;
-    z-index:1000;display:flex;flex-direction:column;overflow:auto}
-  #card.open{transform:none}
-  .card-pad{padding:18px 18px 24px}
-  .x{position:absolute;top:10px;right:10px;width:36px;height:36px;font-size:22px;color:var(--dim);cursor:pointer;line-height:1;background:transparent;border:0;z-index:2}
-  .badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;color:#0b0e14}
-  .addr{font-size:17px;font-weight:800;margin:12px 0 2px;line-height:1.25}
-  .sub{font-size:12.5px;color:var(--dim)}
-  .big{margin:18px 0 4px;font-size:40px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-1px}
-  .big small{font-size:14px;font-weight:600;color:var(--dim);letter-spacing:0}
-  .row{display:flex;justify-content:space-between;padding:11px 0;border-top:1px solid var(--line);font-size:13px}
-  .row .k{color:var(--dim)}
-  .row .v{font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
-  .ignored{color:var(--amber)}
-  .live{display:inline-flex;align-items:center;gap:6px;color:var(--red);font-size:11.5px;font-weight:700;
-    text-transform:uppercase;letter-spacing:.6px;margin-top:6px}
-  .live .pulse{width:8px;height:8px;border-radius:50%;background:var(--red);animation:p 1.6s infinite}
-  @keyframes p{0%,100%{opacity:1}50%{opacity:.25}}
-  .status{margin-top:13px;padding:11px 12px;border-radius:11px;font-weight:800;font-size:14px;letter-spacing:.2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .status .sdot{width:9px;height:9px;border-radius:50%;background:currentColor;flex:none}
-  .status .sm{font-weight:600;font-size:11.5px;color:var(--dim);letter-spacing:0}
-  .status .rec{font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;background:#2a1c10;color:var(--amber);letter-spacing:.3px}
-  .st-persist{background:#1d0f0f;color:#ff6b5a;border:1px solid #3a1d1d}
-  .st-active{background:#170f12;color:#ff8b7a;border:1px solid #33201f}
-  .st-emerge{background:#1c1608;color:var(--amber);border:1px solid #3a2c14}
-  .st-resolved{background:#0c1118;color:#9fb0c8;border:1px solid var(--line)}
-  .spark{margin-top:11px}
-  .spark svg{display:block;height:30px;width:100%}
-  .sl-ax{display:flex;justify-content:space-between;font-size:9.5px;color:#8a96ad;margin-top:3px}
-  .predict{margin-top:11px;font-size:12px;line-height:1.5;color:#aebbd0;background:#0a0f18;border:1px solid var(--line);border-left:3px solid #2c3a52;border-radius:0 9px 9px 0;padding:9px 11px}
-  .predict-h{font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);margin-bottom:5px}
-  .histrow{margin-top:11px;display:none}
-  .histtoggle{font-size:11.5px;color:var(--dim);border:1px solid var(--line);background:#0b111c;border-radius:999px;padding:5px 11px;cursor:pointer;user-select:none}
-  .histtoggle.on{color:var(--ink);border-color:#2c3a52;background:#121b2b}
-  .quote{margin:16px 0;padding:12px 13px;background:#0a0f18;border-left:3px solid var(--amber);
-    border-radius:0 8px 8px 0;font-size:12.5px;color:#cdd6e6;line-height:1.45}
-  .sect{margin-top:16px;border-top:1px solid var(--line);padding-top:14px}
-  .sect-h{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
-  .city .cityline{font-size:13.5px;line-height:1.5;color:#cdd6e6}
-  .city .cite{margin-top:6px;font-size:11px;color:#8a96ad;font-style:italic}
-  .verdict{font-size:14px;font-weight:800;letter-spacing:.3px;padding:11px 12px;border-radius:10px;background:#0a0f18}
-  .verdict .vsub{font-weight:600;color:var(--dim);font-size:11.5px;letter-spacing:0}
-  .verdict.still{color:var(--red);border:1px solid #3a1d1d}
-  .verdict.cleared{color:#36c98a;border:1px solid #163a2a}
-  .verdict.none{color:var(--dim);font-weight:600;border:1px solid var(--line)}
-  .verdict .clash{margin-top:7px;font-size:11.5px;font-weight:700;color:var(--amber);letter-spacing:0}
-  .thread{margin-top:10px;display:flex;flex-direction:column;gap:8px}
-  .thread .empty{font-size:12.5px;color:var(--dim);line-height:1.5;padding:2px 0}
-  .post{background:#0b111c;border:1px solid var(--line);border-radius:10px;padding:10px 11px}
-  .ptag{display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
-  .ptag.still_here{background:#3a1d1d;color:#ff8b7a}
-  .ptag.worse{background:#3a2a16;color:var(--amber)}
-  .ptag.cleaned,.ptag.gone{background:#163a2a;color:#36c98a}
-  .ptext{font-size:13px;color:var(--ink);line-height:1.45;white-space:pre-wrap;word-break:break-word}
-  .pmeta{font-size:10.5px;color:#8a96ad;margin-top:6px}
-  .acts{display:flex;gap:8px;margin-top:16px}
-  .acts button{flex:1;padding:12px;border-radius:11px;font-size:13px;font-weight:800;cursor:pointer;border:1px solid var(--line)}
-  .seen-btn{background:var(--red);color:#fff;border-color:var(--red)!important}
-  .seen-btn.done{background:#16202f;color:var(--ink);border-color:var(--line)!important}
-  .add-btn{background:#16202f;color:var(--ink)}
-  .receipt-link{display:block;margin-top:9px;padding:12px;border-radius:11px;background:#1a1410;border:1px solid var(--amber,#ffb020);color:var(--amber,#ffb020);font-weight:800;font-size:13px;text-align:center;text-decoration:none}
-  .pform{margin-top:10px;display:flex;flex-direction:column;gap:9px}
-  .pform textarea{width:100%;min-height:62px;resize:vertical;background:#0a0f18;border:1px solid var(--line);border-radius:10px;color:var(--ink);font:inherit;font-size:13px;padding:10px}
-  .schips{display:flex;gap:6px;flex-wrap:wrap}
-  .schips span{font-size:12px;padding:6px 11px;border-radius:999px;border:1px solid var(--line);color:var(--dim);cursor:pointer;user-select:none}
-  .schips span.on{background:#1a2535;color:var(--ink);border-color:#2c3a52}
-  .post-btn{background:var(--red);color:#fff;padding:12px;border:none;border-radius:11px;font-weight:800;font-size:14px;cursor:pointer}
-  .photo-btn{background:#0a0f18;border:1px dashed #2a3850;color:#aebbd0;border-radius:10px;padding:11px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;text-align:center}
-  .photo-prev{position:relative;width:100%;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
-  .photo-prev img{display:block;width:100%;max-height:220px;object-fit:cover}
-  .photo-x{position:absolute;top:6px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(8,11,17,.85);color:#fff;font-size:19px;line-height:28px;text-align:center;cursor:pointer;border:1px solid var(--line)}
-  .pphoto{display:block;width:100%;max-height:260px;object-fit:cover;border-radius:8px;margin-bottom:8px;cursor:pointer;border:1px solid var(--line)}
-  .formnote{font-size:11.5px;color:var(--dim);line-height:1.45;padding:2px 2px 0}
-  .pending-ack{background:#0a0f18;border:1px solid #163a2a;color:#36c98a;border-radius:11px;padding:13px 14px;font-size:13px;font-weight:700;line-height:1.5}
-  .hint{position:absolute;left:12px;bottom:12px;z-index:600;font-size:11.5px;color:var(--dim);
-    background:rgba(8,11,17,.8);padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
-  .leaflet-popup-content-wrapper{background:#0e1420;color:var(--ink);border:1px solid var(--line)}
-  .leaflet-popup-tip{background:#0e1420}
-
-  /* ---------- Share this area: frame a cluster on the map, mint one permalink ---------- */
-  .sharearea{position:absolute;right:12px;bottom:12px;z-index:640;display:flex;align-items:center;gap:7px;
-    font-size:12.5px;font-weight:800;color:#1a1204;background:var(--amber);border:none;border-radius:999px;
-    padding:10px 15px;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.45)}
-  .sharearea svg{width:15px;height:15px}
-  .sheetback{position:fixed;inset:0;z-index:1600;background:rgba(4,7,12,.72);display:none;align-items:flex-end;justify-content:center}
-  .sheetback.on{display:flex}
-  .sheet{background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 0 0;width:100%;max-width:560px;
-    padding:20px 18px calc(22px + env(safe-area-inset-bottom));box-shadow:0 -10px 40px rgba(0,0,0,.5)}
-  @media(min-width:600px){.sheetback{align-items:center}.sheet{border-radius:16px}}
-  .sheet h3{margin:0 0 4px;font-size:18px;font-weight:800;color:var(--ink)}
-  .sheet .ssub{margin:0 0 14px;font-size:13px;color:var(--dim);line-height:1.45}
-  .sheet .sbig{color:var(--red);font-weight:800}
-  .sheet .srow{display:flex;gap:9px;margin-top:6px}
-  .sheet .sbtn{flex:1;text-align:center;padding:12px;border-radius:11px;font-weight:800;font-size:14px;text-decoration:none;cursor:pointer;border:none}
-  .sheet .sbtn.x{background:var(--red);color:#fff}
-  .sheet .sbtn.copy{background:var(--amber);color:#1a1204}
-  .sheet .sbtn.ghost{background:transparent;border:1px solid var(--line);color:var(--dim);flex:none;padding:12px 16px}
-  .sheet .slink{margin-top:12px;font-size:12px;color:var(--dim);word-break:break-all;background:#0a0f18;border:1px solid var(--line);border-radius:9px;padding:9px 11px}
-  .sheet .serr{color:#ff8b7a;font-size:13px;margin-top:8px}
-
-  /* damning headline on the card — the precomputed most-damning fact, the moat made literal */
-  .damning{margin:14px 0 2px;font-size:17px;font-weight:800;line-height:1.35;letter-spacing:-.3px;color:#ffb3a8}
-  .damning .sc{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.4px;color:var(--amber);
-    background:#1c1608;border:1px solid #3a2c14;border-radius:5px;padding:2px 7px;margin-left:7px;vertical-align:middle;text-transform:uppercase}
-  .case-kicker{display:flex;align-items:center;gap:8px;padding-right:34px;font-size:10.5px;font-weight:800;text-transform:uppercase;color:var(--dim)}
-  .case-kicker .case-type{color:var(--type)}
-  .case-kicker .case-live{display:flex;align-items:center;gap:5px;color:var(--red)}
-  .case-kicker .case-live i{width:7px;height:7px;border-radius:50%;background:var(--red);animation:p 1.6s infinite}
-  .case-title{font-size:22px;line-height:1.28;font-weight:800;margin:12px 0 7px}
-  .case-place{font-size:12.5px;color:var(--dim);line-height:1.45}
-  .case-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);margin:17px -18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-  .case-fact{min-width:0;background:var(--panel);padding:13px 6px;text-align:center}
-  .case-fact b{display:block;font-size:19px;font-variant-numeric:tabular-nums;white-space:nowrap}
-  .case-fact b.hot{color:var(--red)}
-  .case-fact span{display:block;margin-top:3px;font-size:10px;line-height:1.3;color:var(--dim)}
-  .case-est{margin-top:5px;font-size:9.5px;color:#778398}
-  .case-indictment{font-size:13.5px;line-height:1.55;color:#cdd6e6;margin:15px 0 0}
-  .case-indictment b{color:var(--ink)}
-  .vote-row{display:grid;grid-template-columns:minmax(116px,auto) 1fr;gap:11px;align-items:center;margin-top:16px;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
-  .vote-btn{display:flex;align-items:center;justify-content:center;gap:9px;min-height:48px;background:var(--red);color:#190b08;border:0;border-radius:8px;font-size:14px;font-weight:800;cursor:pointer}
-  .vote-btn .up{font-size:18px}.vote-btn .count{font-size:17px;font-variant-numeric:tabular-nums}
-  .vote-btn.done{background:#273244;color:var(--ink)}
-  .vote-copy{font-size:11.5px;line-height:1.4;color:var(--dim)}
-  .vote-copy b{color:var(--ink)}
-  .record-details{margin-top:14px;border-top:1px solid var(--line)}
-  .record-details summary{padding:14px 0 0;font-size:12.5px;font-weight:800;color:var(--amber);cursor:pointer;list-style-position:inside}
-
-  /* ---------- findbar: search + locate, overlaid on the map (never reflows the flex layout) ---------- */
-  .findbar{position:absolute;left:12px;right:12px;top:12px;z-index:650;display:flex;gap:8px;max-width:560px;margin:0 auto;pointer-events:none}
-  .findbar.hide{display:none}
-  .findwrap{position:relative;flex:1;pointer-events:auto}
-  .findbox{display:flex;align-items:center;gap:9px;background:rgba(14,20,32,.94);border:1px solid #28344a;
-    border-radius:13px;padding:10px 12px;box-shadow:0 10px 30px -16px rgba(0,0,0,.9)}
-  .findbox:focus-within{border-color:#3a4a68}
-  .findbox .pin{flex:none;width:16px;height:16px;color:var(--red)}
-  .findbox input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--ink);font:inherit;font-size:14px;font-weight:600}
-  .findbox input::placeholder{color:#8a96ad;font-weight:500}
-  .geo{flex:none;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--ink);
-    background:rgba(22,32,47,.94);border:1px solid var(--line);border-radius:13px;padding:10px 12px;cursor:pointer;
-    white-space:nowrap;pointer-events:auto;box-shadow:0 10px 30px -16px rgba(0,0,0,.9)}
-  .geo svg{width:14px;height:14px;color:var(--red)}
-  .geo.busy{opacity:.6}
-  .sugg{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--panel);border:1px solid var(--line);
-    border-radius:12px;overflow:hidden;box-shadow:0 18px 40px -18px rgba(0,0,0,.9);display:none}
-  .sugg.show{display:block}
-  .sugg .item{padding:11px 13px;font-size:13px;color:var(--ink);cursor:pointer;border-top:1px solid #131b29}
-  .sugg .item:first-child{border-top:0}
-  .sugg .item:active,.sugg .item.hl{background:#121b2b}
-  .sugg .item .sm{display:block;font-size:11px;color:var(--dim);margin-top:2px}
-  .sugg .note{padding:10px 13px;font-size:12px;color:var(--dim)}
-
-  /* ---------- LANDING ("The Record") — the default arrival ---------- */
-  #landing{position:fixed;inset:0;z-index:1500;overflow-y:auto;overflow-x:hidden;background:var(--bg);
-    -webkit-overflow-scrolling:touch}
-  #landing.hide{display:none}
-  #landing a{color:inherit;text-decoration:none}
-  #landing .mast{position:fixed;top:0;left:0;right:0;z-index:60;display:flex;justify-content:space-between;
-    align-items:center;padding:13px 20px;padding-top:max(13px,env(safe-area-inset-top));
-    background:linear-gradient(180deg,rgba(8,11,17,1) 0%,rgba(8,11,17,.98) 62%,rgba(8,11,17,0) 100%);pointer-events:none}
-  #landing .mast .brandw{font-weight:800;letter-spacing:-.4px;font-size:15px}
-  #landing .mast .brandw b{color:var(--red)}
-  #landing .mast .livel{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:var(--dim);
-    text-transform:uppercase;letter-spacing:.6px;font-weight:700;font-variant-numeric:tabular-nums}
-  #landing .mast .livel i{width:6px;height:6px;border-radius:50%;background:#36c98a;animation:beat 2.6s infinite}
-  @keyframes beat{0%{box-shadow:0 0 0 0 rgba(54,201,138,.5)}70%{box-shadow:0 0 0 7px rgba(54,201,138,0)}100%{box-shadow:0 0 0 0 rgba(54,201,138,0)}}
-  #landing .scene{padding:88px 22px 64px;position:relative}
-  #landing .inner{max-width:560px;width:100%;margin:0 auto}
-  #landing .kick{font-size:11px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);
-    display:flex;align-items:center;gap:9px;margin-bottom:22px}
-  #landing .kick .ln{height:1px;flex:1;background:var(--line)}
-  #landing .hero{min-height:100svh;min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding-bottom:104px}
-  #landing .hero .lead{font-size:18px;line-height:1.5;color:#cdd6e6;font-weight:500;margin:0}
-  #landing .hero .lead b{color:var(--ink);font-weight:700}
-  #landing .megastat{margin:20px 0 10px;line-height:.9}
-  #landing .megastat .num{font-size:clamp(78px,24vw,128px);font-weight:800;letter-spacing:-4px;
-    font-variant-numeric:tabular-nums;color:var(--red);display:block}
-  #landing .megastat .unit{font-size:clamp(28px,8.5vw,42px);font-weight:800;letter-spacing:-1px;color:var(--amber)}
-  #landing .hero .says{font-size:19px;line-height:1.45;font-weight:700;margin:14px 0 0;letter-spacing:-.2px}
-  #landing .hero .says .dim{color:var(--dim);font-weight:500}
-  #landing .hero .src{margin-top:24px;font-size:11.5px;color:#8a96ad;font-style:italic;line-height:1.5}
-  #landing .scrollcue{position:absolute;left:0;right:0;bottom:max(28px,env(safe-area-inset-bottom));text-align:center;
-    color:var(--dim);font-size:11px;letter-spacing:1.2px;text-transform:uppercase;animation:bob 2.4s ease-in-out infinite}
-  #landing .scrollcue .arr{display:block;margin:8px auto 0;width:16px;height:16px;
-    border-right:2px solid var(--dim);border-bottom:2px solid var(--dim);transform:rotate(45deg)}
-  @keyframes bob{0%,100%{transform:translateY(0);opacity:.85}50%{transform:translateY(6px);opacity:.4}}
-  #landing .mech h2{font-size:26px;line-height:1.26;font-weight:800;letter-spacing:-.6px;margin:0 0 22px}
-  #landing .mech h2 b{color:var(--amber)}
-  #landing .flow{display:flex;flex-direction:column;gap:9px}
-  #landing .flowrow{display:flex;align-items:center;gap:13px;padding:14px 15px;border:1px solid var(--line);
-    border-radius:14px;background:var(--panel)}
-  #landing .flowrow .ic{width:30px;height:30px;flex:none;border-radius:8px;background:#0a0f18;border:1px solid var(--line);
-    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:var(--dim)}
-  #landing .flowrow .t{font-size:14px;line-height:1.4}
-  #landing .flowrow .t span{color:var(--dim)}
-  #landing .flowx{text-align:center;color:#8a96ad;font-size:17px;line-height:0;margin:-3px 0}
-  #landing .punch{margin-top:22px;font-size:16px;line-height:1.5;font-weight:600;color:#cdd6e6}
-  #landing .punch b{color:var(--ink)}
-  #landing .receipt-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:6px;gap:10px}
-  #landing .receipt-head .t{font-size:13px;font-weight:800;letter-spacing:.3px}
-  #landing .receipt-head .t span{color:var(--dim);font-weight:600}
-  #landing .where{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--ink);
-    background:#0b111c;border:1px solid var(--line);border-radius:999px;padding:5px 11px;cursor:pointer}
-  #landing .where svg{width:11px;height:11px;fill:var(--red)}
-  #landing .where .car{color:var(--dim);font-weight:600}
-  #landing .board2{margin-top:8px}
-  #landing .tear{height:1px;background:repeating-linear-gradient(90deg,var(--line) 0 6px,transparent 6px 11px);margin:12px 2px}
-  #landing .row2{display:block;padding:15px 8px 16px;border-radius:13px;cursor:pointer}
-  #landing .row2:active{background:#0b111c}
-  #landing .row2+.row2{border-top:1px solid #131b29}
-  #landing .rtop{display:flex;align-items:baseline;gap:11px}
-  #landing .rank{font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--dim);
-    width:22px;flex:none;text-align:right;letter-spacing:-.5px}
-  #landing .row2.top .rank{color:var(--red)}
-  #landing .rmain{flex:1;min-width:0}
-  #landing .rwhere{font-size:16px;font-weight:800;letter-spacing:-.4px;line-height:1.2}
-  #landing .rmeta{font-size:11px;color:var(--dim);margin-top:3px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
-  #landing .tdot{display:inline-flex;align-items:center;gap:5px;font-weight:600}
-  #landing .tdot i{width:7px;height:7px;border-radius:50%;flex:none}
-  #landing .flag{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;
-    padding:2px 6px;border-radius:4px;vertical-align:middle}
-  #landing .flag.persist{background:#1d0f0f;color:#ff6b5a;border:1px solid #3a1d1d}
-  #landing .flag.years{background:#0c1118;color:#9fb0c8;border:1px solid var(--line)}
-  #landing .rcount{flex:none;text-align:right;align-self:center}
-  #landing .rcount .n{font-size:25px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-1px;line-height:1}
-  #landing .rcount .u{font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim);margin-top:2px}
-  #landing .verdict2{margin:11px 0 0 33px;font-size:13px;line-height:1.45;color:#d6deec}
-  #landing .verdict2 b{color:var(--ink)}
-  #landing .verdict2.still{color:#ffb3a8}
-  #landing .verdict2.still b{color:var(--red)}
-  #landing .chev{margin-top:9px;margin-left:33px;font-size:10.5px;font-weight:700;letter-spacing:.4px;
-    text-transform:uppercase;color:var(--dim);display:inline-flex;align-items:center;gap:5px}
-  #landing .chev .sh{color:var(--red)}
-  #landing .search{position:relative;z-index:3}
-  #landing .searchbox{display:flex;align-items:center;gap:11px;background:var(--panel);border:1px solid #28344a;
-    border-radius:15px;padding:14px 15px;box-shadow:0 0 0 4px rgba(40,52,74,.16),0 18px 40px -22px rgba(0,0,0,.9)}
-  #landing .searchbox:focus-within{border-color:#3a4a68}
-  #landing .searchbox .pin{flex:none;width:18px;height:18px;color:var(--red)}
-  #landing .searchbox input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--ink);font:inherit;font-size:15px;font-weight:600}
-  #landing .searchbox input::placeholder{color:#8a96ad;font-weight:500}
-  #landing .lgeo{flex:none;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--ink);
-    background:#16202f;border:1px solid var(--line);border-radius:999px;padding:7px 11px;cursor:pointer;white-space:nowrap}
-  #landing .lgeo svg{width:13px;height:13px;color:var(--red)}
-  #landing .lsugg{position:relative;margin-top:8px}
-  #landing .blockcard{margin-top:14px;background:linear-gradient(180deg,#0f1622,#0c1018);border:1px solid var(--line);
-    border-radius:17px;overflow:hidden;box-shadow:0 24px 50px -32px rgba(0,0,0,.9)}
-  #landing .bcbody{padding:16px}
-  #landing .bchead{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
-  #landing .bchead .w{font-size:14px;font-weight:800;letter-spacing:-.2px}
-  #landing .bchead .within{font-size:11px;color:var(--dim);font-weight:600}
-  #landing .verdict-line{margin:12px 0 0;font-size:15px;font-weight:800;line-height:1.4;letter-spacing:-.2px}
-  #landing .verdict-line .amb{color:var(--amber)}
-  #landing .verdict-line .rd{color:var(--red)}
-  #landing .ilist{margin-top:14px;display:flex;flex-direction:column;gap:8px}
-  #landing .irow{display:flex;align-items:center;gap:11px;background:#0b111c;border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer}
-  #landing .irow .tag{flex:none;width:9px;height:9px;border-radius:50%}
-  #landing .irow .mid{flex:1;min-width:0}
-  #landing .irow .ty{font-size:13px;font-weight:800;letter-spacing:-.1px}
-  #landing .irow .ad{font-size:11px;color:var(--dim);font-weight:500;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #landing .irow .stat{flex:none;text-align:right}
-  #landing .irow .stat .nn{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
-  #landing .irow .stat .ss{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;margin-top:1px}
-  #landing .cta{display:block;width:100%;margin-top:15px;padding:15px;border-radius:13px;border:0;background:var(--red);
-    color:#fff;font:inherit;font-size:14.5px;font-weight:800;letter-spacing:-.2px;cursor:pointer;text-align:center}
-  #landing .cta .arr{opacity:.7}
-  #landing .ctasub{text-align:center;font-size:11px;color:var(--dim);margin-top:9px;line-height:1.5}
-  #landing .scale h2{font-size:26px;line-height:1.26;font-weight:800;letter-spacing:-.6px;margin:0 0 6px}
-  #landing .scale .sub{font-size:14px;color:var(--dim);margin:0 0 20px;line-height:1.5}
-  #landing .boros{display:flex;flex-direction:column;gap:9px}
-  #landing .boro{border:1px solid var(--line);border-radius:13px;background:var(--panel);padding:13px 15px;display:block;cursor:pointer}
-  #landing .boro:active{background:#0b111c}
-  #landing .boro .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
-  #landing .boro .nm{font-size:15px;font-weight:700}
-  #landing .boro .nm .go{color:var(--dim);font-weight:700;margin-left:5px}
-  #landing .boro .ct{font-size:12.5px;color:var(--dim);font-variant-numeric:tabular-nums}
-  #landing .boro .ct b{color:var(--ink);font-weight:800}
-  #landing .bar{height:7px;border-radius:99px;background:#0a0f18;overflow:hidden}
-  #landing .bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--amber),var(--red))}
-  #landing .end{text-align:center}
-  #landing .end .inner{max-width:480px}
-  #landing .end h2{font-size:29px;line-height:1.2;font-weight:800;letter-spacing:-.7px;margin:0 0 14px}
-  #landing .end h2 b{color:var(--red)}
-  #landing .end p{font-size:14.5px;line-height:1.55;color:#cdd6e6;margin:0 0 26px}
-  #landing .end .cta{margin-top:0;box-shadow:0 8px 30px rgba(255,90,71,.22)}
-  #landing .cta2{display:block;width:100%;margin-top:11px;padding:14px;border-radius:13px;cursor:pointer;
-    background:transparent;border:1px solid var(--line);color:var(--ink);font:inherit;font-size:14px;font-weight:700}
-  #landing .endmeta{margin-top:20px;font-size:11px;color:#8a96ad;display:inline-flex;align-items:center;gap:7px}
-  #landing .endmeta i{width:6px;height:6px;border-radius:50%;background:#36c98a}
-  #landing .fine{margin-top:14px;font-size:10.5px;color:#8590a6;line-height:1.6}
-  #landing .scene .inner>*{opacity:0;transform:translateY(14px);animation:rise .7s cubic-bezier(.22,.7,.25,1) forwards}
-  #landing .scene.live .inner>*{opacity:1;transform:none;animation:none}
-  @keyframes rise{to{opacity:1;transform:none}}
-  #landing .inner>*:nth-child(1){animation-delay:.02s}#landing .inner>*:nth-child(2){animation-delay:.09s}
-  #landing .inner>*:nth-child(3){animation-delay:.16s}#landing .inner>*:nth-child(4){animation-delay:.23s}
-  #landing .inner>*:nth-child(5){animation-delay:.30s}#landing .inner>*:nth-child(6){animation-delay:.37s}
-  @media (prefers-reduced-motion:reduce){
-    #landing .scene .inner>*{opacity:1;transform:none;animation:none}
-    #landing .scrollcue{animation:none}#landing .mast .livel i{animation:none}}
-  /* Visible keyboard focus — WCAG 2.4.7 (was missing entirely) */
-  :focus-visible{outline:2px solid #6ea8ff;outline-offset:2px;border-radius:inherit}
-  a:focus-visible,button:focus-visible,[role="button"]:focus-visible,
-  input:focus-visible,textarea:focus-visible{outline:2px solid #6ea8ff;outline-offset:2px}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="description" content="Build driving and walking routes around selected NYC license plate cameras and public 311 report clusters.">
+  <title>Unignorable — move through NYC with context</title>
+  <link rel="stylesheet" href="/vendor/leaflet.css">
+  <style>
+    :root{--ink:#181916;--paper:#f3f0e8;--panel:#fffdf8;--muted:#6c6b63;--line:#d9d4c8;--red:#ff5b45;--amber:#f5aa3c;--blue:#2c7be5;--green:#328b65;--purple:#7b62d9;--shadow:0 18px 48px #17181222;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
+    *{box-sizing:border-box}html,body,#app,#map{height:100%;margin:0}body{overflow:hidden;background:var(--paper)}button,input{font:inherit}button{cursor:pointer}.leaflet-container{background:#ddd8cc;font-family:inherit}.leaflet-control-attribution{font-size:10px}
+    #map{position:absolute;inset:0}.scrim{display:none}.shell{position:absolute;z-index:1000;inset:16px auto 16px 16px;width:min(390px,calc(100vw - 32px));display:flex;flex-direction:column;gap:10px;pointer-events:none}.card{pointer-events:auto;background:color-mix(in srgb,var(--panel) 96%,transparent);border:1px solid #ffffffaa;border-radius:18px;box-shadow:var(--shadow);backdrop-filter:blur(15px)}
+    .icon-btn{border:0;background:#ebe7de;border-radius:10px;padding:7px 9px;color:var(--ink)}.section-link{text-decoration:none;font-size:11px;font-weight:750;white-space:nowrap}
+    .planner{padding:11px}.planner-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}.planner h1{font-size:21px;line-height:1;letter-spacing:-.055em;margin:0}.planner-brand{display:flex;align-items:center;gap:7px}.planner-brand b{font-size:15px;letter-spacing:-.04em}.planner-brand .icon-btn{padding:5px 7px;font-size:12px}.planner .lede{display:none}.mode-picker{display:grid;grid-template-columns:1fr 1fr;gap:3px;background:#ebe7de;border-radius:10px;padding:2px;margin-bottom:6px}.mode-picker button{border:0;border-radius:8px;padding:5px;background:transparent;color:var(--muted);font-size:12px;font-weight:750}.mode-picker button[aria-pressed="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 4px #17181218}.address-wrap{position:relative}.field{display:grid;grid-template-columns:24px 1fr;align-items:center;border:1px solid var(--line);background:#fff;border-radius:10px;margin-top:5px;overflow:hidden}.field span{text-align:center;color:var(--muted);font-weight:700}.field input{width:100%;padding:8px 7px;border:0;outline:0;background:transparent}.field:focus-within{border-color:var(--ink);box-shadow:0 0 0 2px #18191618}.suggestions{position:absolute;z-index:1400;left:0;right:0;top:calc(100% + 4px);display:none;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px #1718122b;overflow:hidden}.suggestions.open{display:block}.suggestion{display:block;width:100%;border:0;border-bottom:1px solid #eee9df;background:#fff;padding:9px 11px;text-align:left;font-size:11px;line-height:1.3;color:var(--ink)}.suggestion:last-child{border-bottom:0}.suggestion.active,.suggestion:hover{background:#f2efe7}.planner-actions{display:flex;gap:8px;margin-top:6px}.primary{flex:1;border:0;border-radius:12px;background:var(--ink);color:white;padding:11px 14px;font-weight:750}.primary:disabled{opacity:.55}.locate{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px 10px}
+    .filters{padding:12px 14px}.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}.section-head>div{display:flex;align-items:center;gap:8px}.section-head b{font-size:13px}.section-head button{border:0;background:none;color:var(--muted);font-size:12px}.layer-status,.layer-hint,.layers-toggle{display:none}.filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.chip{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:11px;padding:9px;background:#fff;font-size:12px;text-align:left;color:var(--ink)}.chip[aria-pressed="true"]{border-color:var(--chip);box-shadow:inset 0 0 0 1px var(--chip);background:color-mix(in srgb,var(--chip) 8%,white)}.dot{width:9px;height:9px;border-radius:50%;background:var(--chip);flex:none}.chip small{display:block;color:var(--muted);font-size:10px;margin-top:1px}.chip.wide{grid-column:1/-1}.discover-toggle{color:#1967d2!important;font-weight:750}.discover{display:none;border-top:1px solid var(--line);padding-top:8px}.discover.open{display:block}.discover p{font-size:11px;color:var(--muted);line-height:1.35;margin:0 0 7px}.discover-choice{width:100%;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:10px;padding:9px;background:#fff;color:var(--ink);font-size:12px;text-align:left}.discover-choice[aria-pressed="true"]{border-color:#1a73e8;background:#e8f0fe}.discover-choice small{color:var(--muted)}
+    .results{overflow:auto;min-height:0;max-height:42vh;padding:10px}.status{font-size:12px;color:var(--muted);padding:4px 5px 8px}.route{display:block;width:100%;border:1px solid var(--line);border-radius:13px;background:#fff;padding:10px;text-align:left;margin-bottom:7px}.route.selected{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}.route-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.route-head b{font-size:13px}.badge{font-size:9px;text-transform:uppercase;letter-spacing:.08em;background:#dff2e8;color:#246d4e;padding:4px 6px;border-radius:99px}.route-stats{display:flex;gap:10px;color:var(--muted);font-size:11px;margin-top:5px;flex-wrap:wrap}.exports{display:grid;grid-template-columns:1fr 1fr;gap:7px}.exports a{min-width:0;text-align:center;text-decoration:none;border:1px solid var(--line);border-radius:10px;padding:9px;color:var(--ink);background:#fff;font-size:11px;font-weight:700}.exports .exact{grid-column:1/-1;background:#ebe7de}.warning{font-size:10px;color:var(--muted);line-height:1.4;margin:8px 3px 0}
+    .planner-actions{align-items:center}.route-hint{flex:1;color:var(--muted);font-size:11px;line-height:1.3}.paywall{padding:5px}.paywall h2{font-size:19px;letter-spacing:-.04em;margin:0 0 5px}.paywall p{font-size:12px;color:var(--muted);line-height:1.45;margin:0 0 10px}.plans{display:grid;grid-template-columns:1fr 1fr;gap:7px}.plan{border:1px solid var(--line);border-radius:12px;background:#fff;padding:10px;text-align:left;color:var(--ink)}.plan.best{background:var(--ink);color:#fff;border-color:var(--ink)}.plan b,.plan span{display:block}.plan b{font-size:18px}.plan span{font-size:10px;opacity:.72}.plan:disabled{opacity:.55}.paywall small{display:block;margin-top:8px;color:var(--muted);font-size:9px;line-height:1.35}
+    .legend{position:absolute;z-index:900;right:14px;top:14px;width:235px;padding:11px 12px}.legend b{font-size:12px}.legend p{margin:5px 0 0;color:var(--muted);font-size:10px;line-height:1.4}.severity-key{display:flex;gap:9px;align-items:center;margin-top:8px;color:var(--muted);font-size:9px}.severity-key span{display:flex;align-items:center;gap:4px}.severity-dot{width:8px;height:8px;border-radius:50%;background:#6ea8ff;border:1px solid #28344a}.severity-dot.elevated{border:2px solid var(--amber)}.severity-dot.high{border:2px solid var(--ink)}.source-line{display:flex;justify-content:space-between;gap:8px;margin-top:8px;font-size:10px}.source-line a{color:var(--ink)}
+    .about{position:absolute;z-index:1200;inset:0;display:none;place-items:center;background:#18191666;padding:20px}.about.open{display:grid}.about article{max-width:530px;padding:24px}.about h2{margin:0 0 8px;letter-spacing:-.04em}.about p,.about li{font-size:13px;line-height:1.55;color:#4f504b}.about .close{float:right;border:0;background:#ebe7de;border-radius:10px;padding:7px 10px}.legacy{display:flex;gap:8px;flex-wrap:wrap}.legacy a{color:var(--ink);font-size:12px}
+    @media(max-width:720px){.shell{inset:8px 8px auto;width:auto}.brand{padding:9px 11px}.brand span{display:none}.planner{padding:11px}.planner h1{font-size:20px}.planner .lede{display:none}.field input{padding:9px 7px}.planner-actions{margin-top:8px}.filters{padding:9px 11px}.filter-grid{display:flex;overflow-x:auto;padding-bottom:2px}.chip{min-width:max-content;padding:7px 9px}.chip.wide{grid-column:auto}.results{position:fixed;left:8px;right:8px;bottom:8px;max-height:34vh}.legend{right:8px;top:auto;bottom:8px;width:190px}.shell.has-results .legend{display:none}.shell.has-results .filters{display:none}.leaflet-control-zoom{margin-top:250px!important}.about article{max-height:80vh;overflow:auto}}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+    /* Navigation-first: a bright, readable map with familiar route controls, but an original UI. */
+    :root{--ink:#202124;--paper:#f8f9fa;--panel:#fff;--muted:#5f6368;--line:#dadce0;--shadow:0 10px 28px #20212424}
+    body{background:var(--paper);color:var(--ink)}.leaflet-container{background:#dbe7f2}.leaflet-tile-pane{filter:none}
+    .card{background:rgba(255,255,255,.97);border-color:#fff;box-shadow:var(--shadow);backdrop-filter:blur(10px)}.brand{background:#fff}.brand b{color:#202124}.brand span{color:#5f6368}.icon-btn,.locate{background:#fff;color:var(--ink);border-color:var(--line)}
+    .mode-picker{background:#f1f3f4}.mode-picker button{color:#5f6368}.mode-picker button[aria-pressed="true"]{background:#fff;color:#1a73e8;box-shadow:0 1px 3px #20212425}.field{background:#fff;border-color:#dadce0}.field input{color:var(--ink)}.field input::placeholder{color:#70757a}.field:focus-within{border-color:#1a73e8;box-shadow:0 0 0 2px #1a73e825}.suggestions{background:#fff;border-color:var(--line);box-shadow:0 10px 22px #20212428}.suggestion{background:#fff;color:var(--ink);border-color:#f1f3f4}.suggestion.active,.suggestion:hover{background:#f1f3f4}
+    .filters{background:rgba(255,255,255,.97)}.section-head button{color:#1a73e8}.chip{background:#fff;color:var(--ink);border-color:var(--line)}.chip[aria-pressed="true"]{background:color-mix(in srgb,var(--chip) 10%,white)}.chip small{color:#5f6368}.route{background:#fff;border-color:#dadce0}.route.selected{border-color:#1a73e8;box-shadow:inset 0 0 0 1px #1a73e8}.badge{background:#e8f0fe;color:#1967d2}.exports a,.plan{background:#fff;color:var(--ink);border-color:#dadce0}.exports .exact{background:#f1f3f4}.plan.best{background:#1a73e8;color:#fff;border-color:#1a73e8}.warning,.paywall p,.paywall small,.status{color:#5f6368}.about{background:#20212477}.about article{background:#fff}.about p,.about li{color:#3c4043}.about .close{background:#f1f3f4;color:var(--ink)}.legacy a{color:#1967d2}.leaflet-control-zoom a{background:#fff;color:#3c4043;border-color:#dadce0}.leaflet-control-attribution{background:#ffffffdd!important;color:#5f6368}.leaflet-control-attribution a{color:#1967d2}
+    .planner-actions{min-height:32px}.locate{min-width:32px;min-height:32px}.chip,.route,.plan,.exports a,.icon-btn{min-height:40px}.mode-picker button{min-height:32px}.route-hint{transition:background .16s,color .16s}.planner.loading .route-hint{display:flex;align-items:center;gap:6px;color:#1967d2;font-weight:750}.planner.loading .route-hint::before{content:'';width:11px;height:11px;border:2px solid #d2e3fc;border-top-color:#1a73e8;border-radius:50%;animation:route-spin .75s linear infinite}@keyframes route-spin{to{transform:rotate(360deg)}}.route-summary{display:flex;align-items:baseline;gap:8px;padding:2px 3px 9px}.route-summary b{font-size:23px;letter-spacing:-.05em}.route-summary span{font-size:12px;color:var(--muted)}.directions{border-top:1px solid var(--line);margin-top:10px;padding-top:9px}.directions summary{cursor:pointer;font-size:13px;font-weight:750}.direction-step{display:grid;grid-template-columns:25px 1fr auto;gap:8px;align-items:start;padding:9px 1px;border-bottom:1px solid #f1f3f4;font-size:12px}.direction-step .step-number{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#e8f0fe;color:#1967d2;font-weight:750;font-size:10px}.direction-step small{color:var(--muted);white-space:nowrap}.swap-route{position:absolute;z-index:2;right:10px;top:50%;transform:translateY(-50%);border:1px solid var(--line);border-radius:50%;width:28px;height:28px;background:#fff;color:#1a73e8;font-weight:800;box-shadow:0 2px 6px #20212425}.route-fields{position:relative;padding-right:16px}.endpoint-label{font-weight:800}
+    @media(max-width:720px){body{overscroll-behavior:none}.shell{inset:calc(8px + env(safe-area-inset-top)) 8px auto;width:auto;gap:8px}.planner{padding:10px}.planner h1{font-size:20px}.field input{min-height:38px;padding:7px}.filters{padding:0;overflow:hidden}.section-head{margin:0;padding:10px 11px}.section-head>div:first-child{min-width:0}.section-head b{display:block}.layer-status{display:block;font-size:10px;margin-top:2px}.layers-toggle{display:inline-flex!important;align-items:center;justify-content:center;min-height:32px;padding:0 9px!important;border:1px solid var(--line)!important;border-radius:9px!important;font-weight:700}.filters:not(.open) #toggle-all{display:none}.filter-grid{display:none;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;max-height:250px;overflow:auto;padding:0 9px 9px}.filters.open .filter-grid{display:grid}.filters.open .layer-hint{display:block}.chip,.chip.wide{min-width:0;padding:8px 9px;grid-column:auto}.chip span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chip small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.layer-hint{margin:0;padding:0 11px 10px;font-size:10px;line-height:1.35}.results{left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));max-height:min(60vh,540px)}.legend{display:none}.shell.has-results .filters{display:block}.leaflet-control-zoom{margin-top:205px!important;margin-right:8px!important}.leaflet-control-zoom a{width:40px!important;height:40px!important;line-height:40px!important}.suggestion{padding:12px 11px;min-height:44px}.paywall h2{font-size:20px}.plans{gap:8px}.direction-step{font-size:12px}}
+    /* Shared with the accountability map: dark navy surfaces, coral actions, amber evidence. */
+    :root{--ink:#eaf0fb;--paper:#080b11;--panel:#0e1420;--muted:#9aa6bd;--line:#1d2737;--red:#ff5a47;--amber:#ffc24b;--blue:#6ea8ff;--green:#4ad6c8;--purple:#c77dff;--shadow:0 18px 48px #0009}
+    body{background:var(--paper);color:var(--ink)}.leaflet-container{background:#0a0f17}.leaflet-tile-pane{filter:brightness(1.22) contrast(.94) saturate(.86)}.card{background:rgba(14,20,32,.96);border-color:#27344a;box-shadow:var(--shadow)}
+    .planner-brand b{color:var(--ink)}.icon-btn,.locate,.swap-route{background:#16202f;color:var(--ink);border-color:var(--line)}
+    .mode-picker{background:#0b111c}.mode-picker button{color:var(--muted)}.mode-picker button[aria-pressed="true"]{background:#1a2535;color:var(--ink);box-shadow:none}
+    .field{background:#0a0f18;border-color:#28344a}.field input{color:var(--ink)}.field input::placeholder{color:#8a96ad}.field:focus-within{border-color:var(--red);box-shadow:0 0 0 2px #ff5a4728}
+    .suggestions,.suggestion{background:var(--panel);color:var(--ink);border-color:var(--line)}.suggestion.active,.suggestion:hover{background:#16202f}
+    .filters,.results{background:rgba(14,20,32,.97);border-color:#27344a}.section-head button,.discover-toggle,.layers-toggle{color:var(--amber)!important}.chip,.discover-choice,.route,.plan,.exports a{background:#0b111c;color:var(--ink);border-color:var(--line)}
+    .chip[aria-pressed="true"]{background:color-mix(in srgb,var(--chip) 17%,#0b111c)}.chip small,.discover-choice small,.layer-status,.layer-hint{color:var(--muted)}.discover-choice[aria-pressed="true"]{border-color:var(--amber);background:#1c1608}
+    .route.selected{border-color:var(--red);box-shadow:inset 0 0 0 1px var(--red)}.badge{background:#3a1d1d;color:#ffb3a8}.exports .exact{background:#16202f}.plan.best{background:var(--red);color:#fff;border-color:var(--red)}
+    .planner.loading .route-hint{color:var(--amber)}.planner.loading .route-hint::before{border-color:#453410;border-top-color:var(--amber)}.direction-step{border-color:var(--line)}.direction-step .step-number{background:#3a1d1d;color:#ffb3a8}
+    .warning,.paywall p,.paywall small,.status{color:var(--muted)}.about{background:#080b11dd}.about article{background:var(--panel)}.about p,.about li{color:#aebbd0}.about .close{background:#16202f;color:var(--ink)}.legacy a,.source-line a{color:var(--amber)}
+    .leaflet-control-zoom a{background:#0e1420;color:var(--ink);border-color:var(--line)}.leaflet-control-attribution{background:#080b11dd!important;color:var(--muted)}.leaflet-control-attribution a{color:var(--amber)}.leaflet-popup-content-wrapper{background:var(--panel);color:var(--ink);border:1px solid var(--line)}.leaflet-popup-tip{background:var(--panel)}
+    @media(max-width:720px){.layers-toggle{background:#16202f!important;color:var(--amber)!important}.results{background:rgba(14,20,32,.98);border-color:#27344a}}
+    .via-stop{display:flex;align-items:center;gap:8px;margin-top:6px;padding:7px 9px;border:1px solid #23514d;border-radius:10px;background:#0b1d20;color:var(--ink);font-size:11px}.via-stop[hidden]{display:none}.via-stop b{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:#00a896;color:#fff}.via-stop span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.via-stop button{border:0;background:transparent;color:var(--muted);font-size:17px;line-height:1}.route-actions{display:flex;gap:7px}.route-actions button{min-height:38px;border:1px solid var(--line);border-radius:10px;background:#16202f;color:var(--ink);font-size:11px;font-weight:750;padding:8px 11px}.route-actions .directions-open{flex:1;background:var(--red);border-color:var(--red);color:white}.next-step{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;padding:9px;border:1px solid var(--line);border-radius:11px;background:#0b111c;font-size:12px}.maneuver{display:grid;place-items:center;width:26px;height:26px;border-radius:8px;background:#3a1d1d;color:#ffb3a8;font-size:16px;font-weight:900}.next-step small{color:var(--muted);white-space:nowrap}.route-outcome{font-size:11px;color:var(--muted);line-height:1.4}.route-outcome strong{color:var(--ink)}.directions[open] summary{margin-bottom:3px}.empty-search{padding:10px 11px;color:var(--muted);font-size:11px}.route-to-discovery{margin-top:7px;border:0;border-radius:8px;background:var(--red);color:white;padding:7px 9px;font-weight:750}.leaflet-popup-content a{color:var(--amber)}
+    @media(max-width:720px){.planner-top{margin-bottom:5px}.planner h1{font-size:19px}.planner-brand b{font-size:13px}.section-link{max-width:102px;overflow:hidden;text-overflow:ellipsis}.mode-picker{margin-bottom:4px}.field{margin-top:4px}.field input{min-height:34px!important}.planner-actions{margin-top:5px}.filters.open .filter-grid{max-height:185px}.results{max-height:min(48vh,430px)}.results:has(.directions[open]){max-height:min(66vh,590px)}.route-summary b{font-size:21px}.direction-step{grid-template-columns:28px 1fr auto;padding:10px 1px}.directions:not([open]) .direction-step{display:none}}
+    .report-detail{display:none;position:fixed;z-index:1150;left:16px;bottom:16px;width:min(390px,calc(100vw - 32px));padding:0;overflow:auto;max-height:min(68vh,650px)}.report-detail.open{display:block}.record-open #results{display:none}.report-detail-head{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:11px 13px;background:rgba(14,20,32,.98);border-bottom:1px solid var(--line)}.report-detail-head b{font-size:12px}.report-close{border:0;border-radius:8px;background:#16202f;color:var(--ink);padding:6px 9px}.report-body{padding:13px}.report-kicker{font-size:9px;font-weight:850;letter-spacing:.09em;color:var(--red)}.report-body h2{font-size:18px;line-height:1.2;letter-spacing:-.035em;margin:6px 0 4px}.report-place,.report-note{color:var(--muted);font-size:10px;line-height:1.45}.report-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden;margin:11px 0}.report-fact{background:#0b111c;padding:9px 5px;text-align:center}.report-fact b{display:block;font-size:16px}.report-fact span{display:block;color:var(--muted);font-size:8px;margin-top:2px}.report-headline{font-size:12px;line-height:1.45;margin:9px 0}.report-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:10px 0}.report-actions button,.report-actions a,.report-submit{display:flex;align-items:center;justify-content:center;min-height:40px;border:1px solid var(--line);border-radius:10px;background:#16202f;color:var(--ink);font-size:11px;font-weight:750;text-decoration:none;text-align:center;padding:8px}.report-actions .confirm,.report-submit{background:var(--red);border-color:var(--red);color:#fff}.report-verdict{border:1px solid var(--line);border-radius:10px;background:#0a0f18;padding:10px;font-size:11px;font-weight:750}.report-thread{display:grid;gap:6px;margin-top:7px}.report-post{border:1px solid var(--line);border-radius:9px;background:#111a28;padding:8px;font-size:10px;line-height:1.4}.report-post b{color:var(--amber)}.report-form{display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}.report-form.open{display:block}.report-form textarea{width:100%;min-height:72px;resize:vertical;border:1px solid var(--line);border-radius:10px;background:#0a0f18;color:var(--ink);padding:9px;font:inherit;font-size:11px}.report-statuses{display:flex;gap:5px;overflow-x:auto;margin:7px 0}.report-status-choice{flex:none;border:1px solid var(--line);border-radius:999px;background:#0b111c;color:var(--muted);padding:6px 8px;font-size:10px}.report-status-choice.on{border-color:var(--amber);color:var(--ink);background:#1c1608}.report-upload{display:flex;align-items:center;gap:7px;margin:7px 0;color:var(--muted);font-size:10px}.report-upload input{min-width:0;width:100%}.report-message{color:var(--amber);font-size:10px;line-height:1.4;margin-top:7px}.map-report-action{border:0;border-radius:8px;background:var(--red);color:white;padding:7px 9px;font-size:10px;font-weight:750;margin-top:7px}
+    @media(max-width:720px){.report-detail{left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));width:auto;max-height:min(58vh,570px)}.report-body{padding:11px}.report-actions{grid-template-columns:1fr 1fr}}
+  </style>
 </head>
 <body>
-<div id="app">
-  <header>
-    <div class="topline">
-      <div class="brand">
-        <h1 onclick="showLanding()" style="cursor:pointer" title="back to the record">un<b>ignor</b>able</h1>
-        <span class="tag">the city's own record of what it keeps closing — and keeps ignoring</span>
-      </div>
-      <div class="views" id="views">
-        <button class="vbtn on" type="button" data-v="map">Map</button>
-        <button class="vbtn" type="button" data-v="trends">Trends</button>
-        <button class="vbtn" type="button" data-v="disparity">Disparity</button>
-      </div>
-    </div>
-    <div class="strip">
-      <div class="stat"><span class="v" id="s-issues">—</span><span class="l">active right now</span></div>
-      <div class="stat"><span class="v" id="s-worst">—</span><span class="l">chronic (persistent)</span></div>
-      <div class="stat"><span class="v warn" id="s-ignored">—</span><span class="l">closures, problem came back</span></div>
-      <div class="stat"><span class="v" id="s-reports">—</span><span class="l">311 reports</span></div>
-    </div>
-    <div class="chips" id="chips"></div>
-    <div class="histrow"><span class="histtoggle" id="histToggle" onclick="toggleHistory()">＋ show resolved (history)</span></div>
-    <div class="fresh" id="fresh"></div>
-  </header>
-  <main>
-    <div id="map"></div>
-    <div class="findbar" id="findbar">
-      <div class="findwrap">
-        <div class="findbox">
-          <svg class="pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
-          <input id="findInput" placeholder="Find your block — address or neighborhood" aria-label="Find your block" autocomplete="off">
-        </div>
-        <div class="sugg" id="findSugg"></div>
-      </div>
-      <button class="geo" id="findGeo" title="Use my location">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3.4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
-        Near me
-      </button>
-    </div>
-    <div class="hint" id="hint">Bigger dot = reported more. Tap one. &middot; <a href="/hotspots" style="color:var(--amber);text-decoration:none">Worst zones &#8594;</a></div>
-    <button class="sharearea" id="shareAreaBtn" onclick="shareArea()" title="Share every spot in this view as one link">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg>
-      Share this area
-    </button>
-    <div class="sheetback" id="sheetBack" onclick="if(event.target===this)closeSheet()">
-      <div class="sheet" id="sheet">
-        <h3 id="sheetTitle">Share this area</h3>
-        <div class="ssub" id="sheetSub">Framing the spots in view…</div>
-        <div id="sheetBody" hidden>
-          <div class="srow">
-            <a class="sbtn x" id="sheetX" href="#" target="_blank" rel="noopener" onclick="sheetShared()">Post to X</a>
-            <button class="sbtn copy" id="sheetCopy" onclick="sheetShared();sheetCopy()">Copy link</button>
-            <button class="sbtn ghost" onclick="closeSheet()">Close</button>
-          </div>
-          <div class="slink" id="sheetLink"></div>
-        </div>
-        <div class="serr" id="sheetErr" hidden></div>
-      </div>
-    </div>
-    <section id="trends"><div class="tpad">
-      <h2 id="t-head">Is it getting worse?</h2>
-      <p class="tsub">Monthly 311 reports by type, 2021–2026 — the question sidewalk was built to answer, now living here.</p>
-      <div id="chart"></div>
-      <div class="tlegend" id="t-legend"></div>
-    </div></section>
-    <section id="disparity"><div class="tpad">
-      <h2>Whose block does the city write off?</h2>
-      <p class="tsub">Same complaint, 51 council districts. The share the city closes as <b>“nothing found”</b> — from its own resolution notes. It closes them in hours everywhere; the gap is whether it finds anything when it gets there.</p>
-      <div class="dhead" id="d-head"></div>
-      <div class="dtypes" id="d-types"></div>
-      <div class="dcap" id="d-cap"></div>
-      <div id="d-bars"></div>
-    </div></section>
-    <aside id="card" aria-label="Issue details"><button class="x" type="button" aria-label="Close issue details" onclick="closeCard()">×</button><div class="card-pad" id="cardBody"></div></aside>
-  </main>
-</div>
-
-<!-- LANDING ("The Record") — default arrival; values filled from /api/issues, then handed to the map -->
-<div id="landing" class="hide">
-  <div class="mast">
-    <div class="brandw">un<b>ignor</b>able</div>
-    <div class="livel"><i></i> <span id="l-livecount">—</span> active now</div>
-  </div>
-
-  <!-- SCENE 1 — the single stat -->
-  <section class="scene hero live">
-    <div class="inner">
-      <div class="kick"><span>NYC 311 · 2021—2026</span><span class="ln"></span></div>
-      <p class="lead">The city closed these reports as <b>resolved</b>. Then the same blocks were reported again.</p>
-      <div class="megastat"><span class="num" id="l-pct">—</span><span class="unit">came back.</span></div>
-      <p class="says"><span id="l-back">—</span> closed tickets<span class="dim"> where the same area (about a block) was reported again.</span></p>
-      <p class="src" id="l-src">Source: NYC 311 open data, the city's own record.</p>
-    </div>
-    <div class="scrollcue" onclick="document.querySelector('#landing .mech').scrollIntoView({behavior:'smooth'})">the receipt<span class="arr"></span></div>
+<main id="app">
+  <div id="map" aria-label="Interactive map of New York City civic conditions"></div>
+  <section class="shell" id="shell" aria-label="Route planner and map controls">
+    <form class="card planner" id="route-form">
+      <div class="planner-top"><h1>Where to?</h1><div class="planner-brand"><b>unignorable</b><button class="icon-btn section-link" id="report-link" type="button">Report nearby</button><button class="icon-btn" id="about-open" type="button" aria-label="About this map">ⓘ</button></div></div>
+      <div class="mode-picker" role="group" aria-label="Travel mode"><button type="button" data-profile="driving" aria-pressed="true">Drive</button><button type="button" data-profile="walking" aria-pressed="false">Walk</button></div>
+      <div class="route-fields"><div class="address-wrap"><label class="field"><span>A</span><input id="origin" name="origin" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="origin-suggestions" placeholder="Choose starting point" required></label><div class="suggestions" id="origin-suggestions" role="listbox"></div></div>
+      <div class="address-wrap"><label class="field"><span>B</span><input id="destination" name="destination" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="destination-suggestions" placeholder="Choose destination" required></label><div class="suggestions" id="destination-suggestions" role="listbox"></div></div><button class="swap-route" id="swap-route" title="Swap start and destination" aria-label="Swap start and destination" type="button">↕</button></div>
+      <div class="via-stop" id="via-stop" hidden><b>C</b><span id="via-name"></span><button id="remove-via" type="button" aria-label="Remove stop">×</button></div>
+      <div class="planner-actions"><span class="route-hint" id="route-hint">Map is free · routes are $1/day or $25/year</span><button class="locate" id="locate" type="button" title="Use current location">◎</button></div>
+    </form>
+    <section class="card filters" id="filter-card" aria-label="Map and route awareness filters">
+      <div class="section-head"><div><b>Route around</b><span class="layer-status" id="layer-status">1 active</span></div><div><button class="discover-toggle" id="discover-toggle" type="button" aria-expanded="false">Add a stop</button><button id="toggle-all" type="button">Clear</button><button class="layers-toggle" id="layers-toggle" type="button" aria-expanded="false" aria-controls="filters">Edit</button></div></div>
+      <div class="filter-grid" id="filters"></div>
+      <p class="layer-hint" id="layer-hint">Selected layers show on the map and shape the route.</p>
+      <div class="discover" id="discover"><p>Show useful live places near your route. Tap a pin to add it as a stop without changing your destination.</p><button class="discover-choice" id="citibike-toggle" type="button" aria-pressed="false"><span>Live Citi Bike <small>available bikes + docks</small></span><span>+</span></button></div>
+    </section>
+    <section class="card results" id="results" hidden aria-live="polite"></section>
+    <section class="card report-detail" id="report-detail" aria-label="Public issue record" aria-live="polite"></section>
   </section>
-
-  <!-- SCENE 2 — mechanism -->
-  <section class="scene mech">
-    <div class="inner">
-      <div class="kick"><span>Why no one sees it</span><span class="ln"></span></div>
-      <h2>311 is a private line. It has <b>no memory</b> and <b>no public.</b></h2>
-      <div class="flow">
-        <div class="flowrow"><div class="ic">1</div><div class="t"><b>You report it.</b> <span>One ticket. Just you and the city.</span></div></div>
-        <div class="flowx">&darr;</div>
-        <div class="flowrow"><div class="ic">2</div><div class="t"><b>They close it.</b> <span>"Visited, nothing found." Ticket gone.</span></div></div>
-        <div class="flowx">&darr;</div>
-        <div class="flowrow"><div class="ic">3</div><div class="t"><b>It comes back.</b> <span>Another report comes in nearby. The count resets to one.</span></div></div>
-      </div>
-      <p class="punch">Reported thousands of times, closed thousands of times, and <b>no one ever sees the pattern.</b> unignorable puts the city's own tickets back together into one record that doesn't forget.</p>
-    </div>
-  </section>
-
-  <!-- SCENE 3 — the receipt (leaderboard, deep-links into the map) -->
-  <section class="scene">
-    <div class="inner">
-      <div class="kick"><span>The receipt</span><span class="ln"></span></div>
-      <div class="receipt-head">
-        <div class="t">WORST-IGNORED SPOTS <span>· by accountability score</span></div>
-        <div class="where" id="l-where" title="set your area">
-          <svg viewBox="0 0 24 24"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1112 6.5a2.5 2.5 0 010 5z"/></svg>
-          <span id="l-where-name">Citywide</span> <span class="car">&#9662;</span>
-        </div>
-      </div>
-      <div class="board2" id="l-board"></div>
-    </div>
-  </section>
-
-  <!-- SCENE 4 — your block -->
-  <section class="scene">
-    <div class="inner">
-      <div class="kick"><span>Now find yours</span><span class="ln"></span></div>
-      <div class="search">
-        <div class="searchbox">
-          <svg class="pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
-          <input id="l-addr" placeholder="Your address or neighborhood" aria-label="Your address" autocomplete="off">
-          <button class="lgeo" id="l-locate">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3.4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
-            Locate me
-          </button>
-        </div>
-        <div class="lsugg"><div class="sugg" id="l-addr-sugg"></div></div>
-      </div>
-      <div id="l-blockcard"></div>
-    </div>
-  </section>
-
-  <!-- SCENE 5 — scale -->
-  <section class="scene scale">
-    <div class="inner">
-      <div class="kick"><span>And it's not one spot</span><span class="ln"></span></div>
-      <h2 id="l-scale-h">— spots are active right now.</h2>
-      <p class="sub" id="l-scale-sub">Tap a borough to drop into the map.</p>
-      <div class="boros" id="l-boros"></div>
-    </div>
-  </section>
-
-  <!-- SCENE 6 — act -->
-  <section class="scene end">
-    <div class="inner">
-      <div class="kick" style="justify-content:center"><span class="ln"></span><span>Make it true</span><span class="ln"></span></div>
-      <h2>The city closed it. <b>You decide if it's fixed.</b></h2>
-      <p>Open the map, find your corner, and say "I see this often." Add a photo. Your verdict — still here, worse, cleaned, gone — overrides the city's "resolved." A real person reviews every report before it's filed.</p>
-      <a class="cta" id="l-openmap">Open the map &rarr;</a>
-      <a class="cta2" id="l-jumpme">Jump to my location</a>
-      <div class="endmeta"><i></i> <span id="l-fresh">NYC 311 open data · refreshed daily</span></div>
-      <p class="fine">unignorable assembles the public record. It does not represent the City of New York. Static, public quality-of-life conditions only — never people, never private data.</p>
-    </div>
-  </section>
-</div>
+  <aside class="card legend" id="legend"><b>Public observations, not a live inventory</b><p id="freshness">Loading source details…</p><div class="severity-key" aria-label="Severity outline legend"><span><i class="severity-dot"></i>lower</span><span><i class="severity-dot elevated"></i>elevated</span><span><i class="severity-dot high"></i>highest</span></div><div class="source-line"><span id="feature-count">—</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">Map/data sources</a></div></aside>
+  <div class="about" id="about" role="dialog" aria-modal="true" aria-labelledby="about-title"><article class="card"><button class="close" id="about-close" type="button">Close</button><h2 id="about-title">What this map means</h2><p>Unignorable combines public map observations with recurring NYC 311 reports. It shows license plate cameras, homelessness and encampment reports, drug activity reports, dumping, broken sidewalks, bad roads, and broken lights or signals. “Flock Safety” appears only when the public manufacturer tag says Flock.</p><p>Selected locations become street exclusions during driving or walking route generation. Routes update automatically. Walking candidates avoid ferries and are rejected when avoidance would add more than 30% travel time or 35% distance. Public reports can be wrong or stale; no layer identifies an individual or proves a condition is present now.</p><p>When 311 resolution text explicitly says NYPD or DHS responded, the popup says so and gives the count. Address searches go to OpenStreetMap Nominatim; routing uses public Valhalla. Your regular-route settings are saved only in this browser.</p><p>The exact generated line stays visible here and can be downloaded as GPX. Google and Apple receive an intentional stop plus up to three shaping points, but either app can recalculate.</p><p>Browsing the map is free. A one-time $1 pass unlocks routes for 24 hours on this browser; a one-time $25 pass unlocks them for one year.</p><div class="legacy"><a href="/issues">Full records board</a><a href="/hotspots">Accountability hotspots</a><a href="/c?t=Encampment&id=40.736%2C-73.983">Campaign 001</a><a href="https://data.cityofnewyork.us/d/erm2-nwe9" target="_blank" rel="noopener">NYC 311 source</a></div></article></div>
+</main>
+<script src="/vendor/leaflet.js"></script>
 <script>
-const TYPES = {
-  'Encampment':                {c:'#ff6b4a', label:'Encampment'},
-  'Drug Activity':             {c:'#c77dff', label:'Drug Activity'},
-  'Homeless Person Assistance':{c:'#4ad6c8', label:'Homeless Assist'},
-  'Panhandling':               {c:'#ffd166', label:'Panhandling'},
+const DEFS={
+  alpr:{label:'License plate cameras',detail:'Flock when tagged',color:'#ffc24b'},
+  homelessness:{label:'Homeless / encampment reports',detail:'encampment / assistance',color:'#ff6b4a'},
+  drugs:{label:'Drug activity',detail:'indoor / outdoor reports',color:'#c77dff'},
+  dumping:{label:'Illegal dumping',detail:'repeat reports',color:'#ff5b45'},
+  sidewalk:{label:'Broken sidewalks',detail:'repeat reports',color:'#f5aa3c'},
+  street:{label:'Bad roads',detail:'potholes / cave-ins',color:'#2c7be5'},
+  signals:{label:'Broken lights/signals',detail:'street / pedestrian',color:'#328b65'}
 };
-const active = new Set(Object.keys(TYPES));
-let ALL = [], layer, map;
+const REPORT_TYPES={
+  'Encampment':{label:'Encampment',color:'#ff5a47',layer:'homelessness'},
+  'Drug Activity':{label:'Drug activity',color:'#c77dff',layer:'drugs'},
+  'Homeless Person Assistance':{label:'Homeless assist',color:'#4ad6c8',layer:'homelessness'},
+  'Panhandling':{label:'Panhandling',color:'#ffc24b',layer:'homelessness'}
+};
+const state={data:null,enabled:new Set(['alpr']),featureGroup:null,routes:[],routeLines:[],selectedRoute:0,endpoints:null,via:null,routeRequest:0,routeTimer:null,routeController:null,profile:'driving',avoidance:null,access:null,discover:{citibike:false,group:null,timer:null},report:{issues:null,enabled:new Set(Object.keys(REPORT_TYPES)),group:null,current:null,selectedStatus:null,photo:null,promise:null,error:null}};
+const PREF_KEY='unignorable-regular-route-v2';
+const canvas=L.canvas({padding:.5});
+const map=L.map('map',{zoomControl:true,renderer:canvas,minZoom:10,maxZoom:19}).setView([40.724,-73.965],12);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap &copy; CARTO'}).addTo(map);
+const routeGroup=L.featureGroup().addTo(map),endpointGroup=L.layerGroup().addTo(map);
+state.discover.group=L.layerGroup().addTo(map);
+state.report.group=L.layerGroup().addTo(map);
+const compactMap=()=>window.matchMedia('(max-width:720px)').matches;
+const esc=value=>String(value==null?'':value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>Number(n||0).toLocaleString('en-US');
+const mins=s=>Math.max(1,Math.round(Number(s)/60));
+const miles=m=>(Number(m)/1609.344).toFixed(1);
+const stepDistance=m=>Number(m)<160.934?`${Math.max(10,Math.round(Number(m)*3.28084/10)*10)} ft`:`${miles(m)} mi`;
+function setRouteHint(message,loading=false){const planner=document.getElementById('route-form'),hint=document.getElementById('route-hint');planner.classList.toggle('loading',loading);hint.textContent=message;}
 
-const fmt = n => n.toLocaleString('en-US');
-const stillHere = i => i.last_seen >= '2026-01-01';
-
-const map_ = L.map('map', {zoomControl:true, preferCanvas:true}).setView([40.735,-73.98], 12);
-map = map_;
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  {attribution:'© OpenStreetMap © CARTO', maxZoom:19}).addTo(map);
-const canvas = L.canvas({padding:.5});
-
-function radius(n,seen=0){ return Math.min(28, 4 + Math.sqrt(n)*0.82 + Math.sqrt(seen)*1.4); }
-
-let showResolved = false, meLayer = null;
-// --- Zoom-based grid clustering (zero-dep, keeps the canvas-circle look) ---
-// At low zoom ~4,100+ dots are illegible and slow. We snap each issue to a lat/lng grid cell
-// whose size shrinks as you zoom in; below the "show everything" threshold we draw ONE dot per
-// cell sized by the SUMMED report count and colored by the cell's dominant (highest-n) type.
-// Honest: a cluster dot's size still means "reported more"; clicking it ZOOMS, never opens a
-// single misleading card. Above z=14 we render every real issue (full fidelity + per-issue click).
-const FULL_ZOOM = 14;
-function cellSize(z){ // degrees per grid cell, coarser when zoomed out
-  if(z>=13) return 0.004; if(z>=12) return 0.008; if(z>=11) return 0.016;
-  if(z>=10) return 0.03; if(z>=9) return 0.06; return 0.12;
+function savePlanner(){
+  try{const origin=document.getElementById('origin'),destination=document.getElementById('destination');localStorage.setItem(PREF_KEY,JSON.stringify({profile:state.profile,filters:[...state.enabled],via:state.via,origin:{value:origin.value,place:origin._place||null},destination:{value:destination.value,place:destination._place||null}}));}catch{}
 }
-function shownIssues(){
-  return ALL.filter(i => active.has(i.type) &&
-    (i.status==='active' || (showResolved && i.status==='resolved')));
+function restorePlanner(){
+  try{const saved=JSON.parse(localStorage.getItem(PREF_KEY)||'null');if(!saved)return;state.profile=saved.profile==='walking'?'walking':'driving';if(Array.isArray(saved.filters))state.enabled=new Set(saved.filters.filter(name=>DEFS[name]));if(saved.via&&Number.isFinite(Number(saved.via.lat))&&Number.isFinite(Number(saved.via.lng)))state.via=saved.via;for(const id of ['origin','destination']){const input=document.getElementById(id),entry=saved[id];if(entry&&entry.value){input.value=entry.value;input._place=entry.place||null;}}document.querySelectorAll('[data-profile]').forEach(item=>item.setAttribute('aria-pressed',String(item.dataset.profile===state.profile)));renderVia();}catch{}
 }
-function draw(){
-  if(layer) layer.remove();
-  layer = L.layerGroup().addTo(map);
-  const shown = shownIssues();
-  const z = map.getZoom();
-  if(z >= FULL_ZOOM || shown.length <= 600){
-    // Full fidelity: one real marker per issue, click → card.
-    shown.forEach(i => {
-      const col = TYPES[i.type].c;
-      const persist = i.pattern==='persistent';
-      const resolved = i.status==='resolved';
-      L.circleMarker([i.lat,i.lng], {
-        renderer:canvas,
-        radius: radius(i.n,i.seen) * (persist?1.12:1),
-        color: col, weight: persist?2:1,
-        fillColor: col,
-        fillOpacity: resolved?0.12:(persist?0.6:0.42),
-        opacity: resolved?0.4:0.85
-      }).on('click', ()=>openCard(i)).addTo(layer);
+
+function buildFilters(){
+  const root=document.getElementById('filters');
+  root.innerHTML=Object.entries(DEFS).map(([id,d])=>`<button class="chip${id==='alpr'?' wide':''}" style="--chip:${d.color}" type="button" data-layer="${id}" aria-pressed="${state.enabled.has(id)}"><span class="dot"></span><span>${d.label}<small>${d.detail}</small></span></button>`).join('');
+  root.addEventListener('click',event=>{const button=event.target.closest('[data-layer]');if(!button)return;const name=button.dataset.layer;if(state.enabled.has(name))state.enabled.delete(name);else state.enabled.add(name);button.setAttribute('aria-pressed',String(state.enabled.has(name)));syncLayers();scheduleRoute(120);});
+}
+
+function popup(feature){
+  if(feature.layer==='alpr'){
+    const vendor=feature.manufacturer||'Manufacturer not tagged';
+    return `<b>License plate camera</b><br>${esc(vendor)}${feature.operator?` · ${esc(feature.operator)}`:''}<br><small>Public observation${feature.observed_at?` · checked ${esc(feature.observed_at)}`:''}. The map cannot know whether it captured a vehicle.</small><br><a href="${esc(feature.source_url)}" target="_blank" rel="noopener">Open source record</a>`;
+  }
+  const response=feature.responses||{},condition=feature.condition||{},facts=[];
+  if(response.nypd_responded)facts.push(`NYPD responded to ${fmt(response.nypd_responded)} call${response.nypd_responded===1?'':'s'}`);
+  if(response.nypd_observed_encampment)facts.push(`NYPD recorded an encampment ${fmt(response.nypd_observed_encampment)} time${response.nypd_observed_encampment===1?'':'s'}`);
+  if(response.dhs_outreach)facts.push(`DHS outreach responded to ${fmt(response.dhs_outreach)} call${response.dhs_outreach===1?'':'s'}`);
+  if(response.arrests)facts.push(`${fmt(response.arrests)} arrest${response.arrests===1?'':'s'} recorded`);
+  if(response.summonses)facts.push(`${fmt(response.summonses)} summons${response.summonses===1?'':'es'} recorded`);
+  return `<b>${esc(DEFS[feature.layer].label)}</b><br>${esc(feature.complaint_type||feature.descriptor)}${feature.descriptor?` · ${esc(feature.descriptor)}`:''}<br><strong>${fmt(feature.count)} reports near this location</strong>${feature.distinct_report_days?` across ${fmt(feature.distinct_report_days)} days`:''}${condition.label?`<br><strong>${esc(condition.label)}</strong><br><small>${esc(condition.basis)}${condition.quiet_window_days?` Quiet window: ${fmt(condition.quiet_window_days)} days.`:''}</small>`:''}${facts.length?`<br><strong>${facts.map(esc).join('<br>')}</strong>`:''}<br><small>${esc(feature.first_seen||'')} → ${esc(feature.last_seen||'')}. This is an evidence estimate, not a live inventory.</small><br><button class="map-report-action" type="button" data-report-lat="${Number(feature.lat)}" data-report-lng="${Number(feature.lng)}">Report or inspect this record</button><br><a href="${esc(feature.source_url)}" target="_blank" rel="noopener">NYC 311 source</a>`;
+}
+
+const FULL_DETAIL_ZOOM=14;
+function featureSeverity(feature){
+  return feature.condition?.routingLevel==='hard'||Number(feature.count)>=20?'high':feature.condition?.routingLevel==='soft'||Number(feature.count)>=5?'elevated':'lower';
+}
+function featureMarkerStyle(level,fill,cluster=false){
+  return {renderer:canvas,radius:cluster?3:2.5,color:level==='high'?'#eaf0fb':level==='elevated'?'#ffc24b':'#28344a',weight:level==='lower'?1:1.5,fillColor:fill,fillOpacity:.92};
+}
+function featureCellSize(zoom){
+  if(zoom>=13)return .004;if(zoom>=12)return .008;if(zoom>=11)return .016;if(zoom>=10)return .03;return .06;
+}
+function drawFeatures(){
+  if(state.featureGroup)state.featureGroup.remove();
+  state.featureGroup=L.layerGroup().addTo(map);
+  if(!state.data||!state.enabled.size)return;
+  const zoom=map.getZoom(),entries=[];
+  for(const name of state.enabled){
+    if(state.report.issues&&(name==='homelessness'||name==='drugs'))continue;
+    for(const feature of (state.data.layers&&state.data.layers[name])||[])entries.push({feature,name});
+  }
+  if(zoom>=FULL_DETAIL_ZOOM||entries.length<=600){
+    const bounds=map.getBounds().pad(.3);
+    entries.filter(({feature})=>bounds.contains([feature.lat,feature.lng])).slice(0,1500).forEach(({feature,name})=>{
+      L.circleMarker([feature.lat,feature.lng],featureMarkerStyle(featureSeverity(feature),DEFS[name].color)).bindPopup(popup(feature),{maxWidth:290}).addTo(state.featureGroup);
     });
     return;
   }
-  // Clustered: aggregate into grid cells.
-  const g = cellSize(z), cells = new Map();
-  for(const i of shown){
-    const k = Math.round(i.lat/g)+'_'+Math.round(i.lng/g);
-    let c = cells.get(k);
-    if(!c){ c = {sumN:0,sumSeen:0,slat:0,slng:0,w:0,topN:-1,topType:null,anyActive:false}; cells.set(k,c); }
-    c.sumN += i.n; c.slat += i.lat*i.n; c.slng += i.lng*i.n; c.w += i.n;
-    c.sumSeen += Number(i.seen)||0;
-    if(i.n > c.topN){ c.topN = i.n; c.topType = i.type; }
-    if(i.status==='active') c.anyActive = true;
+  const grid=featureCellSize(zoom),cells=new Map();
+  for(const {feature,name} of entries){
+    const key=Math.round(feature.lat/grid)+'_'+Math.round(feature.lng/grid),weight=Math.max(1,Number(feature.count)||1),level=featureSeverity(feature);
+    let cell=cells.get(key);
+    if(!cell){cell={lat:0,lng:0,weight:0,topWeight:-1,topLayer:name,severity:'lower'};cells.set(key,cell);}
+    cell.lat+=feature.lat*weight;cell.lng+=feature.lng*weight;cell.weight+=weight;
+    if(weight>cell.topWeight){cell.topWeight=weight;cell.topLayer=name;}
+    if(level==='high'||(level==='elevated'&&cell.severity==='lower'))cell.severity=level;
   }
-  cells.forEach(c => {
-    const lat = c.slat/c.w, lng = c.slng/c.w, col = TYPES[c.topType].c;
-    L.circleMarker([lat,lng], {
-      renderer:canvas,
-      radius: Math.min(30, radius(c.sumN,c.sumSeen)*1.05),
-      color: col, weight: 1, fillColor: col,
-      fillOpacity: c.anyActive?0.42:0.16, opacity: c.anyActive?0.85:0.4
-    }).on('click', ()=>{ map.flyTo([lat,lng], Math.min(FULL_ZOOM+1, z+3), {duration:.7}); }).addTo(layer);
+  cells.forEach(cell=>{
+    const lat=cell.lat/cell.weight,lng=cell.lng/cell.weight;
+    L.circleMarker([lat,lng],featureMarkerStyle(cell.severity,DEFS[cell.topLayer].color,true)).on('click',()=>map.flyTo([lat,lng],Math.min(FULL_DETAIL_ZOOM+1,zoom+3),{duration:.7})).addTo(state.featureGroup);
   });
 }
-// Redraw on zoom so cluster granularity tracks the view (cheap; only when crossing matters).
-let lastDrawZoom = null;
-function onZoomDraw(){ const z=map.getZoom(); if(z!==lastDrawZoom){ lastDrawZoom=z; draw(); } }
-function toggleHistory(){
-  showResolved = !showResolved;
-  const el = document.getElementById('histToggle');
-  el.classList.toggle('on', showResolved);
-  el.textContent = showResolved ? '− hide resolved' : '＋ show resolved (history)';
-  if(window.pulse) window.pulse(showResolved?'show_resolved':'hide_resolved');
-  draw();
+
+function syncLayers(){
+  const buttons=[...document.querySelectorAll('[data-layer]')];buttons.forEach(button=>button.setAttribute('aria-pressed',String(state.enabled.has(button.dataset.layer))));
+  document.getElementById('toggle-all').textContent=state.enabled.size?'Clear':'Select all';
+  document.getElementById('layer-status').textContent=state.enabled.size?`${state.enabled.size} selected`:'Fastest route';
+  document.getElementById('layer-hint').textContent=state.enabled.size?'Selected layers show here and shape every route.':'No avoidance selected; routes use the fastest plausible corridor.';
+  drawFeatures();
 }
 
-// --- Share this area: frame the spots in view, mint one permalink (/a/<id>) ---
-let sheetState = { url:null, tweet:null, id:null };
-function shareArea(){
-  const back=document.getElementById('sheetBack');
-  document.getElementById('sheetBody').hidden=true;
-  document.getElementById('sheetErr').hidden=true;
-  document.getElementById('sheetTitle').textContent='Share this area';
-  document.getElementById('sheetSub').textContent='Framing the spots in view…';
-  back.classList.add('on');
-  const b=map.getBounds();
-  const bbox={s:b.getSouth(),w:b.getWest(),n:b.getNorth(),e:b.getEast()};
-  fetch('/api/area',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({bbox:bbox,types:Array.from(active),resolved:showResolved})})
-   .then(r=>r.json())
-   .then(d=>{
-     if(!d.ok){ sheetErr(d.error==='no issues in this area'
-       ? 'No active spots in view. Pan or zoom to a cluster, then try again.'
-       : 'Could not build this area. Try again.'); return; }
-     sheetState={url:d.url,tweet:d.tweet,id:d.id};
-     const st=d.stats||{};
-     document.getElementById('sheetTitle').textContent=d.title||'This area';
-     document.getElementById('sheetSub').innerHTML='<span class="sbig">'+fmt(st.spots||0)+'</span> spot'+(st.spots===1?'':'s')
-       +' · <span class="sbig">'+fmt(st.n||0)+'</span> reports · closed '+fmt(st.closed||0)+'×'
-       +(st.activeSpots?' · '+fmt(st.activeSpots)+' still active':'');
-     document.getElementById('sheetX').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(d.tweet||'');
-     document.getElementById('sheetLink').textContent=d.url;
-     document.getElementById('sheetBody').hidden=false;
-     if(window.pulse) window.pulse('area_share_open');
-   })
-   .catch(()=>sheetErr('Could not build this area. Try again.'));
+function renderVia(){
+  const root=document.getElementById('via-stop');root.hidden=!state.via;document.getElementById('via-name').textContent=state.via?`Stop: ${state.via.name}`:'';
 }
-function sheetErr(msg){ const e=document.getElementById('sheetErr'); e.textContent=msg; e.hidden=false; document.getElementById('sheetSub').textContent=''; }
-function closeSheet(){ document.getElementById('sheetBack').classList.remove('on'); }
-function sheetShared(){ if(sheetState.id) fetch('/api/area/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:sheetState.id})}).catch(()=>{}); if(window.pulse) window.pulse('area_share_send'); }
-function sheetCopy(){
-  const url=sheetState.url; if(!url) return;
-  (navigator.clipboard?navigator.clipboard.writeText(url):Promise.reject()).then(()=>{
-    const el=document.getElementById('sheetCopy'); const o=el.textContent; el.textContent='Copied!'; setTimeout(()=>{el.textContent=o;},1500);
-  }).catch(()=>window.prompt('Copy this link:',url));
-}
+function syncReportLink(){document.getElementById('report-link').setAttribute('aria-label','Report or inspect the nearest public record');}
 
-let current = null, selStatus = null, photoData = null;
-const STATUS_LABEL = {still_here:'Still here', worse:'Got worse', cleaned:'Cleaned up', gone:'Gone'};
-const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function ago(ts){
-  const s=(Date.now()-new Date(ts).getTime())/1000;
-  if(s<60) return 'just now';
-  if(s<3600) return Math.floor(s/60)+'m ago';
-  if(s<86400) return Math.floor(s/3600)+'h ago';
-  return Math.floor(s/86400)+'d ago';
+function reportSeverity(issue){return issue.pattern==='persistent'||Number(issue.score)>=65?'high':Number(issue.score)>=52?'elevated':'lower';}
+function reportMarkerStyle(issue,cluster=false){
+  const level=reportSeverity(issue),fill=(REPORT_TYPES[issue.type]||{}).color||'#9aa6bd';
+  return featureMarkerStyle(level,fill,cluster);
 }
-
-let DATA_THROUGH = '';
-const PAT = {
-  persistent:{label:'PERSISTENT',cls:'st-persist'},
-  ongoing:   {label:'ACTIVE',cls:'st-active'},
-  emerging:  {label:'EMERGING',cls:'st-emerge'},
-  resolved:  {label:'LIKELY RESOLVED',cls:'st-resolved'},
-};
-function human(d){
-  if(d>=365) return (d/365).toFixed(d>=730?0:1)+(d>=730?' yrs':' yr');
-  if(d>=60) return Math.round(d/30)+' months';
-  if(d>=14) return Math.round(d/7)+' weeks';
-  return d+' day'+(d===1?'':'s');
+function reportDistanceMeters(a,b){
+  const rad=Math.PI/180,lat1=Number(a.lat)*rad,lat2=Number(b.lat)*rad,dLat=(Number(b.lat)-Number(a.lat))*rad,dLng=(Number(b.lng)-Number(a.lng))*rad;
+  const h=Math.sin(dLat/2)**2+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+  return 6371000*2*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
 }
-function statusLine(i){
-  if(i.pattern==='persistent') return `active ${human(i.current_days)} straight`;
-  if(i.pattern==='ongoing')    return `active · this run ${human(i.current_days)}`;
-  if(i.pattern==='emerging')   return `new · started ${human(i.current_days)} ago`;
-  return `quiet ${human(i.silence)} · normal gap here is ~${i.cadence}d`;
+async function loadReportIssues(){
+  if(state.report.issues)return state.report.issues;
+  if(state.report.promise)return state.report.promise;
+  state.report.promise=(async()=>{
+    try{const response=await fetch('/api/report-issues');const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Public records are unavailable.');state.report.issues=payload;state.report.error=null;drawFeatures();drawReportIssues();return payload;}
+    catch(error){state.report.error=error.message||'Public records are temporarily unavailable.';return null;}
+    finally{state.report.promise=null;}
+  })();
+  return state.report.promise;
 }
-function predictLine(i){
-  const kick = `<div class="predict-h">Assessment</div>`;
-  if(i.status==='resolved')
-    return kick+`<b>Likely resolved</b> — silent ${i.silence} days against its ~${i.cadence}-day cadence (${i.confidence}× past normal). <b>Neighbors — is it actually gone?</b>`;
-  if(i.pattern==='persistent')
-    return kick+`<b>Active & chronic</b> — ${human(i.current_days)} of continuous reports, no break in the city's own data.`;
-  if(i.pattern==='emerging')
-    return kick+`<b>Emerging</b> — first activity ${human(i.current_days)} ago. Worth watching.`;
-  return kick+`<b>Active</b> — current run started ${human(i.current_days)} ago.`;
-}
-async function loadSparkline(i){
-  try{
-    const r = await fetch(`/api/episodes?type=${encodeURIComponent(i.type)}&id=${encodeURIComponent(i.id)}`);
-    renderSparkline(document.getElementById('spark'), await r.json(), i.type);
-  }catch(e){}
-}
-function renderSparkline(el, eps, type){
-  if(!el) return;
-  if(!eps || !eps.length){ el.innerHTML=''; return; }
-  const col = TYPES[type].c;
-  const start = Date.parse(eps[0][0]+'T00:00:00Z');
-  const end = Date.parse((DATA_THROUGH||eps[eps.length-1][1])+'T00:00:00Z');
-  const span = Math.max(1, end-start);
-  const W=320,H=30, x = t => ((Date.parse(t+'T00:00:00Z')-start)/span)*W;
-  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="none" aria-label="Reported activity over time">`;
-  svg += `<line x1="0" y1="15" x2="${W}" y2="15" stroke="#273244" stroke-width="3"/>`;
-  eps.forEach(([s,e])=>{
-    const x1=x(s), x2=Math.max(x(e),x1+3);
-    svg += `<rect x="${x1.toFixed(1)}" y="10" width="${(x2-x1).toFixed(1)}" height="10" rx="3" fill="${col}" opacity="0.9"/>`;
-  });
-  svg += `</svg>`;
-  el.innerHTML = svg + `<div class="sl-ax"><span>${eps[0][0].slice(0,7)}</span><span>${eps.length} episode${eps.length>1?'s':''}</span><span>now</span></div>`;
-}
-
-function fmtCost(n){
-  n=Number(n)||0;
-  if(n>=1000) return '~$'+(n>=10000?Math.round(n/1000):(n/1000).toFixed(1).replace('.0',''))+'k';
-  return '~$'+Math.round(n);
-}
-function fmtCostRange(i){
-  const b=i&&i.response_labor;
-  return b ? fmtCost(b.low)+'-'+fmtCost(b.planning).replace(/^~/,'') : fmtCost(i&&i.estimated_cost);
-}
-function caseTitle(i){
-  const days=Math.max(1,Number(i.current_days)||1);
-  if(i.status!=='active') return `${TYPES[i.type].label} reports at this block have gone quiet.`;
-  if(i.type==='Encampment') return `An encampment has been reported on this block for ${fmt(days)} days straight.`;
-  if(i.type==='Drug Activity') return `Drug activity has been reported on this block for ${fmt(days)} days straight.`;
-  if(i.type==='Panhandling') return `Panhandling has been reported on this block for ${fmt(days)} days straight.`;
-  return `Requests for homeless assistance have continued on this block for ${fmt(days)} days.`;
-}
-
-function openCard(i){
-  current = i; selStatus = null; photoData = null;
-  const t = TYPES[i.type];
-  const rd = (i.avg_return_days!=null) ? i.avg_return_days : null;
-  const rdTxt = rd==null ? null : (rd < 1 ? 'the same day' : (rd < 1.5 ? '1 day' : rd+' days'));
-  if(window.pulse) window.pulse('issue_open',{type:i.type,id:i.id,reports:i.n});
-  const addr=esc((i.addr||'Approximate block location').replace(/\s+/g,' ').trim());
-  const nothing=Number(i.nothing_found)||0;
-  document.getElementById('cardBody').innerHTML = `
-    <div class="case-kicker" style="--type:${t.c}"><span class="case-type">${esc(t.label)}</span><span>·</span><span class="case-live">${i.status==='active'?'<i></i>Active now':'Historical record'}</span></div>
-    <div class="case-title">${esc(caseTitle(i))}</div>
-    <div class="case-place">${addr}${i.borough?` · ${esc(i.borough)}`:''} · Council District ${esc(i.council||'—')} · approximate block</div>
-    <div class="case-facts">
-      <div class="case-fact"><b>${fmt(i.n)}</b><span>311 reports</span></div>
-      <div class="case-fact"><b class="hot">${fmt(i.closed_n)}</b><span>city closures</span></div>
-      <div class="case-fact"><b class="hot">${fmtCostRange(i)}</b><span>response labor range</span></div>
-    </div>
-    <div class="case-est">From deduplicated response-days: one worker for 30 minutes to two workers for one hour, using NYPD published starting pay as the labor reference. Excludes cleanup, vehicles, overhead, shelter, and medical care. Not an audited bill.</div>
-    <div class="case-indictment">${i.headline?esc(i.headline):`First reported ${esc(i.first_seen)}.`}${nothing?` The city marked <b>${fmt(nothing)}</b> closures “nothing found.”`:''}${i.returned_n?` The same block was reported again after <b>${fmt(i.returned_n)}</b> closures.`:''}</div>
-
-    <div class="vote-row">
-      <button class="vote-btn" id="seenBtn" type="button" onclick="seeOften()"><span class="up">▲</span><span>Confirm</span><span class="count" id="voteCount">${fmt(i.seen||0)}</span></button>
-      <div class="vote-copy"><b>See this here now?</b><br>One confirmation per person.</div>
-    </div>
-
-    <div class="sect truth">
-      <div class="sect-h">What neighbors confirm</div>
-      <div id="verdict" class="verdict none">checking the block…</div>
-      <div id="thread" class="thread"></div>
-    </div>
-
-    <div class="acts">
-      <button class="add-btn" onclick="toggleForm()">Add what you see</button>
-    </div>
-    <details class="record-details">
-      <summary>Full city record</summary>
-      <div class="status ${PAT[i.pattern].cls}">
-        <span class="sdot"></span>${PAT[i.pattern].label}
-        <span class="sm">${statusLine(i)}</span>
-        ${i.episode_count>1?`<span class="rec">${i.episode_count} periods of activity</span>`:''}
-      </div>
-      <div class="spark" id="spark"></div>
-      <div class="predict">${predictLine(i)}</div>
-      ${i.status==='active'?`<div class="clock" id="clock" data-first="${esc(i.first_seen)}">
-        <div class="clock-top"><span class="clock-days" id="clkD">—</span><span class="clock-unit">days since the first report</span></div>
-        <div class="clock-tick" id="clkT">—</div>
-        <div class="clock-sub">First reported ${esc(i.first_seen)}. Closed <b>${fmt(i.closed_n)}×</b> since. A closure ends a ticket, not this public record.</div>
-        ${i.impossible_closures>0?`<div class="clock-flag">${fmt(i.impossible_closures)} ${i.impossible_closures==1?'closure was':'closures were'} timestamped before the report was filed.</div>`:''}
-      </div>`:''}
-      <div class="sect city">
-        <div class="sect-h">The city’s record</div>
-        <div class="cityline">Reported <b>${fmt(i.n)}×</b> since ${esc(i.first_seen)}. Marked <b>resolved ${fmt(i.closed_n)}×</b>. Reported again after <b>${fmt(i.returned_n)} closures</b>${rdTxt?` — typically ${rdTxt} later`:''}.</div>
-      </div>
-      ${i.disparity?`<div class="disp-badge ${dispCls(i.disparity)}" onclick="openDisparity('${i.type.replace(/'/g,"\\'")}')">${dispBadgeText(i)}</div>`:''}
-    </details>
-    <a class="receipt-link" href="${i.campaign?'/c':'/i'}?t=${encodeURIComponent(i.type)}&id=${encodeURIComponent(i.id)}" target="_blank" rel="noopener" onclick="window.pulse&&window.pulse('receipt_open',{type:i.type,id:i.id})">${i.campaign?'Active campaign - join it &rarr;':'&#128196; Get the public receipt - names who&#39;s accountable, built to post &rarr;'}</a>
-    <div class="pform" id="pform" hidden>
-      <textarea id="ptext" maxlength="500" placeholder="What do you actually see here right now? (anonymous)"></textarea>
-      <div class="schips" id="schips">
-        <span data-s="still_here" onclick="selectChip(this)">Still here</span>
-        <span data-s="worse" onclick="selectChip(this)">Got worse</span>
-        <span data-s="cleaned" onclick="selectChip(this)">Cleaned up</span>
-        <span data-s="gone" onclick="selectChip(this)">Gone now</span>
-      </div>
-      <input type="file" id="pfile" accept="image/*" capture="environment" hidden onchange="onPhotoPick(this)">
-      <button type="button" class="photo-btn" id="photoBtn" onclick="document.getElementById('pfile').click()">📷 Add a photo — the proof the city can’t see</button>
-      <div class="photo-prev" id="photoPrev" hidden><img id="photoImg" alt=""><span class="photo-x" onclick="clearPhoto()">×</span></div>
-      <div class="formnote">📋 A person reviews every report before it’s published — and before we file it to the city on your behalf.</div>
-      <button class="post-btn" id="postBtn" onclick="submitPost()">Submit for review</button>
-    </div>`;
-  document.getElementById('card').classList.add('open');
-  loadSparkline(i);
-  loadThread();
-  startClock();
-}
-function closeCard(){ document.getElementById('card').classList.remove('open'); if(clockTimer){clearInterval(clockTimer);clockTimer=null;} }
-
-// The Inaction Clock — elapsed time since the FIRST report, ticking every second. A city "closed"
-// is a tick mark on it, never a stop. Days is the accusation; the live HH:MM:SS is the drama.
-let clockTimer=null;
-function startClock(){
-  if(clockTimer){ clearInterval(clockTimer); clockTimer=null; }
-  const el=document.getElementById('clock'); if(!el) return;
-  const first=Date.parse((el.dataset.first||'')+'T00:00:00'); if(isNaN(first)) return;
-  const tick=()=>{
-    const dEl=document.getElementById('clkD'), tEl=document.getElementById('clkT');
-    if(!dEl||!tEl){ clearInterval(clockTimer); clockTimer=null; return; }
-    const totalS=Math.floor((Date.now()-first)/1000); if(totalS<0) return;
-    const days=Math.floor(totalS/86400), h=Math.floor(totalS%86400/3600), m=Math.floor(totalS%3600/60), s=totalS%60;
-    const p=n=>String(n).padStart(2,'0');
-    dEl.textContent=days.toLocaleString('en-US');
-    tEl.innerHTML=`${p(h)}:${p(m)}:${p(s)} <span>and counting</span>`;
-  };
-  tick(); clockTimer=setInterval(tick,1000);
-}
-
-// Disparity badge on the card — always honest about direction (this district can be better OR worse).
-function dispCls(d){ return d.ratio_vs_median>=1.15?'bad':(d.ratio_vs_median<=0.85?'ok':''); }
-function dispBadgeText(i){
-  const d=i.disparity, r=d.ratio_vs_median, tl=((TYPES[i.type]||{}).label||i.type).toLowerCase();
-  if(r>=1.15) return `⚖ The city writes off ${tl} complaints in this district <b>${r}× the citywide rate</b> — #${d.rank_worst} of ${d.total} districts. See the gap →`;
-  if(r<=0.85) return `⚖ This district's ${tl} complaints are written off <b>less</b> than most (${Math.round(d.rate*100)}% vs ${Math.round(d.rate/r*100)}% citywide). See the gap →`;
-  return `⚖ About the citywide rate for ${tl} dismissals here (#${d.rank_worst} of ${d.total}). See the gap →`;
-}
-function openDisparity(t){ dispType=t; const b=document.querySelector('.vbtn[data-v="disparity"]'); if(b) b.click(); }
-
-function toggleForm(){
-  const f = document.getElementById('pform'); f.hidden = !f.hidden;
-  if(!f.hidden) document.getElementById('ptext').focus();
-}
-function selectChip(el){
-  const chips = document.getElementById('schips').children;
-  if(selStatus===el.dataset.s){ selStatus=null; el.classList.remove('on'); }
-  else { selStatus=el.dataset.s; [...chips].forEach(x=>x.classList.toggle('on', x===el)); }
-}
-
-// Downscale the picked photo in-browser (canvas) so a 4MB phone shot ships as a ~150KB JPEG.
-function downscale(file, maxDim, quality){
-  return new Promise((resolve, reject)=>{
-    const img = new Image();
-    img.onload = ()=>{
-      const scale = Math.min(1, maxDim/Math.max(img.width, img.height));
-      const w = Math.round(img.width*scale), h = Math.round(img.height*scale);
-      const c = document.createElement('canvas'); c.width=w; c.height=h;
-      c.getContext('2d').drawImage(img, 0, 0, w, h);
-      URL.revokeObjectURL(img.src);
-      resolve(c.toDataURL('image/jpeg', quality));
-    };
-    img.onerror = reject;
-    img.src = URL.createObjectURL(file);
-  });
-}
-async function onPhotoPick(input){
-  const file = input.files && input.files[0]; input.value='';
-  if(!file) return;
-  try{
-    photoData = await downscale(file, 1280, 0.72);
-    document.getElementById('photoImg').src = photoData;
-    document.getElementById('photoPrev').hidden = false;
-    document.getElementById('photoBtn').textContent = '📷 Change photo';
-  }catch(e){}
-}
-function clearPhoto(){
-  photoData = null;
-  document.getElementById('photoPrev').hidden = true;
-  document.getElementById('photoImg').src = '';
-  document.getElementById('photoBtn').textContent = '📷 Add a photo — the proof the city can’t see';
-}
-
-async function loadThread(){
-  try{
-    const i = current;
-    const r = await fetch(`/api/thread?type=${encodeURIComponent(i.type)}&id=${encodeURIComponent(i.id)}`);
-    renderThread(await r.json());
-  }catch(e){}
-}
-function renderThread(t){
-  const i = current, v = document.getElementById('verdict'); if(!v) return;
-  const cityClosed = i.closed_n>0;
-  if(t.verdict==='still_here'){
-    v.className='verdict still';
-    v.innerHTML = `🚩 STILL HERE <span class="vsub">· ${t.corrob} neighbor${t.corrob===1?'':'s'} confirm${t.corrob===1?'s':''}${t.lastTs?` · last ${ago(t.lastTs)}`:''}</span>`
-      + (cityClosed?`<div class="clash">the city calls this “resolved.” the block says otherwise.</div>`:'');
-  } else if(t.verdict==='cleared'){
-    v.className='verdict cleared';
-    v.innerHTML = `✓ NEIGHBORS SAY THIS IS CLEARED <span class="vsub">${t.lastTs?`· last ${ago(t.lastTs)}`:''}</span>`;
-  } else {
-    v.className='verdict none';
-    v.innerHTML = `Unverified — no one has confirmed what’s here. <b>Be the first.</b>`;
+function drawReportIssues(){
+  state.report.group.clearLayers();
+  if(!state.report.issues||!state.report.enabled.size)return;
+  const bounds=map.getBounds().pad(.35),zoom=map.getZoom(),visible=state.report.issues.filter(issue=>issue.status==='active'&&state.report.enabled.has(issue.type)&&bounds.contains([issue.lat,issue.lng]));
+  if(zoom>=15||visible.length<=180){
+    const center=map.getCenter();visible.sort((a,b)=>reportDistanceMeters(center,a)-reportDistanceMeters(center,b)||Number(b.score)-Number(a.score)).slice(0,220).forEach(issue=>L.circleMarker([issue.lat,issue.lng],reportMarkerStyle(issue)).on('click',()=>openReportIssue(issue)).addTo(state.report.group));
+    return;
   }
-  const th = document.getElementById('thread');
-  th.innerHTML = !t.posts.length
-    ? `<div class="empty">No commentary yet. The city’s number is the only story here — change that.</div>`
-    : t.posts.map(p=>`
-      <div class="post">
-        ${p.status?`<span class="ptag ${p.status}">${STATUS_LABEL[p.status]}</span>`:''}
-        ${p.photo?`<img class="pphoto" src="/photos/${esc(p.photo)}" loading="lazy" alt="citizen photo" onclick="window.open('/photos/${esc(p.photo)}','_blank')">`:''}
-        ${p.text?`<div class="ptext">${esc(p.text)}</div>`:''}
-        <div class="pmeta">anon · ${ago(p.ts)}</div>
-      </div>`).join('');
+  const grid=zoom<=11?.028:zoom===12?.018:zoom===13?.010:.005,cells=new Map();
+  visible.forEach(issue=>{const key=Math.round(issue.lat/grid)+'_'+Math.round(issue.lng/grid),weight=Math.max(1,Math.min(Number(issue.n)||1,500));let cell=cells.get(key);if(!cell){cell={lat:0,lng:0,weight:0,issue};cells.set(key,cell);}cell.lat+=issue.lat*weight;cell.lng+=issue.lng*weight;cell.weight+=weight;if(Number(issue.score)>Number(cell.issue.score))cell.issue=issue;});
+  cells.forEach(cell=>{const lat=cell.lat/cell.weight,lng=cell.lng/cell.weight;L.circleMarker([lat,lng],reportMarkerStyle(cell.issue,true)).on('click',()=>map.flyTo([lat,lng],Math.min(FULL_DETAIL_ZOOM+1,zoom+3),{duration:.55})).addTo(state.report.group);});
 }
-
-function syncSeen(t){
-  const it = ALL.find(x=>x.type===current.type && x.id===current.id);
-  if(it) it.seen = t.corrob;
-  const count=document.getElementById('voteCount'); if(count) count.textContent=fmt(t.corrob||0);
-  draw();
+function nearestReportIssue(lat,lng){
+  if(!state.report.issues)return null;
+  let best=null,bestDistance=Infinity;
+  state.report.issues.forEach(issue=>{if(issue.status!=='active'||!state.report.enabled.has(issue.type))return;const distance=reportDistanceMeters({lat,lng},issue);if(distance<bestDistance||(distance===bestDistance&&Number(issue.score)>Number(best?.score||0))){best=issue;bestDistance=distance;}});
+  return best?{issue:best,distance:bestDistance}:null;
 }
-
-async function seeOften(){
-  const i = current, btn = document.getElementById('seenBtn');
-  btn.disabled = true; btn.classList.add('done');
-  if(window.pulse) window.pulse('see_often',{type:i.type,id:i.id});
+async function focusReport(lat,lng,openNearest=true){
+  map.setView([lat,lng],Math.max(16,map.getZoom()));await loadReportIssues();drawReportIssues();
+  if(!openNearest)return;
+  const nearest=nearestReportIssue(lat,lng);
+  if(nearest&&nearest.distance<=500)openReportIssue(nearest.issue);
+  else openReportMessage(state.report.error||'No active public record within 500 m. Pan the map and inspect another spot.');
+}
+function inspectMapCenter(){const center=map.getCenter();focusReport(center.lat,center.lng,true);}
+function openReportMessage(message){
+  state.report.current=null;const root=document.getElementById('report-detail');root.innerHTML=`<div class="report-detail-head"><b>Report nearby</b><button class="report-close" type="button" data-report-close aria-label="Close report message">Close</button></div><div class="report-body"><div class="report-kicker">PUBLIC RECORD</div><h2>No nearby record</h2><div class="report-place">${esc(message)}</div></div>`;root.classList.add('open');document.body.classList.add('record-open');
+}
+function openReportIssue(issue){
+  state.report.current=issue;state.report.selectedStatus=null;state.report.photo=null;
+  const persistent=issue.pattern==='persistent',days=Number(issue.current_days)||0,record=`/i?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`;
+  const root=document.getElementById('report-detail');root.innerHTML=`<div class="report-detail-head"><b>Public record + field updates</b><button class="report-close" type="button" data-report-close aria-label="Close issue record">Close</button></div><div class="report-body"><div class="report-kicker">${persistent?'CHRONIC':esc(String(issue.status||'active').toUpperCase())} · ${esc(issue.type)}</div><h2>${esc(issue.addr||'Approximate block location')}</h2><div class="report-place">${esc(issue.borough||'New York City')}${days?` · active run ${fmt(days)} days`:''} · approximate block</div><div class="report-facts"><div class="report-fact"><b>${fmt(issue.n)}</b><span>311 reports</span></div><div class="report-fact"><b>${fmt(issue.closed_n)}</b><span>city closures</span></div><div class="report-fact"><b>${fmt(issue.returned_n)}</b><span>came back</span></div></div>${issue.headline?`<div class="report-headline">${esc(issue.headline)}</div>`:''}<div class="report-actions"><button class="confirm" type="button" data-report-confirm>Confirm here now · <span data-confirm-count>${fmt(issue.seen)}</span></button><button type="button" data-report-form>Add what you see</button><button type="button" data-report-avoid>Avoid this type</button><a href="${record}" target="_blank" rel="noopener">Accountability record</a></div><div class="report-verdict" id="integrated-verdict">Checking neighbor updates…</div><div class="report-thread" id="integrated-thread"></div><div class="report-form" id="integrated-report-form"><textarea id="integrated-report-text" maxlength="500" placeholder="What is here right now?"></textarea><div class="report-statuses">${[['still_here','Still here'],['worse','Got worse'],['cleaned','Cleaned up'],['gone','Gone now']].map(([value,label])=>`<button class="report-status-choice" type="button" data-report-status="${value}">${label}</button>`).join('')}</div><label class="report-upload">Add a photo <input id="integrated-report-photo" type="file" accept="image/*" capture="environment"></label><button class="report-submit" type="button" data-report-submit>Submit for review</button><div class="report-note">A person reviews every update before it is published.</div><div class="report-message" id="integrated-report-message"></div></div></div>`;root.classList.add('open');document.body.classList.add('record-open');loadIntegratedThread();
+}
+function closeReportIssue(){state.report.current=null;document.body.classList.remove('record-open');const root=document.getElementById('report-detail');root.classList.remove('open');root.innerHTML='';}
+function integratedMessage(message){const root=document.getElementById('integrated-report-message');if(root)root.textContent=message;}
+function renderIntegratedThread(thread){
+  const issue=state.report.current,verdict=document.getElementById('integrated-verdict'),root=document.getElementById('integrated-thread');if(!issue||!verdict||!root)return;
+  const count=document.querySelector('[data-confirm-count]');if(count)count.textContent=fmt(thread.corrob||0);
+  if(thread.verdict==='still_here'){verdict.textContent=`STILL HERE · ${fmt(thread.corrob)} neighbor confirmation${thread.corrob===1?'':'s'}`;verdict.style.color='var(--red)';}
+  else if(thread.verdict==='cleared'){verdict.textContent='NEIGHBORS SAY THIS IS CLEARED';verdict.style.color='var(--green)';}
+  else{verdict.textContent='Unverified — no recent field confirmation.';verdict.style.color='var(--muted)';}
+  root.innerHTML=(thread.posts||[]).slice(0,8).map(post=>`<div class="report-post">${post.status?`<b>${esc(String(post.status).replaceAll('_',' ').toUpperCase())}</b><br>`:''}${post.text?esc(post.text):''}<small>${post.ts?` · ${new Date(post.ts).toLocaleDateString('en-US')}`:''}</small></div>`).join('');
+}
+async function loadIntegratedThread(){const issue=state.report.current;if(!issue)return;try{const response=await fetch(`/api/thread?type=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}`);renderIntegratedThread(await response.json());}catch{integratedMessage('Neighbor updates could not be loaded.');}}
+async function confirmIntegratedReport(button){const issue=state.report.current;if(!issue)return;button.disabled=true;try{const response=await fetch('/api/seen',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:issue.type,id:issue.id})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Could not confirm.');button.firstChild.textContent='Confirmed here now · ';renderIntegratedThread(payload);}catch(error){integratedMessage(error.message||'Could not confirm.');button.disabled=false;}}
+function downscaleReportPhoto(file){return new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>{const scale=Math.min(1,1280/Math.max(image.width,image.height)),canvas=document.createElement('canvas');canvas.width=Math.round(image.width*scale);canvas.height=Math.round(image.height*scale);canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);URL.revokeObjectURL(image.src);resolve(canvas.toDataURL('image/jpeg',.72));};image.onerror=reject;image.src=URL.createObjectURL(file);});}
+async function submitIntegratedReport(button){
+  const issue=state.report.current,text=document.getElementById('integrated-report-text')?.value.trim();if(!issue||(!text&&!state.report.selectedStatus&&!state.report.photo)){integratedMessage('Choose a status, add a note, or attach a photo.');return;}
+  button.disabled=true;button.textContent='Submitting…';
+  try{const response=await fetch('/api/post',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:issue.type,id:issue.id,text:text||null,status:state.report.selectedStatus,photo:state.report.photo})});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Could not submit.');renderIntegratedThread(payload);integratedMessage('Thanks — your update is in review.');document.getElementById('integrated-report-text').value='';state.report.selectedStatus=null;state.report.photo=null;document.querySelectorAll('[data-report-status]').forEach(item=>item.classList.remove('on'));}
+  catch(error){integratedMessage(error.message||'Could not submit.');}finally{button.disabled=false;button.textContent='Submit for review';}
+}
+function avoidCurrentReport(){const issue=state.report.current,item=issue&&REPORT_TYPES[issue.type];if(!item)return;state.enabled.add(item.layer);syncLayers();savePlanner();setRouteHint(`${item.label} is now selected for route avoidance.`);closeReportIssue();scheduleRoute(0);}
+function chooseDiscovery(station){
+  state.via={name:station.name,lat:station.lat,lng:station.lng};renderVia();savePlanner();scheduleRoute(0);map.closePopup();
+}
+async function loadCitiBike(){
+  const selected=state.routes[state.selectedRoute],coordinates=selected&&selected.geometry&&selected.geometry.coordinates||[];
+  const middle=coordinates.length?coordinates[Math.floor(coordinates.length/2)]:null;
+  const fallback=state.endpoints?.destination||state.endpoints?.origin||map.getCenter();
+  const center=middle?{lat:middle[1],lng:middle[0]}:fallback,button=document.getElementById('citibike-toggle');button.disabled=true;button.lastElementChild.textContent='…';
   try{
-    const r = await fetch('/api/seen',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:i.type,id:i.id})});
-    const t = await r.json();
-    if(!r.ok) throw new Error(t.error||'Could not confirm');
-    renderThread(t); syncSeen(t);
-    btn.querySelector('span:nth-child(2)').textContent=t.duplicate?'Confirmed':'Confirmed';
-  }catch(e){ btn.disabled=false; btn.classList.remove('done'); }
+    const response=await fetch(`/api/discover/citibike?lat=${center.lat}&lng=${center.lng}`),payload=await response.json();if(!response.ok)throw new Error(payload.error||'Live bikes are unavailable.');
+    state.discover.group.clearLayers();
+    payload.stations.forEach(station=>{
+      L.circleMarker([station.lat,station.lng],{renderer:canvas,radius:5,color:'#fff',weight:1.5,fillColor:'#00a896',fillOpacity:.95}).bindPopup(`<b>${esc(station.name)}</b><br>${station.bikes} bikes · ${station.docks} open docks<br><button class="route-to-discovery" type="button">Add as a stop</button>`).on('popupopen',event=>{const action=event.popup.getElement()?.querySelector('.route-to-discovery');if(action)action.addEventListener('click',()=>chooseDiscovery(station),{once:true});}).addTo(state.discover.group);
+    });
+  }catch(error){document.getElementById('layer-hint').textContent=error.message||'Live bikes are unavailable.';}
+  finally{button.disabled=false;button.lastElementChild.textContent=state.discover.citibike?'−':'+';}
 }
 
-async function submitPost(){
-  const i = current, text = document.getElementById('ptext').value.trim();
-  if(!text && !selStatus && !photoData) return;
-  const btn = document.getElementById('postBtn'); btn.disabled=true; btn.textContent='Posting…';
-  if(window.pulse) window.pulse('post_added',{type:i.type,id:i.id,status:selStatus||undefined,photo:photoData?1:undefined});
-  try{
-    const r = await fetch('/api/post',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:i.type,id:i.id,text,status:selStatus,photo:photoData})});
-    const t = await r.json();
-    document.getElementById('ptext').value=''; selStatus=null;
-    [...document.getElementById('schips').children].forEach(x=>x.classList.remove('on'));
-    clearPhoto();
-    if(t.pending){
-      document.getElementById('pform').innerHTML =
-        `<div class="pending-ack">✓ Thanks — your report is in.<br>A person reviews every report before it’s published. It’ll appear here once approved.</div>`;
-    } else {
-      document.getElementById('pform').hidden=true;
-    }
-    renderThread(t); syncSeen(t);
-  }catch(e){} finally { btn.disabled=false; btn.textContent='Submit for review'; }
+function closeSuggestions(input){
+  const list=document.getElementById(input.getAttribute('aria-controls'));list.classList.remove('open');list.innerHTML='';input.setAttribute('aria-expanded','false');
 }
 
-function buildChips(){
-  const c = document.getElementById('chips');
-  Object.entries(TYPES).forEach(([k,v])=>{
-    const el = document.createElement('button');
-    el.type='button';
-    el.className='chip on'; el.innerHTML=`<span class="dot" style="background:${v.c}"></span>${v.label}`;
-    el.onclick=()=>{ if(active.has(k)){active.delete(k);el.classList.remove('on');}
-      else{active.add(k);el.classList.add('on');} draw(); };
-    c.appendChild(el);
+function selectSuggestion(input,place){
+  input.value=place.name;input._place=place;closeSuggestions(input);scheduleRoute(0);
+}
+
+function bindAutocomplete(input){
+  const list=document.getElementById(input.getAttribute('aria-controls'));let timer=null,controller=null,places=[],active=-1,searching=false;
+  const paint=()=>{list.innerHTML=searching?'<div class="empty-search">Searching NYC addresses…</div>':places.length?places.map((place,index)=>`<button class="suggestion${index===active?' active':''}" type="button" role="option" data-index="${index}" aria-selected="${index===active}">${esc(place.name)}</button>`).join(''):'<div class="empty-search">No NYC address found. Try a street number and borough.</div>';const open=searching||input.value.trim().length>=3;list.classList.toggle('open',open);input.setAttribute('aria-expanded',String(open));};
+  input.addEventListener('input',()=>{
+    input._place=null;active=-1;searching=false;clearTimeout(timer);if(controller)controller.abort();invalidateRoutes();savePlanner();const query=input.value.trim();if(query.length<3){places=[];paint();return;}
+    timer=setTimeout(async()=>{controller=new AbortController();searching=true;paint();try{const response=await fetch('/api/geocode?q='+encodeURIComponent(query),{signal:controller.signal});places=response.ok?await response.json():[];if(input.value.trim()!==query)return;searching=false;paint();}catch(error){if(error.name!=='AbortError'){places=[];searching=false;paint();}}},300);
   });
+  input.addEventListener('keydown',event=>{
+    if(!places.length)return;
+    if(event.key==='ArrowDown'){event.preventDefault();active=(active+1)%places.length;paint();}
+    else if(event.key==='ArrowUp'){event.preventDefault();active=(active-1+places.length)%places.length;paint();}
+    else if(event.key==='Enter'&&active>=0){event.preventDefault();selectSuggestion(input,places[active]);}
+    else if(event.key==='Escape'){closeSuggestions(input);}
+  });
+  list.addEventListener('mousedown',event=>{const button=event.target.closest('[data-index]');if(!button)return;event.preventDefault();selectSuggestion(input,places[Number(button.dataset.index)]);});
+  input.addEventListener('blur',()=>setTimeout(()=>closeSuggestions(input),120));
 }
 
-// View toggle: Map ↔ Trends (absorbed sidewalk lens) ↔ Disparity (the district gap)
-document.getElementById('views').addEventListener('click', e=>{
-  const b = e.target.closest('.vbtn'); if(!b) return;
-  document.querySelectorAll('.vbtn').forEach(x=>x.classList.toggle('on', x===b));
-  const v = b.dataset.v, isMap = v==='map';
-  document.getElementById('trends').classList.toggle('show', v==='trends');
-  document.getElementById('disparity').classList.toggle('show', v==='disparity');
-  document.getElementById('chips').style.display = isMap?'':'none';
-  document.getElementById('hint').style.display = isMap?'':'none';
-  document.getElementById('findbar').classList.toggle('hide', !isMap);
-  if(window.pulse) window.pulse('view_'+v);
-  if(v==='trends') renderTrends();
-  if(v==='disparity') renderDisparity();
+async function geocodeOne(input){
+  const query=input.value.trim();
+  if(input._place&&input._place.name===query)return input._place;
+  const direct=/^\s*(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/.exec(query);
+  if(direct)return {name:'Current location',lat:Number(direct[1]),lng:Number(direct[2])};
+  const response=await fetch('/api/geocode?q='+encodeURIComponent(query));
+  const places=await response.json();
+  if(!places.length)throw new Error(`Could not find “${query}” in NYC.`);
+  input.value=places[0].name;input._place=places[0];return places[0];
+}
+
+function drawRoutes(){
+  routeGroup.clearLayers();endpointGroup.clearLayers();state.routeLines=[];
+  state.routes.forEach((route,index)=>{
+    const line=L.geoJSON(route.geometry,{style:{color:index===state.selectedRoute?'#ff5a47':'#7f8da4',weight:index===state.selectedRoute?7:4,opacity:index===state.selectedRoute?.96:.55}}).addTo(routeGroup);
+    line.on('click',()=>selectRoute(index));state.routeLines.push(line);
+  });
+  if(state.endpoints){
+    L.circleMarker([state.endpoints.origin.lat,state.endpoints.origin.lng],{radius:10,color:'#fff',weight:3,fillColor:'#4ad6c8',fillOpacity:1}).bindTooltip('Start',{direction:'top'}).addTo(endpointGroup);
+    L.circleMarker([state.endpoints.destination.lat,state.endpoints.destination.lng],{radius:10,color:'#fff',weight:3,fillColor:'#ea4335',fillOpacity:1}).bindTooltip('Destination',{direction:'top'}).addTo(endpointGroup);
+    if(state.endpoints.via)L.circleMarker([state.endpoints.via.lat,state.endpoints.via.lng],{radius:8,color:'#fff',weight:2,fillColor:'#00a896',fillOpacity:1}).bindTooltip(`Stop · ${state.endpoints.via.name}`,{direction:'top'}).addTo(endpointGroup);
+  }
+  if(state.routes.length)fitRoute();
+}
+
+function fitRoute(){
+  const bounds=routeGroup.getBounds();if(!bounds.isValid())return;
+  if(compactMap()){
+    const planner=document.querySelector('.planner').getBoundingClientRect(),results=document.getElementById('results');
+    const bottom=results.hidden?38:Math.min(results.getBoundingClientRect().height+18,window.innerHeight*.48);
+    map.fitBounds(bounds,{paddingTopLeft:[18,Math.max(18,planner.bottom+12)],paddingBottomRight:[18,bottom],maxZoom:17});
+  }else{
+    const shell=document.getElementById('shell').getBoundingClientRect(),legend=document.getElementById('legend').getBoundingClientRect();
+    map.fitBounds(bounds,{paddingTopLeft:[shell.right+22,38],paddingBottomRight:[legend.width+38,38],maxZoom:17});
+  }
+}
+
+function invalidateRoutes(){
+  clearTimeout(state.routeTimer);if(state.routeController)state.routeController.abort();
+  document.getElementById('route-form').classList.remove('loading');
+  state.routeRequest++;
+  state.routes=[];state.routeLines=[];state.endpoints=null;state.selectedRoute=0;state.avoidance=null;
+  routeGroup.clearLayers();endpointGroup.clearLayers();
+  document.getElementById('results').hidden=true;document.getElementById('results').innerHTML='';
+  document.getElementById('shell').classList.remove('has-results');
+}
+
+function renderPaywall(message=''){
+  const root=document.getElementById('results');root.hidden=false;document.getElementById('shell').classList.add('has-results');
+  root.innerHTML=`<div class="paywall"><h2>Your regular route, without the parts you avoid.</h2><p>${esc(message||'The map is free. Unlock unlimited driving and walking routes on this browser.')}</p><div class="plans"><button class="plan" type="button" data-plan="day"><b>$1</b><span>24 hours · one-time</span></button><button class="plan best" type="button" data-plan="year"><b>$25</b><span>one year · one-time</span></button></div><small>Secure checkout by Stripe. Your addresses and avoidance choices stay in this browser and return after checkout.</small></div>`;
+  root.querySelectorAll('[data-plan]').forEach(button=>button.addEventListener('click',()=>startCheckout(button.dataset.plan,button)));
+}
+
+async function startCheckout(plan,button){
+  savePlanner();document.querySelectorAll('[data-plan]').forEach(item=>item.disabled=true);button.querySelector('span').textContent='Opening secure checkout…';
+  try{const response=await fetch('/api/checkout',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({plan})});const payload=await response.json();if(!response.ok||!payload.url)throw new Error(payload.error||'Could not open checkout.');location.href=payload.url;}
+  catch(error){renderPaywall(error.message||'Checkout is temporarily unavailable.');}
+}
+
+function scheduleRoute(delay=150){
+  clearTimeout(state.routeTimer);savePlanner();
+  const originInput=document.getElementById('origin'),destinationInput=document.getElementById('destination'),origin=originInput.value.trim(),destination=destinationInput.value.trim();
+  if(!origin||!destination){invalidateRoutes();return;}
+  if(!originInput._place||!destinationInput._place){invalidateRoutes();setRouteHint('Choose each address from the list');return;}
+  if(state.access&&!state.access.active){invalidateRoutes();renderPaywall();return;}
+  if(!state.access)return;
+  state.routeTimer=setTimeout(buildRoute,delay);
+}
+
+async function buildRoute(){
+  if(state.routeController)state.routeController.abort();const controller=new AbortController();state.routeController=controller;
+  const requestId=++state.routeRequest;setRouteHint(`Finding your ${state.profile} route…`,true);renderResults(`Finding your ${state.profile} route…`);
+  try{
+    const [origin,destination]=await Promise.all([geocodeOne(document.getElementById('origin')),geocodeOne(document.getElementById('destination'))]);
+    if(requestId!==state.routeRequest)return;savePlanner();
+    const response=await fetch('/api/routes',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({origin,destination,via:state.via,profile:state.profile,filters:[...state.enabled]}),signal:controller.signal});
+    const payload=await response.json();if(requestId!==state.routeRequest)return;
+    if(response.status===402){state.access={active:false};state.routes=[];renderPaywall();return;}
+    if(!response.ok)throw new Error(payload.error||'Could not build this route.');
+    state.routes=payload.routes;state.avoidance=payload.avoidance;state.selectedRoute=Math.max(0,state.routes.findIndex(route=>route.recommended));state.endpoints={origin,destination,via:state.via};drawRoutes();setRouteHint(payload.cache_hit?'Route ready · instant refresh':'Route ready');renderResults();requestAnimationFrame(fitRoute);if(state.discover.citibike)loadCitiBike();
+  }catch(error){if(error.name!=='AbortError'&&requestId===state.routeRequest){state.routes=[];setRouteHint(error.message||'Could not build this route.');renderResults(error.message||'Could not build this route.');}}
+}
+
+function metricText(route){
+  const names=[...state.enabled];
+  if(!names.length)return 'No avoidance filters selected';
+  const evidence=names.reduce((sum,name)=>sum+Number(route.metrics[name]||0),0),hard=Number(route.selected_intersections||0);
+  if(!evidence)return 'No selected evidence near this route';
+  if(!hard)return `${fmt(evidence)} mapped evidence point${evidence===1?'':'s'} nearby · no hard exclusions crossed`;
+  return `${fmt(hard)} high-confidence location${hard===1?'':'s'} crossed · ${fmt(evidence)} mapped evidence point${evidence===1?'':'s'} nearby`;
+}
+
+function maneuverGlyph(step,index,total){
+  const text=`${step.type||''} ${step.modifier||''} ${step.instruction||''}`.toLowerCase();
+  if(index===total-1||text.includes('arrive')||text.includes('destination'))return '●';
+  if(text.includes('u-turn')||text.includes('uturn'))return '↶';
+  if(text.includes('roundabout')||text.includes('rotary'))return '⟳';
+  if(text.includes('slight left'))return '↖';if(text.includes('slight right'))return '↗';
+  if(text.includes('left'))return '↰';if(text.includes('right'))return '↱';
+  if(text.includes('merge'))return '⇢';return '↑';
+}
+
+function downloadExactRoute(route){
+  const points=(route.geometry&&route.geometry.coordinates||[]).map(point=>`<trkpt lat="${Number(point[1]).toFixed(6)}" lon="${Number(point[0]).toFixed(6)}"></trkpt>`).join('');
+  const xml=`<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="Unignorable" xmlns="http://www.topografix.com/GPX/1/1"><metadata><name>Unignorable ${state.profile} avoidance route</name></metadata><trk><name>Unignorable avoidance route</name><trkseg>${points}</trkseg></trk></gpx>`;
+  const url=URL.createObjectURL(new Blob([xml],{type:'application/gpx+xml'}));const link=document.createElement('a');link.href=url;link.download=`unignorable-${state.profile}-route.gpx`;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+function renderResults(message){
+  const root=document.getElementById('results');root.hidden=false;document.getElementById('shell').classList.add('has-results');
+  if(message){root.innerHTML=`<div class="status">${esc(message)}</div>`;return;}
+  const selected=state.routes[state.selectedRoute];
+  const remaining=state.avoidance&&state.avoidance.remaining_intersections||0;
+  const policy=state.enabled.size?(state.avoidance.improved?`The direct choice crossed ${fmt(state.avoidance.baseline_intersections)} high-confidence locations. This route reduces that to ${fmt(remaining)}.`:remaining?`The router tried ${fmt(state.avoidance.excluded_areas)} hard exclusions. The cleanest reasonable route still passes ${fmt(remaining)} high-confidence location${remaining===1?'':'s'}.`:`No high-confidence selected locations are crossed.`):'No avoidance selected; the fastest plausible route is recommended.';
+  const steps=(selected.steps&&selected.steps.length?selected.steps:[{instruction:'Follow the highlighted avoidance route to your destination.',distance:selected.distance,duration:selected.duration}]);
+  const detailsOpen=compactMap()?'':' open',first=steps[0];
+  root.innerHTML=`<div class="route-summary"><b>${mins(selected.duration)} min</b><span>${miles(selected.distance)} mi${state.via?` · via ${esc(state.via.name)}`:''}</span></div><div class="next-step"><span class="maneuver">${maneuverGlyph(first,0,steps.length)}</span><span>${esc(first.instruction)}</span><small>${first.distance?stepDistance(first.distance):''}</small></div><div class="route-outcome"><strong>${esc(metricText(selected))}</strong><br>${esc(policy)}</div><div class="route-actions"><button class="directions-open" id="show-directions" type="button">Turn-by-turn · ${steps.length} steps</button><button id="overview-route" type="button">Overview</button></div><details class="directions"${detailsOpen}><summary>All directions</summary>${steps.map((step,index)=>`<div class="direction-step"><span class="maneuver">${maneuverGlyph(step,index,steps.length)}</span><span>${esc(step.instruction)}</span><small>${step.distance?stepDistance(step.distance):''}</small></div>`).join('')}</details>${state.routes.map((route,index)=>`<button class="route ${index===state.selectedRoute?'selected':''}" type="button" data-route="${index}"><div class="route-head"><b>${mins(route.duration)} min · ${miles(route.distance)} mi</b>${route.recommended?`<span class="badge">${state.enabled.size?(route.selected_intersections?'Cleanest available':'Avoids selected'):'Fastest'}</span>`:''}</div><div class="route-stats"><span>${esc(metricText(route))}</span></div></button>`).join('')}<div class="exports"><a href="${esc(selected.export.apple)}" target="_blank" rel="noopener">Start in Apple Maps</a><a href="${esc(selected.export.google)}" target="_blank" rel="noopener">Start in Google Maps</a><a class="exact" href="#" id="download-gpx">Download exact route (GPX)</a></div><p class="warning">The highlighted in-app line and GPX are exact. Apple and Google receive the stop and shaping points, but can recalculate.</p>`;
+  root.querySelectorAll('[data-route]').forEach(button=>button.addEventListener('click',()=>selectRoute(Number(button.dataset.route))));
+  document.getElementById('download-gpx').addEventListener('click',event=>{event.preventDefault();downloadExactRoute(selected);});
+  document.getElementById('overview-route').addEventListener('click',fitRoute);
+  const details=root.querySelector('.directions');details.addEventListener('toggle',()=>{if(!details.open)requestAnimationFrame(fitRoute);});
+  document.getElementById('show-directions').addEventListener('click',()=>{details.open=true;requestAnimationFrame(()=>details.scrollIntoView({behavior:'smooth',block:'nearest'}));});
+}
+
+function selectRoute(index){state.selectedRoute=index;drawRoutes();renderResults();}
+
+document.getElementById('route-form').addEventListener('submit',event=>{event.preventDefault();scheduleRoute(0);});
+
+document.getElementById('locate').addEventListener('click',()=>{
+  if(!navigator.geolocation)return renderResults('Location is unavailable in this browser.');
+  navigator.geolocation.getCurrentPosition(position=>{const input=document.getElementById('origin');input.value=`${position.coords.latitude.toFixed(6)}, ${position.coords.longitude.toFixed(6)}`;input._place={name:input.value,lat:position.coords.latitude,lng:position.coords.longitude};map.setView([position.coords.latitude,position.coords.longitude],15);scheduleRoute(0);},()=>renderResults('Location permission was not granted.'),{enableHighAccuracy:false,timeout:8000});
 });
 
-// --- Disparity view: per-district "nothing found" rate for one complaint type, worst-first ---
-let dispData=null, dispType=null;
-async function renderDisparity(){
-  if(!dispData){
-    try{ dispData = await (await fetch('/api/disparity')).json(); }catch{ dispData={}; }
-  }
-  const vt = dispData.valid_types||[];
-  if(!vt.length){ document.getElementById('d-head').innerHTML='<div class="dbig">Disparity data is rebuilding — check back shortly.</div>'; return; }
-  if(!dispType) dispType = vt.includes('Encampment')?'Encampment':vt[0];
-  // type toggle chips
-  document.getElementById('d-types').innerHTML = vt.map(t=>
-    `<span class="dtype ${t===dispType?'on':''}" data-t="${t}">${(TYPES[t]||{}).label||t}</span>`).join('');
-  document.querySelectorAll('.dtype').forEach(el=> el.onclick=()=>{ dispType=el.dataset.t; drawDisparity(); });
-  drawDisparity();
-}
-function drawDisparity(){
-  const rows = (dispData.ranked||{})[dispType]||[];
-  const cw = ((dispData.citywide||{}).by_type||{})[dispType]||{};
-  const cwPct = Math.round((cw.dismissal_rate||0)*100);
-  const worst = rows[0], best = rows[rows.length-1];
-  const label = ((TYPES[dispType]||{}).label||dispType);
-  // headline accusation, pure city data
-  document.getElementById('d-head').innerHTML = worst&&best ? `
-    <div class="dbig">For <b>${label.toLowerCase()}</b> complaints, the city closes <b>${Math.round(worst.dismissal_rate*100)}%</b> as
-    “nothing found” in <b>District ${worst.district}</b> (${cap(worst.borough)}) — but only
-    <b>${Math.round(best.dismissal_rate*100)}%</b> in District ${best.district} (${cap(best.borough)}).
-    That's <b>${(worst.dismissal_rate/(best.dismissal_rate||1)).toFixed(1)}×</b> more of your neighbors' reports
-    written off, same complaint.</div>` : '';
-  document.getElementById('d-cap').textContent =
-    `Citywide, ${cwPct}% of ${label.toLowerCase()} complaints are closed “nothing found.” ${rows.length} districts with enough reports to rank · NYC 311 open data, ${dispData.generated}.`;
-  const max = Math.max(...rows.map(r=>r.dismissal_rate), 0.01);
-  document.getElementById('d-bars').innerHTML = rows.map(r=>{
-    const pct = Math.round(r.dismissal_rate*100);
-    const isBest = r===best;
-    return `<div class="drow ${isBest?'best':''}">
-      <div class="dl">#${r.rank_worst} · District ${r.district} <span>${cap(r.borough)} · ${fmt(r.n)}</span></div>
-      <div class="dbar" style="width:${Math.max(2,(r.dismissal_rate/max)*100)}%"></div>
-      <div class="dv">${pct}%</div></div>`;
-  }).join('');
-}
-function cap(s){ return s? s.charAt(0)+s.slice(1).toLowerCase() : ''; }
+document.getElementById('swap-route').addEventListener('click',()=>{
+  const origin=document.getElementById('origin'),destination=document.getElementById('destination');
+  [origin.value,destination.value]=[destination.value,origin.value];[origin._place,destination._place]=[destination._place,origin._place];scheduleRoute(0);
+});
+document.getElementById('remove-via').addEventListener('click',()=>{state.via=null;renderVia();savePlanner();scheduleRoute(0);});
 
-let trendsDone=false;
-async function renderTrends(){
-  if(trendsDone) return; trendsDone=true;
-  const data = await (await fetch('/api/trends')).json();
-  const months = [...new Set(data.map(r=>r.month))].sort();
-  const idx = {}; data.forEach(r=>{ idx[r.type+r.month]=r.n; });
-  const series = {};
-  Object.keys(TYPES).forEach(t=> series[t] = months.map(m=> idx[t+m]||0));
-  const rawMax = Math.max(1, ...Object.values(series).flat());
-  // round the axis ceiling up to a clean step so the tick labels read as round numbers
-  const niceMax = (m)=>{ const p=Math.pow(10,Math.floor(Math.log10(m))); const f=m/p;
-    const n = f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10; return n*p; };
-  const maxN = niceMax(rawMax);
-  const W=900,H=320,PL=52,PR=22,PT=24,PB=40;
-  const X = i => PL + (months.length<2?0:i/(months.length-1))*(W-PL-PR);
-  const Y = n => H-PB - n/maxN*(H-PB-PT);
-  const axLabel = v => v>=1000 ? (v/1000)+'k' : ''+v;
-  let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet">`;
-  // Y-axis: faint horizontal gridlines + value labels at 0 / .25 / .5 / .75 / max
-  [0,.25,.5,.75,1].forEach(f=>{ const v=maxN*f, y=Y(v);
-    svg += `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W-PR}" y2="${y.toFixed(1)}" stroke="#162033"/>`;
-    svg += `<text x="${PL-8}" y="${(y+3.5).toFixed(1)}" fill="#9aa6bd" font-size="10.5" text-anchor="end">${axLabel(Math.round(v))}</text>`;
-  });
-  // X-axis: year ticks
-  months.forEach((m,i)=>{ if(m.endsWith('-01')){
-    svg += `<line x1="${X(i).toFixed(1)}" y1="${PT}" x2="${X(i).toFixed(1)}" y2="${H-PB}" stroke="#121b29"/>`;
-    svg += `<text x="${X(i).toFixed(1)}" y="${H-PB+18}" fill="#9aa6bd" font-size="11" text-anchor="middle">${m.slice(0,4)}</text>`;
-  }});
-  Object.entries(series).forEach(([t,arr])=>{
-    const col = TYPES[t].c;
-    const pts = arr.map((n,i)=>`${X(i).toFixed(1)},${Y(n).toFixed(1)}`).join(' ');
-    // subtle area fill under each line for readability, then the line, then an end-point dot
-    const area = `${PL},${(H-PB).toFixed(1)} ${pts} ${(W-PR).toFixed(1)},${(H-PB).toFixed(1)}`;
-    svg += `<polygon points="${area}" fill="${col}" opacity="0.05"/>`;
-    svg += `<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>`;
-    const lx=X(arr.length-1), ly=Y(arr[arr.length-1]);
-    svg += `<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="3.4" fill="${col}"/>`;
-  });
-  svg += `</svg>`;
-  document.getElementById('chart').innerHTML = svg;
-  document.getElementById('t-legend').innerHTML = Object.entries(TYPES)
-    .map(([t,v])=>`<span><i style="background:${v.c}"></i>${v.label}</span>`).join('');
-  const enc = series['Encampment'];
-  const f = enc.slice(0,12).reduce((a,b)=>a+b,0), l = enc.slice(-12).reduce((a,b)=>a+b,0);
-  const ch = f? Math.round((l/f-1)*100):0;
-  document.getElementById('t-head').innerHTML =
-    `Encampment reports are <b style="color:${ch>=0?'var(--red)':'#4ad6c8'}">${ch>=0?'up':'down'} ${Math.abs(ch)}%</b> year over year`;
-}
+document.querySelectorAll('[data-profile]').forEach(button=>button.addEventListener('click',()=>{
+  state.profile=button.dataset.profile;document.querySelectorAll('[data-profile]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
+  scheduleRoute(100);
+}));
+bindAutocomplete(document.getElementById('origin'));bindAutocomplete(document.getElementById('destination'));
 
-// ---------- geo helpers ----------
-function haversine(aLat,aLng,bLat,bLng){
-  const R=6371000, toR=x=>x*Math.PI/180;
-  const dLat=toR(bLat-aLat), dLng=toR(bLng-aLng);
-  const s=Math.sin(dLat/2)**2 + Math.cos(toR(aLat))*Math.cos(toR(bLat))*Math.sin(dLng/2)**2;
-  return 2*R*Math.asin(Math.sqrt(s));
-}
-// Nearest ACTIVE issue currently in the filter (cheap linear scan over ALL).
-function nearestIssue(lat,lng){
-  let best=null, bd=Infinity;
-  for(const i of ALL){
-    if(!active.has(i.type)) continue;
-    if(i.status!=='active' && !showResolved) continue;
-    const d=haversine(lat,lng,i.lat,i.lng);
-    if(d<bd){ bd=d; best=i; }
-  }
-  return best ? {issue:best, dist:bd} : null;
-}
-function issuesNear(lat,lng,radiusM){
-  return ALL.map(i=>({i, d:haversine(lat,lng,i.lat,i.lng)}))
-    .filter(x=>x.d<=radiusM).sort((a,b)=>a.d-b.d);
-}
+document.getElementById('report-link').addEventListener('click',inspectMapCenter);
+document.getElementById('map').addEventListener('click',event=>{const button=event.target.closest('[data-report-lat]');if(!button)return;focusReport(Number(button.dataset.reportLat),Number(button.dataset.reportLng),true);});
+document.getElementById('report-detail').addEventListener('click',event=>{
+  const close=event.target.closest('[data-report-close]');if(close){closeReportIssue();return;}
+  const confirm=event.target.closest('[data-report-confirm]');if(confirm){confirmIntegratedReport(confirm);return;}
+  const form=event.target.closest('[data-report-form]');if(form){document.getElementById('integrated-report-form')?.classList.toggle('open');return;}
+  const avoid=event.target.closest('[data-report-avoid]');if(avoid){avoidCurrentReport();return;}
+  const status=event.target.closest('[data-report-status]');if(status){state.report.selectedStatus=state.report.selectedStatus===status.dataset.reportStatus?null:status.dataset.reportStatus;document.querySelectorAll('[data-report-status]').forEach(item=>item.classList.toggle('on',item.dataset.reportStatus===state.report.selectedStatus));return;}
+  const submit=event.target.closest('[data-report-submit]');if(submit)submitIntegratedReport(submit);
+});
+document.getElementById('report-detail').addEventListener('change',async event=>{if(event.target.id!=='integrated-report-photo')return;const file=event.target.files&&event.target.files[0];if(!file)return;integratedMessage('Preparing photo…');try{state.report.photo=await downscaleReportPhoto(file);integratedMessage('Photo ready.');}catch{integratedMessage('Could not read that photo.');}});
 
-const BORO_CENTER = {
-  manhattan:[40.776,-73.971], brooklyn:[40.650,-73.95], queens:[40.728,-73.79],
-  bronx:[40.844,-73.865], statenisland:[40.58,-74.15],
-};
-const BORO_NAME = {MANHATTAN:'manhattan', BROOKLYN:'brooklyn', QUEENS:'queens', BRONX:'bronx', 'STATEN ISLAND':'statenisland'};
-const BORO_LABEL = {manhattan:'Manhattan', brooklyn:'Brooklyn', queens:'Queens', bronx:'The Bronx', statenisland:'Staten Island'};
+document.getElementById('toggle-all').addEventListener('click',()=>{if(state.enabled.size)state.enabled.clear();else Object.keys(DEFS).forEach(name=>state.enabled.add(name));syncLayers();scheduleRoute(120);});
+document.getElementById('layers-toggle').addEventListener('click',()=>{const card=document.getElementById('filter-card'),open=!card.classList.contains('open');card.classList.toggle('open',open);document.getElementById('layers-toggle').setAttribute('aria-expanded',String(open));document.getElementById('layers-toggle').textContent=open?'Done':'Edit';});
+document.getElementById('discover-toggle').addEventListener('click',()=>{const panel=document.getElementById('discover'),open=!panel.classList.contains('open');panel.classList.toggle('open',open);document.getElementById('discover-toggle').setAttribute('aria-expanded',String(open));});
+document.getElementById('citibike-toggle').addEventListener('click',()=>{state.discover.citibike=!state.discover.citibike;const button=document.getElementById('citibike-toggle');button.setAttribute('aria-pressed',String(state.discover.citibike));button.lastElementChild.textContent=state.discover.citibike?'−':'+';if(state.discover.citibike)loadCitiBike();else state.discover.group.clearLayers();});
+map.on('zoomend',()=>{syncLayers();drawReportIssues();});window.addEventListener('resize',()=>{syncLayers();drawReportIssues();if(state.routes.length)fitRoute();});
+map.on('moveend',()=>{syncReportLink();drawReportIssues();if(map.getZoom()>=FULL_DETAIL_ZOOM)drawFeatures();if(state.discover.citibike){clearTimeout(state.discover.timer);state.discover.timer=setTimeout(loadCitiBike,450);}});
+map.on('contextmenu',event=>focusReport(event.latlng.lat,event.latlng.lng,true));
+document.getElementById('about-open').addEventListener('click',()=>{document.getElementById('about').classList.add('open');document.getElementById('about-close').focus();});
+document.getElementById('about-close').addEventListener('click',()=>{document.getElementById('about').classList.remove('open');document.getElementById('about-open').focus();});
+document.getElementById('about').addEventListener('click',event=>{if(event.target.id==='about')document.getElementById('about-close').click();});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.getElementById('about').classList.contains('open'))document.getElementById('about-close').click();});
 
-// ---------- view switching: landing <-> map (one document) ----------
-let mapBooted = false;
-function showMap(){
-  document.getElementById('landing').classList.add('hide');
-  if(!mapBooted){ mapBooted=true; bootMap(); }
-  else setTimeout(()=>map.invalidateSize(),60);
-}
-function showLanding(){ document.getElementById('landing').classList.remove('hide'); }
-function bootMap(){
-  draw();
-  map.on('zoomend', onZoomDraw);
-  lastDrawZoom = map.getZoom();
-  setTimeout(()=>map.invalidateSize(),60);
-}
-
-// Drop / move the transient "you are here" marker on its OWN layer (never wiped by draw()).
-function dropMe(lat,lng){
-  if(meLayer){ meLayer.remove(); meLayer=null; }
-  meLayer = L.layerGroup().addTo(map);
-  L.circleMarker([lat,lng], {renderer:canvas, radius:9, color:'#eaf0fb', weight:3,
-    fillColor:'#36c98a', fillOpacity:.9, opacity:1, interactive:false}).addTo(meLayer);
-  L.circleMarker([lat,lng], {renderer:canvas, radius:22, color:'#36c98a', weight:1,
-    fillColor:'#36c98a', fillOpacity:.08, opacity:.5, interactive:false}).addTo(meLayer);
-}
-
-// ---------- locate me (geolocation; gated behind a tap, degrades gracefully) ----------
-function locateMe(onDone){
-  if(!navigator.geolocation){ if(onDone) onDone(false); return; }
-  if(window.pulse) window.pulse('locate_me');
-  navigator.geolocation.getCurrentPosition(pos=>{
-    const {latitude:lat, longitude:lng} = pos.coords;
-    showMap();
-    const go=()=>{ map.setView([lat,lng],15); dropMe(lat,lng);
-      const n=nearestIssue(lat,lng); if(n && n.dist<700){ draw(); openCard(n.issue); } };
-    mapBooted ? go() : setTimeout(go,120);
-    if(onDone) onDone(true);
-  }, err=>{ if(onDone) onDone(false); }, {enableHighAccuracy:true, timeout:8000, maximumAge:60000});
-}
-
-// ---------- address search (debounced geocode via our proxy) ----------
-function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
-async function geocodeQuery(q){
-  try{ const r=await fetch('/api/geocode?q='+encodeURIComponent(q)); return await r.json(); }
-  catch(e){ return []; }
-}
-function gotoPoint(lat,lng,zoom){
-  showMap();
-  const go=()=>{ map.setView([lat,lng], zoom||15); dropMe(lat,lng);
-    const n=nearestIssue(lat,lng); if(n && n.dist<700){ draw(); openCard(n.issue); } };
-  mapBooted ? go() : setTimeout(go,120);
-}
-// Wire a search input + its suggestion dropdown to the geocoder. `onPick(lat,lng,name)`.
-function wireSearch(inputEl, suggEl, onPick){
-  const run = debounce(async ()=>{
-    const q = inputEl.value.trim();
-    if(q.length<3){ suggEl.classList.remove('show'); suggEl.innerHTML=''; return; }
-    const res = await geocodeQuery(q);
-    if(inputEl.value.trim()!==q) return; // stale
-    if(!res.length){ suggEl.innerHTML=`<div class="note">No match in NYC for "${esc(q)}". Try a fuller address.</div>`; suggEl.classList.add('show'); return; }
-    suggEl.innerHTML = res.map((r,k)=>`<div class="item" data-k="${k}">${esc(r.name.split(',').slice(0,3).join(', '))}<span class="sm">${esc(r.name.split(',').slice(3,5).join(', '))}</span></div>`).join('');
-    suggEl.classList.add('show');
-    [...suggEl.querySelectorAll('.item')].forEach(el=>{
-      el.onclick=()=>{ const r=res[+el.dataset.k]; suggEl.classList.remove('show'); inputEl.blur();
-        if(window.pulse) window.pulse('address_search',{q}); onPick(r.lat,r.lng,r.name); };
-    });
-  }, 350);
-  inputEl.addEventListener('input', run);
-  inputEl.addEventListener('keydown', e=>{ if(e.key==='Enter'){ const first=suggEl.querySelector('.item'); if(first) first.click(); }});
-  document.addEventListener('click', e=>{ if(!suggEl.contains(e.target) && e.target!==inputEl) suggEl.classList.remove('show'); });
-}
-
-// ---------- LANDING render (pure re-presentation of ALL; same stats as the header strip) ----------
-let LB_BORO = null; // null = citywide; else uppercase borough name
-function topBoardScope(){
-  const pool = LB_BORO ? ALL.filter(i=>(i.borough||'Unspecified')===LB_BORO) : ALL;
-  return [...pool].sort((a,b)=> b.score-a.score).slice(0,12);
-}
-function boardRowHTML(i, rank){
-  const t=TYPES[i.type], top=rank<=3;
-  const nb = (i.addr||'Unknown location').replace(/\s+/g,' ').trim();
-  const persist = i.pattern==='persistent';
-  const yrs = i.first_seen ? (2026 - +i.first_seen.slice(0,4)) : 0;
-  const flag = persist ? `<span class="flag persist">Chronic</span>` : (yrs>=4?`<span class="flag years">${yrs} yrs</span>`:'');
-  return `<a class="row2 ${top?'top':''}" data-type="${esc(i.type)}" data-id="${esc(i.id)}">
-    <div class="rtop">
-      <div class="rank">${String(rank).padStart(2,'0')}</div>
-      <div class="rmain">
-        <div class="rwhere">${esc(nb)}</div>
-        <div class="rmeta"><span class="tdot"><i style="background:${t.c}"></i>${t.label}</span><span>· ${esc(i.borough||'NYC')}</span>${flag}</div>
-      </div>
-      <div class="rcount"><div class="n">${fmt(i.n)}</div><div class="u">reports</div></div>
-    </div>
-    <div class="verdict2 ${i.status==='active'?'still':''}">${esc(i.headline||'')}</div>
-    <div class="chev">Open on the map <span class="sh">&rarr;</span></div>
-  </a>`;
-}
-function renderBoard(){
-  const list = topBoardScope();
-  const top3 = list.slice(0,3).map((i,k)=>boardRowHTML(i,k+1)).join('');
-  const tail = list.slice(3).map((i,k)=>boardRowHTML(i,k+4)).join('');
-  document.getElementById('l-board').innerHTML = top3 + (tail?`<div class="tear"></div>`+tail:'');
-  document.getElementById('l-where-name').textContent = LB_BORO ? (BORO_LABEL[BORO_NAME[LB_BORO]]||LB_BORO) : 'Citywide';
-  // row -> map deep-link
-  document.querySelectorAll('#l-board .row2').forEach(el=>{
-    el.onclick=(e)=>{ e.preventDefault();
-      const it=ALL.find(x=>x.type===el.dataset.type && x.id===el.dataset.id);
-      if(window.pulse) window.pulse('board_row_open',{type:el.dataset.type,id:el.dataset.id});
-      if(it) focusIssue(it);
-    };
-  });
-}
-function cycleBoro(){
-  const order=[null,'MANHATTAN','BROOKLYN','QUEENS','BRONX','STATEN ISLAND'];
-  LB_BORO = order[(order.indexOf(LB_BORO)+1)%order.length];
-  renderBoard();
-}
-function renderLanding(){
-  const reports = ALL.reduce((a,i)=>a+i.n,0);
-  const closed = ALL.reduce((a,i)=>a+i.closed_n,0);
-  const back = ALL.reduce((a,i)=>a+i.returned_n,0);
-  const activeN = ALL.filter(i=>i.status==='active').length;
-  const chronic = ALL.filter(i=>i.pattern==='persistent').length;
-  const pct = Math.round(back/closed*100);
-  document.getElementById('l-livecount').textContent = fmt(activeN);
-  document.getElementById('l-pct').textContent = pct+'%';
-  document.getElementById('l-back').textContent = fmt(back);
-  const d=new Date((DATA_THROUGH||'2026-06-21')+'T00:00:00');
-  const through=d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-  document.getElementById('l-src').textContent =
-    `Source: NYC 311 open data, the city's own record. ${fmt(closed)} quality-of-life closures, 2021–2026.`;
-  document.getElementById('l-fresh').textContent = `NYC 311 open data · current through ${through} · refreshed daily`;
-  renderBoard();
-  // Scale: borough active counts
-  const bc={};
-  ALL.filter(i=>i.status==='active').forEach(i=>{ const b=i.borough||'Unspecified'; bc[b]=bc[b]||{a:0,c:0}; bc[b].a++; if(i.pattern==='persistent')bc[b].c++; });
-  document.getElementById('l-scale-h').textContent = `${fmt(activeN)} spots are active right now.`;
-  document.getElementById('l-scale-sub').textContent = `${fmt(chronic)} have run continuously for months — chronic, never resolved. Tap a borough to drop into the map.`;
-  const order=['MANHATTAN','BROOKLYN','QUEENS','BRONX','STATEN ISLAND'];
-  const maxA=Math.max(1,...order.map(b=>(bc[b]||{a:0}).a));
-  document.getElementById('l-boros').innerHTML = order.map(b=>{
-    const o=bc[b]||{a:0,c:0}, slug=BORO_NAME[b];
-    return `<a class="boro" data-boro="${slug}"><div class="top"><span class="nm">${BORO_LABEL[slug]}<span class="go">&rarr;</span></span><span class="ct"><b>${fmt(o.a)}</b> active · ${o.c} chronic</span></div><div class="bar"><i style="width:${Math.round(o.a/maxA*100)}%"></i></div></a>`;
-  }).join('');
-  document.querySelectorAll('#l-boros .boro').forEach(el=>{
-    el.onclick=()=>{ const slug=el.dataset.boro;
-      if(window.pulse) window.pulse('view_map',{boro:slug});
-      showMap(); const c=BORO_CENTER[slug]; const go=()=>map.setView(c,13); mapBooted?go():setTimeout(go,120); };
-  });
-  // Scene-3 locality pill
-  document.getElementById('l-where').onclick = cycleBoro;
-  // Scene-4 address search -> block card
-  wireSearch(document.getElementById('l-addr'), document.getElementById('l-addr-sugg'), (lat,lng,name)=>{ renderBlockCard(lat,lng,name); });
-  document.getElementById('l-locate').onclick = ()=>{
-    const btn=document.getElementById('l-locate'); btn.textContent='Locating…';
-    if(!navigator.geolocation){ btn.textContent='Locate me'; return; }
-    navigator.geolocation.getCurrentPosition(p=>{ btn.textContent='Locate me'; renderBlockCard(p.coords.latitude,p.coords.longitude,'Your location'); },
-      ()=>{ btn.textContent='Locate me'; }, {enableHighAccuracy:true,timeout:8000});
-  };
-  // Scene-6 CTAs
-  document.getElementById('l-openmap').onclick = (e)=>{ e.preventDefault(); if(window.pulse)window.pulse('view_map'); showMap(); map_.setView([40.735,-73.98],12); };
-  document.getElementById('l-jumpme').onclick = (e)=>{ e.preventDefault(); locateMe(); };
-}
-// Block card (Scene 4 payoff): geocode point -> issues within ~450m -> top 3 by n.
-function renderBlockCard(lat,lng,name){
-  const near = issuesNear(lat,lng,450);
-  const host = document.getElementById('l-blockcard');
-  if(window.pulse) window.pulse('block_lookup');
-  if(!near.length){
-    host.innerHTML = `<div class="blockcard"><div class="bcbody">
-      <div class="bchead"><span class="w">${esc((name||'').split(',')[0]||'This block')}</span></div>
-      <div class="verdict-line">Nothing on the city's record within a 5-minute walk. <span class="amb">That's a finding too.</span></div>
-      <a class="cta" id="l-blockcta">See this area on the map <span class="arr">&rarr;</span></a>
-      <div class="ctasub">Opens the live map, centered here.</div></div></div>`;
-  } else {
-    const closedH = near.reduce((a,x)=>a+x.i.closed_n,0);
-    const backH = near.reduce((a,x)=>a+x.i.returned_n,0);
-    const pctH = closedH? Math.round(backH/closedH*100):0;
-    const top = near.filter(x=>active.has(x.i.type)).slice(0,3);
-    const boro = near[0].i.borough||'NYC', cb = near[0].i.board||'—';
-    host.innerHTML = `<div class="blockcard"><div class="bcbody">
-      <div class="bchead"><span class="w">${esc((name||'').split(',')[0]||'This block')}</span><span class="within">${esc(boro)} · CB ${esc(cb)}</span></div>
-      <div class="verdict-line">The city closed reports here <span class="rd">${fmt(closedH)}&times;</span>.${closedH?` <span class="amb">${pctH}% came back.</span>`:''}</div>
-      <div class="ilist">${top.map(x=>{const i=x.i,t=TYPES[i.type];
-        return `<div class="irow" data-type="${esc(i.type)}" data-id="${esc(i.id)}">
-          <span class="tag" style="background:${t.c}"></span>
-          <div class="mid"><div class="ty">${t.label}</div><div class="ad">${esc((i.addr||'').replace(/\s+/g,' ').trim())} — ${esc(i.headline||'')}</div></div>
-          <div class="stat"><div class="nn">${fmt(i.n)}</div><div class="ss">reports</div></div></div>`;}).join('')}</div>
-      <a class="cta" id="l-blockcta">See my block's full record <span class="arr">&rarr;</span></a>
-      <div class="ctasub">Opens the live map, centered on you. Tap any spot to read what neighbors actually see.</div></div></div>`;
-    host.querySelectorAll('.irow').forEach(el=>{ el.onclick=()=>{ const it=ALL.find(x=>x.type===el.dataset.type&&x.id===el.dataset.id); if(it) focusIssue(it); }; });
-  }
-  document.getElementById('l-blockcta').onclick=(e)=>{ e.preventDefault(); gotoPoint(lat,lng,15); };
-}
-
-// Focus a single issue on the map (flyTo + open its card); flips showResolved if needed.
-function focusIssue(it){
-  if(it.status==='resolved' && !showResolved){
-    showResolved=true; const el=document.getElementById('histToggle');
-    el.classList.add('on'); el.textContent='− hide resolved';
-  }
-  showMap();
-  const go=()=>{ active.add(it.type); draw(); map_.flyTo([it.lat,it.lng],16,{duration:.9}); openCard(it); };
-  mapBooted ? go() : setTimeout(go,150);
-}
-
-// ---------- deep-link router: decide landing vs map from location ----------
-function routeFromLocation(){
-  const p = location.pathname, hash=location.hash, qs=new URLSearchParams(location.search);
-  const issueHash = hash.match(/^#issue=([^:]+):(.+)$/);
-  if(issueHash){
-    const t=decodeURIComponent(issueHash[1]), id=decodeURIComponent(issueHash[2]);
-    const it=ALL.find(i=>i.type===t && i.id===id);
-    if(it){ focusIssue(it); return; }
-  }
-  const focus=qs.get('focus');
-  if(focus){
-    const cut=focus.indexOf('|'), t=cut>=0?focus.slice(0,cut):'', id=cut>=0?focus.slice(cut+1):'';
-    const it=ALL.find(i=>i.type===t && i.id===id);
-    if(it){ focusIssue(it); return; }
-  }
-  if(qs.get('geo')==='1'){ showMap(); locateMe(); return; }
-  if(qs.get('boro')){ const slug=qs.get('boro'); showMap();
-    const c=BORO_CENTER[slug]||[40.735,-73.98]; const go=()=>map.setView(c,13); mapBooted?go():setTimeout(go,150); return; }
-  const lat=parseFloat(qs.get('lat')), lng=parseFloat(qs.get('lng'));
-  if(Number.isFinite(lat)&&Number.isFinite(lng)){ const z=parseInt(qs.get('z'))||15;
-    showMap(); const go=()=>{ map.setView([lat,lng],z); dropMe(lat,lng);
-      const n=nearestIssue(lat,lng); if(n&&n.dist<700){ draw(); openCard(n.issue); } }; mapBooted?go():setTimeout(go,150); return; }
-  if(p==='/map'){ showMap(); return; }
-  showMap();  // default arrival = full-screen map (landing reachable via the wordmark; redesign pending)
-}
-
-(async function(){
-  buildChips();
+async function boot(){
+  buildFilters();
+  restorePlanner();
+  try{const response=await fetch('/api/access');state.access=await response.json();setRouteHint(state.access.plan==='bypass'?'Routes are open during checkout setup':state.access.active?(state.access.expires_at?`Route pass active through ${new Date(state.access.expires_at).toLocaleDateString('en-US')}`:'Route access active'):'Map is free · routes are $1/day or $25/year');}catch{state.access={active:false};}
   try{
-    const response=await fetch('/api/issues');
-    if(!response.ok) throw new Error('issues unavailable');
-    ALL=await response.json();
-    if(!Array.isArray(ALL)||!ALL.length) throw new Error('empty issue set');
-  }catch(e){
-    document.getElementById('hint').textContent='The public record is temporarily unavailable. Retrying…';
-    setTimeout(()=>location.reload(),15000);
-    return;
-  }
-  const reports = ALL.reduce((a,i)=>a+i.n,0);
-  const closed = ALL.reduce((a,i)=>a+i.closed_n,0);
-  const back = ALL.reduce((a,i)=>a+i.returned_n,0);
-  document.getElementById('s-issues').textContent = fmt(ALL.filter(i=>i.status==='active').length);
-  document.getElementById('s-worst').textContent = fmt(ALL.filter(i=>i.pattern==='persistent').length);
-  document.getElementById('s-ignored').textContent = Math.round(back/closed*100)+'%';
-  document.getElementById('s-reports').textContent = fmt(reports);
-  const through = ALL.reduce((a,i)=> i.last_seen>a?i.last_seen:a, '');
-  DATA_THROUGH = through;
-  const d = new Date(through+'T00:00:00');
-  document.getElementById('fresh').innerHTML =
-    `<span class="ok"></span>NYC 311 open data · current through ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} · refreshed daily`;
-
-  // findbar (on the map) — search + locate
-  wireSearch(document.getElementById('findInput'), document.getElementById('findSugg'), (lat,lng)=>gotoPoint(lat,lng,15));
-  document.getElementById('findGeo').onclick = ()=>{
-    const b=document.getElementById('findGeo'); b.classList.add('busy');
-    locateMe(ok=>{ b.classList.remove('busy'); });
-  };
-
-  renderLanding();
-  routeFromLocation();
-  window.addEventListener('hashchange', routeFromLocation);
-})();
-
-// IntersectionObserver — each landing scene settles as it crosses center (no scroll-jacking).
-(function(){
-  if(!('IntersectionObserver' in window)) return;
-  const io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting) e.target.classList.add('live'); }); },{threshold:.30});
-  document.querySelectorAll('#landing .scene').forEach((s,i)=>{ if(i>0) io.observe(s); });
-})();
+    const response=await fetch('/api/map-layers');state.data=await response.json();if(!response.ok)throw new Error(state.data.error||'Map data unavailable');
+    const counts=Object.fromEntries(Object.keys(DEFS).map(name=>[name,(state.data.layers[name]||[]).length]));
+    const flock=(state.data.layers.alpr||[]).filter(item=>item.manufacturer==='Flock Safety').length;
+    const civic=Object.keys(DEFS).filter(name=>name!=='alpr').reduce((sum,name)=>sum+counts[name],0);
+    document.getElementById('feature-count').textContent=`${fmt(counts.alpr)} cameras (${fmt(flock)} Flock) · ${fmt(civic)} 311 clusters`;
+    const freshness=state.data.meta&&state.data.meta.layer_freshness||{};
+    const statusLine=(name,label)=>{const item=freshness[name]||{},stamp=item.refreshed_at?new Date(item.refreshed_at).toLocaleDateString('en-US'):'an unknown date';return item.status==='retained'?`${label} retained from ${stamp} after a refresh failure`:item.status==='fresh'?`${label} refreshed ${stamp}`:`${label} freshness unavailable`;};
+    document.getElementById('freshness').textContent=`${statusLine('alpr','Camera map')}; ${statusLine('homelessness','311 clusters')}. Coverage is incomplete; 311 clusters require repeated reports plus recent activity.`;
+  }catch{document.getElementById('freshness').textContent='Map layers are temporarily unavailable.';}
+  syncLayers();syncReportLink();scheduleRoute(0);
+  const params=new URLSearchParams(location.search);
+  const lat=Number(params.get('lat')),lng=Number(params.get('lng')),focus=Number.isFinite(lat)&&Number.isFinite(lng)?{lat,lng}:null;
+  if(params.get('mode')==='report'&&focus)await focusReport(focus.lat,focus.lng,true);
+  else loadReportIssues();
+}
+boot();
 </script>
-<!-- Pulse first-party analytics (factory standard, zero-dep beacon). Exposes window.pulse for custom events. -->
-<script>(function(){if(location.hostname==="localhost")return;var I="https://pulse.polyfeeds.dev/api/ingest";function s(e,x){try{var b=JSON.stringify(Object.assign({event:e,path:location.pathname,referrer:document.referrer||undefined,screen:innerWidth+"x"+innerHeight},x||{}));if(navigator.sendBeacon){navigator.sendBeacon(I,new Blob([b],{type:"text/plain"}))}else{fetch(I,{method:"POST",headers:{"Content-Type":"text/plain"},keepalive:true,body:b})}}catch(e){}}window.pulse=s;s("page_view");var t=Date.now();function d(){s("page_dwell",{dwellMs:Date.now()-t})}addEventListener("pagehide",d);document.addEventListener("visibilitychange",function(){if(document.visibilityState==="hidden")d()})})();</script>
 </body>
 </html>
