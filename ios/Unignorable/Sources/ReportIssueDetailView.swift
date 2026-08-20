@@ -126,7 +126,7 @@ struct ReportIssueDetailView: View {
                 .background(AppTheme.raised, in: RoundedRectangle(cornerRadius: 10))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.line))
                 .overlay(alignment: .topLeading) {
-                    if comment.isEmpty { Text("What is here right now?").foregroundStyle(AppTheme.muted).padding(14).allowsHitTesting(false) }
+                    if comment.isEmpty { Text("Describe the condition or public space.").foregroundStyle(AppTheme.muted).padding(14).allowsHitTesting(false) }
                 }
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -144,7 +144,7 @@ struct ReportIssueDetailView: View {
             }
             .buttonStyle(.bordered)
 
-            Text("A person reviews every update before it is published.")
+            Text("Do not photograph, describe, or characterize people. Document the condition or public space only. A person reviews every update before it is published.")
                 .font(.caption).foregroundStyle(AppTheme.muted)
 
             Button {

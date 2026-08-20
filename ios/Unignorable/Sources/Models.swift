@@ -87,13 +87,142 @@ struct MapFeature: Codable, Identifiable, Sendable {
     let manufacturer: String?
     let count: Int?
     let descriptor: String?
+    let address: String?
     let subjectType: String?
     let distinctReportDays: Int?
     let fieldObservationCount: Int?
     let condition: ConditionEstimate?
+    let nowcast: NowcastEstimate?
     let locationUncertaintyM: Double?
     let locationMethod: String?
     var coordinate: CLLocationCoordinate2D { .init(latitude: lat, longitude: lng) }
+}
+
+struct NowcastEstimate: Codable, Sendable {
+    let methodVersion: String?
+    let rollout: String?
+    let status: String?
+    let asOf: String?
+    let label: String?
+    let uncalibratedScore: Double?
+    let scoreRange: [Double]?
+    let scoreSemantics: String?
+    let rangeSemantics: String?
+    let confidenceSemantics: String?
+    let liveProbability: Double?
+    let currentProbability: Double?
+    let probabilityRange: [Double]?
+    let confidence: String?
+    let features: NowcastFeatures?
+    let localTimeWindow: LocalTimeWindow?
+    let spatialUncertainty: NowcastSpatialUncertainty?
+    let basis: String?
+}
+
+struct NowcastFeatures: Codable, Sendable {
+    let reportDays7: Int?
+    let reportDays14: Int?
+    let reportDays30: Int?
+    let reportDays90: Int?
+    let reportAgeDays: Double?
+    let reportCadenceDays: Double?
+    let lastReportAt: String?
+    let lastDirectCheckAt: String?
+}
+
+/// A pattern in when reports arrive. This is deliberately not described as a
+/// physical-presence window until a future model has evidence to support that claim.
+struct LocalTimeWindow: Codable, Sendable {
+    let startHour: Double?
+    let endHour: Double?
+    let label: String?
+    let timezone: String?
+    let reportDays: Int?
+    let daysInWindow: Int?
+    let effectiveDaysInWindow: Double?
+    let sampleSize: Int?
+    let concentration: Double?
+    let strength: String?
+    let basis: String?
+}
+
+struct NowcastSpatialUncertainty: Codable, Sendable {
+    let radiusM: Double?
+    let label: String?
+    let basis: String?
+}
+
+extension MapFeature {
+    /// An uncalibrated 0...1 model score. Backend field names are retained for
+    /// compatibility, but the client never presents this as an empirical probability.
+    var forecastScore: Double? {
+        let value = nowcast?.uncalibratedScore ?? nowcast?.currentProbability ?? nowcast?.liveProbability ?? condition?.presenceProbability
+        guard let value, value.isFinite, (0...1).contains(value) else { return nil }
+        return value
+    }
+
+    var forecastScoreRange: ClosedRange<Double>? {
+        let values = nowcast?.scoreRange ?? nowcast?.probabilityRange ?? condition?.probabilityRange
+        guard let values, values.count == 2,
+              values[0].isFinite, values[1].isFinite,
+              (0...1).contains(values[0]), (0...1).contains(values[1]) else { return nil }
+        return min(values[0], values[1])...max(values[0], values[1])
+    }
+
+    var forecastEvidenceStrength: String {
+        switch nowcast?.confidence?.lowercased() {
+        case "high": "Stronger evidence"
+        case "medium": "Moderate evidence"
+        default: "Limited evidence"
+        }
+    }
+
+    var forecastTitle: String {
+        guard let score = forecastScore else { return "Encampment condition status uncertain" }
+        if score >= 0.74, nowcast?.confidence?.lowercased() != "low" {
+            return "Encampment condition likely present"
+        }
+        if score <= 0.18, nowcast?.confidence?.lowercased() != "low" {
+            return "Encampment condition likely absent"
+        }
+        return "Encampment condition uncertain"
+    }
+
+    var isExperimentalForecast: Bool {
+        nowcast?.status?.lowercased() == "beta" || nowcast?.rollout?.lowercased() != "live"
+    }
+
+    var forecastLocationRadiusM: Double? {
+        let value = nowcast?.spatialUncertainty?.radiusM ?? locationUncertaintyM
+        guard let value, value.isFinite, value > 0 else { return nil }
+        return value
+    }
+
+    var reportTimingLabel: String? {
+        guard let window = nowcast?.localTimeWindow else { return nil }
+        let supplied = window.label?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let supplied, !supplied.isEmpty { return "Historical reports most often arrived \(supplied)" }
+        guard let start = Self.localHour(window.startHour), let end = Self.localHour(window.endHour) else { return nil }
+        return "Historical reports most often arrived \(start)–\(end)"
+    }
+
+    var reportTimingIsStrongEnoughForPrimary: Bool {
+        switch nowcast?.localTimeWindow?.strength?.lowercased() {
+        case "moderate", "strong": true
+        default: false
+        }
+    }
+
+    private static func localHour(_ value: Double?) -> String? {
+        guard let value, value.isFinite, value >= 0, value < 24 else { return nil }
+        let minutes = Int((value * 60).rounded()) % (24 * 60)
+        var hour = minutes / 60
+        let minute = minutes % 60
+        let suffix = hour < 12 ? "AM" : "PM"
+        hour %= 12
+        if hour == 0 { hour = 12 }
+        return minute == 0 ? "\(hour) \(suffix)" : String(format: "%d:%02d %@", hour, minute, suffix)
+    }
 }
 
 struct ConditionEstimate: Codable, Sendable {

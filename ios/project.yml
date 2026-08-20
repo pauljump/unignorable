@@ -9,7 +9,7 @@ settings:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: "99US464DK4"
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "0.1.0"
+    MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"
 targets:
   Unignorable:
@@ -19,6 +19,7 @@ targets:
       - path: Unignorable/Sources
     settings:
       base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_FILE: Unignorable/Sources/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: dev.polyfeeds.unignorable
         TARGETED_DEVICE_FAMILY: "1"

@@ -41,8 +41,8 @@ if (!cols.includes('ip_hash')) db.exec(`ALTER TABLE posts ADD COLUMN ip_hash TEX
 db.exec(`CREATE INDEX IF NOT EXISTS idx_posts_mod ON posts(mod)`);
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_posts_seen_ip ON posts(issue_key,ip_hash) WHERE kind='seen' AND ip_hash IS NOT NULL`);
 
-// Proximity-verified field observations calibrate the latent encampment model. No name, raw IP,
-// trip, or free text is stored. One observer can contribute one state per site per UTC day.
+// Nearby community submissions are unreviewed leads, never model labels. No name, raw IP, trip,
+// or free text is stored. One observer can contribute one state per site per UTC day.
 db.exec(`
   CREATE TABLE IF NOT EXISTS condition_observations(
     id                INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,23 +54,33 @@ db.exec(`
     observer_hash     TEXT NOT NULL,
     distance_m        REAL NOT NULL,
     model_probability REAL,
-    model_version     TEXT
+    model_version     TEXT,
+    model_score       REAL,
+    model_contract_version TEXT,
+    provenance        TEXT NOT NULL DEFAULT 'community_unreviewed',
+    review_status     TEXT NOT NULL DEFAULT 'unreviewed'
   );
   CREATE UNIQUE INDEX IF NOT EXISTS idx_condition_observer_day
     ON condition_observations(feature_id,observer_hash,observation_day);
   CREATE INDEX IF NOT EXISTS idx_condition_feature_time
     ON condition_observations(feature_id,observed_at);
 `);
+const conditionCols = db.prepare(`PRAGMA table_info(condition_observations)`).all().map(column => column.name);
+if (!conditionCols.includes('model_score')) db.exec(`ALTER TABLE condition_observations ADD COLUMN model_score REAL`);
+if (!conditionCols.includes('model_contract_version')) db.exec(`ALTER TABLE condition_observations ADD COLUMN model_contract_version TEXT`);
+if (!conditionCols.includes('provenance')) db.exec(`ALTER TABLE condition_observations ADD COLUMN provenance TEXT NOT NULL DEFAULT 'community_unreviewed'`);
+if (!conditionCols.includes('review_status')) db.exec(`ALTER TABLE condition_observations ADD COLUMN review_status TEXT NOT NULL DEFAULT 'unreviewed'`);
 const qConditionInsert = db.prepare(`INSERT OR IGNORE INTO condition_observations(
-  feature_id,state,observed_at,observation_day,submitted_at,observer_hash,distance_m,model_probability,model_version
-) VALUES(?,?,?,?,?,?,?,?,?)`);
-const qConditionSummary = db.prepare(`SELECT state,count(*) observations,count(distinct observer_hash) observers,
+  feature_id,state,observed_at,observation_day,submitted_at,observer_hash,distance_m,model_score,model_version,
+  model_contract_version,provenance,review_status
+) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`);
+const qConditionSummary = db.prepare(`SELECT state,provenance,review_status,count(*) observations,count(distinct observer_hash) observers,
   max(observed_at) last_observed_at FROM condition_observations
-  WHERE feature_id=? AND observed_at>=? GROUP BY state`);
+  WHERE feature_id=? AND observed_at>=? GROUP BY state,provenance,review_status`);
 
 // A walk opportunity is deliberately not an observation. It records only that an opted-in
 // navigator passed a mapped site closely enough to have had an opportunity to see it. The raw
-// coordinate is checked by the server and discarded; these rows are for sampling and calibration
+// coordinate is checked by the server and discarded; these rows describe research sampling
 // coverage, never a positive or negative input to the presence model.
 db.exec(`
   CREATE TABLE IF NOT EXISTS walk_opportunities(
@@ -319,11 +329,13 @@ function countsAll() {
   return m;
 }
 
-function addConditionObservation({ featureId, state, observedAt, observerHash, distance, modelProbability, modelVersion }) {
+function addConditionObservation({ featureId, state, observedAt, observerHash, distance, modelScore, modelVersion, modelContractVersion }) {
   const timestamp = new Date(observedAt).toISOString();
   const result = qConditionInsert.run(featureId, state, timestamp, timestamp.slice(0, 10), new Date().toISOString(),
-    observerHash, Number(distance), Number.isFinite(modelProbability) ? modelProbability : null, modelVersion || null);
-  return { accepted: Number(result.changes) === 1, duplicate: Number(result.changes) === 0 };
+    observerHash, Number(distance), Number.isFinite(modelScore) ? modelScore : null, modelVersion || null,
+    modelContractVersion || null, 'community_unreviewed', 'unreviewed');
+  return { accepted: Number(result.changes) === 1, duplicate: Number(result.changes) === 0,
+    provenance: 'community_unreviewed', review_status: 'unreviewed', forecast_unchanged: true };
 }
 
 function conditionObservationSummary(featureId, days = 30) {

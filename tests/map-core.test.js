@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { pointInGeoJSON, routeIntersectsPoint, featureRisk, scoreRoute, chooseRecommended, plausibleRoutes, exportUrls, simplifyWalkingSteps, LAYER_RADII } = require('../map-core');
-const { manufacturer, layerFor, supported, resolutionEvidence, conditionEvidence } = require('../scripts/refresh-map-data');
+const { manufacturer, layerFor, supported, resolutionEvidence, conditionEvidence,
+  parseNycWallTime, nycLocalDay, recordReportedLocation, reportedLocationLabel } = require('../scripts/refresh-map-data');
 const { classifyResolution, estimatePresence, routingLevel } = require('../condition-model');
 
 const line = [[-74, 40.7], [-73.99, 40.7]];
@@ -128,6 +129,28 @@ test('ALPR vendors and 311 categories use explicit provenance rules', () => {
   assert.equal(supported('dumping', 'Illegal Dumping', 'Chronic Dumping'), true);
   assert.equal(supported('dumping', 'Illegal Dumping', 'Removal Request'), false);
   assert.equal(supported('drugs', 'Drug Activity', 'Use Outside'), true);
+});
+
+test('forecast locations retain the newest non-empty 311 address with an honest fallback', () => {
+  const site = { _address: null, _addressAt: -Infinity, _borough: null, _boroughAt: -Infinity };
+  recordReportedLocation(site, { incident_address: '  100 WEST 23 STREET ', borough: 'MANHATTAN' }, 100);
+  recordReportedLocation(site, { incident_address: '', borough: 'MANHATTAN' }, 300);
+  recordReportedLocation(site, { incident_address: '90 WEST 23 STREET', borough: 'MANHATTAN' }, 50);
+  assert.equal(reportedLocationLabel(site), '100 WEST 23 STREET');
+  recordReportedLocation(site, { incident_address: '102 WEST 23 STREET', borough: 'MANHATTAN' }, 400);
+  assert.equal(reportedLocationLabel(site), '102 WEST 23 STREET');
+
+  const approximate = { _address: null, _addressAt: -Infinity, _borough: null, _boroughAt: -Infinity };
+  recordReportedLocation(approximate, { incident_address: null, borough: 'STATEN ISLAND' }, 100);
+  assert.equal(reportedLocationLabel(approximate), 'Approximate reported location in Staten Island');
+});
+
+test('NYC source wall times parse deterministically across standard time, DST, and repeated hours', () => {
+  assert.equal(new Date(parseNycWallTime('2026-01-15T12:00:00.000')).toISOString(), '2026-01-15T17:00:00.000Z');
+  assert.equal(new Date(parseNycWallTime('2026-07-15T12:00:00.000')).toISOString(), '2026-07-15T16:00:00.000Z');
+  assert.equal(new Date(parseNycWallTime('2026-11-01T01:30:00.000')).toISOString(), '2026-11-01T05:30:00.000Z');
+  assert.equal(parseNycWallTime('2026-03-08T02:30:00.000'), null);
+  assert.equal(nycLocalDay(Date.parse('2026-08-20T02:00:00Z')), '2026-08-19');
 });
 
 test('311 condition evidence requires explicit outcomes or recurrence instead of trusting closure status', () => {

@@ -25,14 +25,54 @@ struct FeatureDetailView: View {
                     }
                 }
 
+                if feature.nowcast != nil {
+                    Section("Current condition model") {
+                        LabeledContent("Modeled state", value: feature.forecastTitle)
+                        if let score = feature.forecastScore {
+                            LabeledContent("Uncalibrated model score", value: "\(Int((score * 100).rounded())) / 100")
+                        }
+                        if let range = feature.forecastScoreRange {
+                            LabeledContent(
+                                "Heuristic score range",
+                                value: "\(Int((range.lowerBound * 100).rounded()))–\(Int((range.upperBound * 100).rounded())) / 100"
+                            )
+                        }
+                        LabeledContent("Evidence strength", value: feature.forecastEvidenceStrength)
+                        if feature.isExperimentalForecast {
+                            LabeledContent("Model status", value: "Experimental")
+                        }
+                        if let value = formatDate(feature.nowcast?.asOf) {
+                            LabeledContent("Forecast updated", value: value)
+                        }
+                        if let basis = feature.nowcast?.basis {
+                            Text(basis).foregroundStyle(.secondary)
+                        }
+                        Text("The score ranks heuristic model output. It is not an empirical probability, and the score range is not a confidence interval.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let window = feature.nowcast?.localTimeWindow, let timing = feature.reportTimingLabel {
+                    Section("Report timing") {
+                        Text(timing)
+                        Text("This is a separate historical reporting pattern. It is not part of the current-condition score and does not say when people will be present.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        if let strength = window.strength {
+                            LabeledContent("Pattern strength", value: strength.capitalized)
+                        }
+                        if let sample = window.sampleSize {
+                            LabeledContent("Eligible report days", value: "\(sample)")
+                        }
+                        if let basis = window.basis {
+                            Text(basis).font(.footnote).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
                 if let condition = feature.condition {
-                    Section("Current estimate") {
-                        if let probability = condition.presenceProbability {
-                            LabeledContent("Estimated present", value: probability.formatted(.percent.precision(.fractionLength(0))))
-                        }
-                        if let range = condition.probabilityRange, range.count == 2 {
-                            LabeledContent("Uncertainty range", value: "\(range[0].formatted(.percent.precision(.fractionLength(0))))–\(range[1].formatted(.percent.precision(.fractionLength(0))))")
-                        }
+                    Section("Routing model") {
                         LabeledContent("Routing use", value: routingText(condition.routingLevel))
                     }
                     Section("Evidence") {
@@ -45,10 +85,10 @@ struct FeatureDetailView: View {
                 }
 
                 Section("Location accuracy") {
-                    if let meters = feature.locationUncertaintyM {
-                        Text("Reported coordinate is approximate (about \(Int(meters.rounded())) m), not a live GPS location.")
+                    if let meters = feature.forecastLocationRadiusM {
+                        Text("This is an approximate area with about a \(Int(meters.rounded())) m radius around a reported coordinate—not an exact point or a live GPS location.")
                     } else {
-                        Text("Public report coordinates are approximate, not live GPS locations.")
+                        Text("This is an approximate reported area, not an exact point or a live GPS location.")
                     }
                 }
 
@@ -68,7 +108,7 @@ struct FeatureDetailView: View {
 
                 if feature.subjectType == "encampment" {
                     Section("Check this location") {
-                        Text("Only answer from the location. Your proximity is checked; no trip or raw location history is stored.")
+                        Text("Only answer about the mapped condition from the location. Do not photograph, describe, or characterize people. Your proximity is checked; no trip or raw location history is stored.")
                             .font(.footnote).foregroundStyle(.secondary)
                         HStack {
                             observationButton("Still here", state: "present", color: .pink)
@@ -92,7 +132,11 @@ struct FeatureDetailView: View {
     }
 
     private var layer: LayerDefinition { LayerDefinition(rawValue: feature.layer ?? "") ?? .alpr }
-    private var title: String { feature.condition?.label ?? feature.manufacturer ?? feature.descriptor ?? layer.title }
+    private var title: String {
+        feature.subjectType == "encampment"
+            ? feature.forecastTitle
+            : feature.manufacturer ?? feature.descriptor ?? layer.title
+    }
     private var webReportURL: URL {
         var parts = URLComponents(string: "https://unignorable.polyfeeds.dev/")!
         parts.queryItems = [
@@ -113,7 +157,10 @@ struct FeatureDetailView: View {
     }
 
     private func formatDate(_ value: String?) -> String? {
-        guard let value, let date = ISO8601DateFormatter().date(from: value) else { return nil }
+        guard let value else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value) else { return nil }
         return date.formatted(.relative(presentation: .named))
     }
 
@@ -136,7 +183,9 @@ struct FeatureDetailView: View {
     private func submit(_ state: String, coordinate: CLLocationCoordinate2D) async {
         do {
             let result = try await APIClient().submitConditionObservation(feature: feature, state: state, coordinate: coordinate)
-            observationStatus = result.duplicate ? "Already counted today." : "Thanks — saved for the next model calibration."
+            observationStatus = result.duplicate
+                ? "Already submitted today. It is saved for review and does not change this forecast."
+                : "Saved for review. This community check does not change the forecast."
         } catch {
             observationStatus = error.localizedDescription
         }

@@ -36,6 +36,44 @@ const RESPONSE_TYPES = new Set(['Encampment', 'Homeless Person Assistance', 'Dru
 const TYPES = [...new Set(Object.values(REGISTRY).flatMap(byType => Object.keys(byType)))];
 const MIN_REPORTS = 5, MIN_SPAN_DAYS = 30, RECENT_DAYS = 180, LOOKBACK_YEARS = 5;
 const SIDEWALK_DB = process.env.DB || path.join(process.env.SIDEWALK_DIR || '/Users/mini-home/Desktop/Monorepo/sidewalk', 'data', 'sidewalk.db');
+const NYC_WALL_FORMATTER = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23',
+  year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const NYC_OFFSET_FORMATTER = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', timeZoneName: 'longOffset' });
+
+function nycParts(timestamp) {
+  return Object.fromEntries(NYC_WALL_FORMATTER.formatToParts(new Date(timestamp))
+    .filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+}
+
+function nycOffsetMs(timestamp) {
+  const name = NYC_OFFSET_FORMATTER.formatToParts(new Date(timestamp)).find(part => part.type === 'timeZoneName')?.value || '';
+  const match = name.match(/^GMT([+-])(\d{2}):(\d{2})$/);
+  if (!match) return null;
+  const sign = match[1] === '-' ? -1 : 1;
+  return sign * (Number(match[2]) * 60 + Number(match[3])) * 60_000;
+}
+
+// Socrata's NYC timestamps are wall times with no offset. Resolve them explicitly against the
+// IANA timezone, choose the earlier instant during the repeated fall-back hour, and reject the
+// nonexistent spring-forward hour rather than silently shifting its day or time.
+function parseNycWallTime(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/);
+  if (!match) return null;
+  const wanted = { year: match[1], month: match[2], day: match[3], hour: match[4], minute: match[5], second: match[6] };
+  const millis = Number((match[7] || '').padEnd(3, '0'));
+  const wallUtc = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]), Number(match[6]), millis);
+  const offsets = new Set([nycOffsetMs(wallUtc - 12 * 3_600_000), nycOffsetMs(wallUtc), nycOffsetMs(wallUtc + 12 * 3_600_000)]);
+  const matches = [...offsets].filter(Number.isFinite).map(offset => wallUtc - offset).filter(timestamp => {
+    const actual = nycParts(timestamp);
+    return Object.entries(wanted).every(([key, expected]) => actual[key] === expected);
+  });
+  return matches.length ? Math.min(...matches) : null;
+}
+
+function nycLocalDay(timestamp) {
+  const parts = nycParts(timestamp);
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
 
 function resolutionEvidence(value = '') {
   const kind = classifyResolution(value, 'Encampment');
@@ -56,16 +94,16 @@ function conditionEvidence(timeline, now = new Date()) {
   const gaps = days.slice(1).map((day, index) => day - days[index]);
   const quietWindow = Math.round(Math.min(90, Math.max(30, gaps.length ? median(gaps) * 4 : 90)));
   let episodes = 1;for(const gap of gaps)if(gap>quietWindow)episodes++;
-  const nowDay = dayNumber(now.toISOString()),lastReportDay=days[days.length-1],silence=Math.max(0,nowDay-lastReportDay);
+  const nowDay = dayNumber(nycLocalDay(now.getTime())),lastReportDay=days[days.length-1],silence=Math.max(0,nowDay-lastReportDay);
   const terminal = Math.max(timeline.lastCleared || 0, timeline.lastNotObserved || 0);
-  const terminalDay = terminal ? dayNumber(new Date(terminal).toISOString()) : 0;
+  const terminalDay = terminal ? dayNumber(nycLocalDay(terminal)) : 0;
   const reportsAfterAction = terminalDay ? days.filter(day => day > terminalDay).length : 0;
   const observedNewer = timeline.lastObserved && timeline.lastObserved > terminal;
   let classification='recent_reports_unverified',label='Recently reported; not agency-confirmed',basis='Recent 311 reports exist, but the latest agency disposition does not establish that the condition remains.';
-  if(observedNewer && nowDay-dayNumber(new Date(timeline.lastObserved).toISOString())<=quietWindow){classification='likely_present';label='Agency observed it recently';basis='An agency response explicitly observed the condition, and the location has not exceeded its adaptive quiet window.';}
+  if(observedNewer && nowDay-dayNumber(nycLocalDay(timeline.lastObserved))<=quietWindow){classification='likely_present';label='Agency observed it recently';basis='An agency response explicitly observed the condition, and the location has not exceeded its adaptive quiet window.';}
   else if(terminal && reportsAfterAction>=2 && silence<=quietWindow){classification='likely_present';label='Reported again after agency action';basis=`Reports returned on ${reportsAfterAction} distinct days after the latest clearance or no-condition response.`;}
-  else if(timeline.lastCleared && timeline.lastCleared>=Date.parse(isoDay(lastReportDay)) && nowDay-dayNumber(new Date(timeline.lastCleared).toISOString())>quietWindow){classification='likely_cleared';label='Likely cleared; no later reports';basis='The agency explicitly recorded corrective action, followed by a full location-specific quiet window with no later report day.';}
-  else if(timeline.lastNotObserved && timeline.lastNotObserved>=Date.parse(isoDay(lastReportDay)) && nowDay-dayNumber(new Date(timeline.lastNotObserved).toISOString())>quietWindow){classification='likely_absent';label='Not found; no later reports';basis='The agency explicitly did not observe the condition, followed by a full location-specific quiet window with no later report day.';}
+  else if(timeline.lastCleared && timeline.lastCleared>=Date.parse(isoDay(lastReportDay)) && nowDay-dayNumber(nycLocalDay(timeline.lastCleared))>quietWindow){classification='likely_cleared';label='Likely cleared; no later reports';basis='The agency explicitly recorded corrective action, followed by a full location-specific quiet window with no later report day.';}
+  else if(timeline.lastNotObserved && timeline.lastNotObserved>=Date.parse(isoDay(lastReportDay)) && nowDay-dayNumber(nycLocalDay(timeline.lastNotObserved))>quietWindow){classification='likely_absent';label='Not found; no later reports';basis='The agency explicitly did not observe the condition, followed by a full location-specific quiet window with no later report day.';}
   else if(silence>quietWindow){classification='dormant_unknown';label='Quiet now; outcome unknown';basis='Reports stopped for longer than this location’s normal recurrence window, but no explicit corrective outcome proves why.';}
   return {classification,label,basis,last_report_at:isoDay(lastReportDay),silence_days:silence,quiet_window_days:quietWindow,episode_count:episodes,report_days_after_latest_action:reportsAfterAction,last_observed_at:timeline.lastObserved?new Date(timeline.lastObserved).toISOString():null,last_cleared_at:timeline.lastCleared?new Date(timeline.lastCleared).toISOString():null,last_not_observed_at:timeline.lastNotObserved?new Date(timeline.lastNotObserved).toISOString():null,method_version:'311-condition-evidence-v1'};
 }
@@ -85,7 +123,7 @@ function enrichConditionEvidence(merged) {
         const lat=Number(row.lat),lng=Number(row.lng);if(!Number.isFinite(lat)||!Number.isFinite(lng))continue;
         const item=merged.get(`${layer}|${lat.toFixed(3)}|${lng.toFixed(3)}`);if(!item)continue;
         const day=dayNumber(row.created_date);if(Number.isFinite(day))item._timeline.reportDays.add(day);
-        const kind=resolutionEvidence(row.resolution_description),action=Date.parse(row.action_at||row.created_date||'');
+        const kind=resolutionEvidence(row.resolution_description),action=parseNycWallTime(row.action_at||row.created_date);
         if(kind&&Number.isFinite(action)){if(kind==='observed')item._timeline.lastObserved=Math.max(item._timeline.lastObserved,action);if(kind==='cleared')item._timeline.lastCleared=Math.max(item._timeline.lastCleared,action);if(kind==='not_observed')item._timeline.lastNotObserved=Math.max(item._timeline.lastNotObserved,action);}
       }
     }
@@ -155,6 +193,26 @@ function supported(layer, type, descriptor) {
 
 function isoDaysAgo(days) { return new Date(Date.now() - days * 86400000).toISOString().slice(0, 10) + 'T00:00:00.000'; }
 
+const cleanLocationText = value => String(value || '').trim().replace(/\s+/g, ' ');
+const titleCase = value => cleanLocationText(value).toLowerCase().replace(/\b[a-z]/g, letter => letter.toUpperCase());
+
+function recordReportedLocation(item, row, createdAt) {
+  const address = cleanLocationText(row.incident_address);
+  const borough = cleanLocationText(row.borough);
+  if (address && (createdAt > item._addressAt || (createdAt === item._addressAt && address.localeCompare(item._address || '') > 0))) {
+    item._address = address; item._addressAt = createdAt;
+  }
+  if (borough && (createdAt > item._boroughAt || (createdAt === item._boroughAt && borough.localeCompare(item._borough || '') > 0))) {
+    item._borough = borough; item._boroughAt = createdAt;
+  }
+}
+
+function reportedLocationLabel(item) {
+  if (item._address) return item._address;
+  const borough = titleCase(item._borough);
+  return borough ? `Approximate reported location in ${borough}` : 'Approximate reported location';
+}
+
 function buildEncampmentSites(now = new Date()) {
   if (!fs.existsSync(SIDEWALK_DB)) return null;
   const db = new DatabaseSync(SIDEWALK_DB, { readOnly: true });
@@ -165,7 +223,7 @@ function buildEncampmentSites(now = new Date()) {
     ORDER BY created_date`);
   const sites = new Map();
   for (const row of query.iterate(since)) {
-    const lat = Number(row.lat), lng = Number(row.lng), createdAt = Date.parse(row.created_date || '');
+    const lat = Number(row.lat), lng = Number(row.lng), createdAt = parseNycWallTime(row.created_date);
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(createdAt)) continue;
     // Four decimal places are roughly 11 m north/south and 8 m east/west in NYC. The point still
     // carries a wider uncertainty radius because 311 publishes an address geocode, not a GPS fix.
@@ -175,7 +233,7 @@ function buildEncampmentSites(now = new Date()) {
       id: `311-encampment-${roundedLat.toFixed(4)}-${roundedLng.toFixed(4)}`,
       layer: 'homelessness', subject_type: 'encampment', lat, lng, count: 0,
       first_seen: null, last_seen: null, _reportDays: new Map(), _events: new Map(),
-      _hasAddress: false,
+      _address: null, _addressAt: -Infinity, _borough: null, _boroughAt: -Infinity,
       responses: { nypd_responded: 0, nypd_observed_encampment: 0, dhs_outreach: 0 },
     };
     item.count += 1;
@@ -183,17 +241,24 @@ function buildEncampmentSites(now = new Date()) {
     if (!item.last_seen || row.created_date > item.last_seen) {
       item.last_seen = row.created_date; item.lat = lat; item.lng = lng;
     }
-    if (String(row.incident_address || '').trim()) item._hasAddress = true;
-    const day = new Date(createdAt).toISOString().slice(0, 10);
-    const report = item._reportDays.get(day) || { at: createdAt, count: 0 };
-    report.at = Math.max(report.at, createdAt); report.count += 1; item._reportDays.set(day, report);
+    recordReportedLocation(item, row, createdAt);
+    // NYC Open Data timestamps are local wall times without an offset. Preserve the source day
+    // and hour explicitly for the report-timing window instead of letting the host timezone shift
+    // them. One report-day event still feeds the presence model, preserving its dedupe semantics.
+    const localDay = String(row.created_date).slice(0, 10);
+    const localHour = Number(String(row.created_date).slice(11, 13));
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(localDay) ? localDay : new Date(createdAt).toISOString().slice(0, 10);
+    const report = item._reportDays.get(day) || { at: createdAt, count: 0, local_day: day, local_hours: new Set() };
+    report.at = Math.max(report.at, createdAt); report.count += 1;
+    if (Number.isInteger(localHour) && localHour >= 0 && localHour <= 23) report.local_hours.add(localHour);
+    item._reportDays.set(day, report);
 
     const text = String(row.resolution_description || '');
     const kind = classifyResolution(text, 'Encampment');
     if (kind) {
-      let actionAt = Date.parse(row.resolution_action_updated_date || row.closed_date || row.created_date || '');
+      let actionAt = parseNycWallTime(row.resolution_action_updated_date || row.closed_date || row.created_date);
       if (!Number.isFinite(actionAt) || actionAt < createdAt - 3600000) actionAt = createdAt;
-      const eventDay = new Date(actionAt).toISOString().slice(0, 10);
+      const eventDay = nycLocalDay(actionAt);
       const eventKey = `${eventDay}|${kind}`;
       const event = item._events.get(eventKey) || { type: kind, at: actionAt, count: 0 };
       event.at = Math.max(event.at, actionAt); event.count += 1; item._events.set(eventKey, event);
@@ -206,41 +271,21 @@ function buildEncampmentSites(now = new Date()) {
   }
   db.close();
 
-  const fieldEvents = new Map();
-  const ugcPath = path.join(DATA_DIR, 'ugc.db');
-  if (fs.existsSync(ugcPath)) {
-    const observations = new DatabaseSync(ugcPath, { readOnly: true });
-    const hasTable = observations.prepare("SELECT 1 found FROM sqlite_master WHERE type='table' AND name='condition_observations'").get();
-    if (hasTable) {
-      const sinceObservation = new Date(now.getTime() - 90 * 86400000).toISOString();
-      const rows = observations.prepare(`SELECT feature_id,state,date(observed_at) day,max(observed_at) observed_at,
-        count(distinct observer_hash) observers FROM condition_observations
-        WHERE observed_at>=? AND state IN ('present','absent') GROUP BY feature_id,state,date(observed_at)`).all(sinceObservation);
-      for (const row of rows) {
-        const list = fieldEvents.get(row.feature_id) || [];
-        const verified = Number(row.observers) >= 2;
-        list.push({ type: verified ? `verified_${row.state}` : `field_${row.state}`,
-          at: row.observed_at, count: Number(row.observers) || 1 });
-        fieldEvents.set(row.feature_id, list);
-      }
-    }
-    observations.close();
-  }
-
   const output = [];
   for (const item of sites.values()) {
     if (!pointInGeoJSON(item, NYC_BOUNDARY)) continue;
     const events = [
-      ...[...item._reportDays.values()].map(report => ({ type: 'public_report', ...report })),
+      ...[...item._reportDays.values()].map(report => ({ type: 'public_report', ...report, local_hours: [...report.local_hours] })),
       ...item._events.values(),
-      ...(fieldEvents.get(item.id) || []),
     ];
     const condition = estimatePresence(events, now);
-    // Shadow only: it is exposed for app experimentation and offline calibration, but condition
-    // remains the sole source for map inclusion and route avoidance until field-label validation
-    // demonstrates that the nowcast improves calibrated probability estimates.
-    const nowcast = estimateWalkNowcast(events, now);
-    const lastAgeDays = Math.max(0, (now.getTime() - Date.parse(item.last_seen || '')) / 86400000);
+    // Shadow only: it is exposed for app experimentation and offline evaluation, but condition
+    // remains the sole source for map inclusion and route avoidance. No promotion path exists
+    // until an independently audited held-out label set and evaluation protocol are established.
+    const locationUncertaintyM = item._address ? 35 : 45;
+    const locationMethod = 'NYC 311 reported coordinate, clustered to approximately 11 meters';
+    const nowcast = estimateWalkNowcast(events, now, { locationUncertaintyM, locationMethod });
+    const lastAgeDays = Math.max(0, (now.getTime() - parseNycWallTime(item.last_seen)) / 86400000);
     // Old, low-probability locations are neither useful map points nor route constraints. Keep
     // fresh negative checks briefly so the UI can explain why a recent report is not being avoided.
     if (lastAgeDays > 120 || (lastAgeDays > 30 && condition.routing_level === 'none')) continue;
@@ -248,18 +293,18 @@ function buildEncampmentSites(now = new Date()) {
     output.push({
       id: item.id, layer: item.layer, subject_type: item.subject_type,
       lat: item.lat, lng: item.lng, count: item.count, distinct_report_days: distinctReportDays,
+      address: reportedLocationLabel(item),
       complaint_type: 'Encampment', descriptor: condition.label,
       first_seen: item.first_seen, last_seen: item.last_seen, responses: item.responses,
       condition,
       nowcast,
-      field_observation_count: (fieldEvents.get(item.id) || []).reduce((sum, event) => sum + Number(event.count || 1), 0),
-      location_uncertainty_m: item._hasAddress ? 35 : 45,
-      location_method: 'NYC 311 reported coordinate, clustered to approximately 11 meters',
+      location_uncertainty_m: locationUncertaintyM,
+      location_method: locationMethod,
       source: 'NYC 311', source_url: 'https://data.cityofnewyork.us/d/erm2-nwe9',
     });
   }
   return output.sort((a, b) => Number(b.condition.presence_probability || 0) - Number(a.condition.presence_probability || 0)
-    || Date.parse(b.last_seen || '') - Date.parse(a.last_seen || ''));
+    || parseNycWallTime(b.last_seen) - parseNycWallTime(a.last_seen));
 }
 
 async function refresh311() {
@@ -380,16 +425,18 @@ async function main() {
       chronic_definition: { min_reports: MIN_REPORTS, min_span_days: MIN_SPAN_DAYS, recent_days: RECENT_DAYS, lookback_years: LOOKBACK_YEARS },
       condition_methodology: {
         version: METHOD_VERSION,
-        rule: 'Encampment presence is a latent-state probability updated by distinct report days, explicit agency observations, imperfect not-found checks, evidence age, and verified field observations. Only high-probability sites with recent corroboration become hard route exclusions; uncertain sites are soft scoring signals and likely-absent sites are not excluded.',
+        rule: 'Encampment presence is a versioned model score updated only by distinct 311 report days, explicit public-agency observations, imperfect not-found checks, and evidence age. Community submissions are stored as unreviewed material and never enter this model or route exclusions.',
         persistence: 'Old evidence relaxes toward an uncertain site prior with a 10-day half-life. Same-day duplicate reports are heavily discounted.',
-        validation: 'Parameters are checked with forward-chaining recurrence tests. In the current mirror, explicit observations predict faster corroboration than report-only events, while not-found checks are only weak negative evidence. NYPD condition-corrected language is treated as temporary because about nine in ten eligible corrected coordinates were reported again within seven days.',
-        limitations: 'NYC publishes address-geocoded 311 coordinates, not tent GPS fixes. The model estimates current presence near an approximately 11-meter coordinate cluster with a disclosed 35–45 meter location uncertainty; it cannot prove real-time presence without a fresh field check.',
+        validation: 'Parameters are checked with forward-chaining recurrence tests over public records. In the current mirror, explicit public-agency observations predict faster corroboration than report-only events, while not-found checks are only weak negative evidence. NYPD condition-corrected language is treated as temporary because about nine in ten eligible corrected coordinates were reported again within seven days.',
+        limitations: 'NYC publishes address-geocoded 311 coordinates, not tent GPS fixes. This score is not a calibrated probability or proof of current presence. Its numeric range is heuristic, not a statistical confidence interval. Community submissions do not alter it.',
       },
       walk_nowcast: {
         version: WALK_NOWCAST_METHOD_VERSION,
         rollout: 'shadow',
-        rule: 'The shadow nowcast adds separate recency, distinct-day frequency, and location-specific cadence features to the existing latent-state estimate. It is not a routing input and does not convert a passing walker into a positive or negative observation.',
-        promotion_gate: 'Promote only if time-split field-observation validation improves calibrated Brier score and does not increase the false-positive rate at the route-avoidance threshold.',
+        rule: 'The beta shadow forecast is an uncalibrated score over public 311 and agency evidence. Its optional three-hour window says when reports were most often submitted in NYC local time over the last 90 days. Each local day contributes one total unit distributed across its reported hours; weak, diffuse, all-day, and disconnected tied patterns are omitted.',
+        validation_status: 'No independently audited held-out ground-truth label set currently exists. The displayed score and range must not be described as a probability or confidence interval.',
+        promotion_gate: 'No promotion gate is defined. Establish an independently audited held-out label set and evaluation protocol before considering probability language or routing use.',
+        routing: 'The forecast remains display-only shadow data. Route scoring and hard exclusions continue to use the independently versioned condition model.',
       },
       caveats: [
         'Mapped ALPR locations are public observations, not a complete or live inventory.',
@@ -407,4 +454,5 @@ async function main() {
 
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
 
-module.exports = { manufacturer, layerFor, supported, resolutionEvidence, conditionEvidence, buildEncampmentSites, REGISTRY, LAYER_NAMES };
+module.exports = { manufacturer, layerFor, supported, resolutionEvidence, conditionEvidence, parseNycWallTime, nycLocalDay,
+  recordReportedLocation, reportedLocationLabel, buildEncampmentSites, REGISTRY, LAYER_NAMES };

@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const { DatabaseSync } = require('node:sqlite');
 
 const project = path.resolve(__dirname, '..');
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unignorable-test-'));
@@ -68,14 +69,18 @@ test('health and public assets are available with security headers', async () =>
   const root = await fetch(origin, { redirect: 'manual' });
   assert.equal(root.status, 200);
   const rootHtml = await root.text();
-  assert.match(rootHtml, /Where to\?/);
-  assert.match(rootHtml, /Selected locations become street exclusions/);
+  assert.match(rootHtml, /id="forecast-card"/);
+  assert.match(rootHtml, /Current condition estimate/);
+  assert.match(rootHtml, /Historical reports most often arrived/);
+  assert.match(rootHtml, /uncalibrated model score/);
+  assert.doesNotMatch(rootHtml, /% estimated presence/);
+  assert.match(rootHtml, /Plan a route around it/);
   assert.match(rootHtml, /Homeless \/ encampment reports/);
   assert.match(rootHtml, /Drug activity/);
   assert.match(rootHtml, /Download exact route \(GPX\)/);
   assert.match(rootHtml, /aria-autocomplete="list"/);
   assert.match(rootHtml, /routes are \$1\/day or \$25\/year/);
-  assert.match(rootHtml, /id="report-link" type="button">Report nearby<\/button>/);
+  assert.match(rootHtml, /id="report-link" type="button">Public record<\/button>/);
   assert.doesNotMatch(rootHtml, /id="report-panel"/);
   assert.doesNotMatch(rootHtml, /report-mode/);
   assert.match(rootHtml, /Public record \+ field updates/);
@@ -86,7 +91,7 @@ test('health and public assets are available with security headers', async () =>
   assert.match(rootHtml, /basemaps\.cartocdn\.com\/dark_all/);
   assert.match(rootHtml, /radius:cluster\?3:2\.5/);
   assert.match(rootHtml, /FULL_DETAIL_ZOOM=14/);
-  assert.match(rootHtml, /Outline shows severity|Severity outline legend/);
+  assert.match(rootHtml, /Evidence outline legend/);
   assert.match(rootHtml, /Choose each address from the list/);
   assert.doesNotMatch(rootHtml, /Build avoidance route/);
   assert.match(rootHtml, /OpenStreetMap Nominatim/);
@@ -94,9 +99,12 @@ test('health and public assets are available with security headers', async () =>
   assert.match(rootHtml, /regular-route settings are saved only in this browser/);
   assert.match(rootHtml, /id="filter-card"/);
   assert.match(rootHtml, /id="layers-toggle"/);
-  assert.match(rootHtml, /Selected layers show on the map and shape the route/);
-  assert.match(rootHtml, /map\.on\('zoomend',\(\)=>\{syncLayers\(\);drawReportIssues\(\);\}\)/);
-  assert.match(rootHtml, /else loadReportIssues\(\)/);
+  assert.match(rootHtml, /Selected layers show on the map and shape routes/);
+  assert.match(rootHtml, /map\.on\('zoomend',\(\)=>\{syncLayers\(\);drawReportIssues\(\);renderForecast\(\);\}\)/);
+  assert.doesNotMatch(rootHtml, /else loadReportIssues\(\)/);
+  assert.match(rootHtml, /fetch\('\/api\/condition-observations'/);
+  assert.match(rootHtml, /data-condition-state="present"/);
+  assert.match(rootHtml, /data-results-back/);
   assert.match(rootHtml, /\.legend\{display:none\}/);
   assert.match(rootHtml, /id="swap-route"/);
   assert.match(rootHtml, /id="discover-toggle"/);
@@ -323,13 +331,27 @@ test('residents can start or join a city-backed campaign', async () => {
   assert.doesNotMatch(campaignHtml, /organizer@example\.com/);
 });
 
-test('nearby field observations are deduplicated and distant submissions are rejected', async () => {
+test('nearby community submissions are saved unreviewed, deduplicated, and distance checked', async () => {
   const body = { feature_id: '311-encampment-1', state: 'present', lat: 40.746, lng: -73.987 };
   const first = await fetch(`${origin}/api/condition-observations`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '198.51.100.44' }, body: JSON.stringify(body),
   });
   assert.equal(first.status, 200);
-  assert.equal((await first.json()).accepted, true);
+  const firstPayload = await first.json();
+  assert.equal(firstPayload.accepted, true);
+  assert.equal(firstPayload.provenance, 'community_unreviewed');
+  assert.equal(firstPayload.review_status, 'unreviewed');
+  assert.equal(firstPayload.forecast_unchanged, true);
+  assert.match(firstPayload.message, /saved for review/i);
+  assert.match(firstPayload.message, /do not change the forecast/i);
+  const observationDb = new DatabaseSync(path.join(dataDir, 'ugc.db'), { readOnly: true });
+  const stored = observationDb.prepare(`SELECT provenance,review_status,model_score,model_version,model_contract_version,model_probability
+    FROM condition_observations WHERE feature_id=? ORDER BY id DESC LIMIT 1`).get(body.feature_id);
+  observationDb.close();
+  assert.deepEqual({ ...stored }, {
+    provenance: 'community_unreviewed', review_status: 'unreviewed', model_score: 0.79,
+    model_version: 'walk-nowcast-v3-shadow', model_contract_version: 'condition-forecast-v1', model_probability: null,
+  });
   const duplicate = await fetch(`${origin}/api/condition-observations`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '198.51.100.44' }, body: JSON.stringify(body),
   });

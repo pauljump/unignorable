@@ -1,4 +1,4 @@
-// Probabilistic current-condition estimates for noisy, opportunistic 311 observations.
+// Current-condition scores for noisy, opportunistic 311 observations.
 //
 // This is deliberately a small, inspectable state-space model. NYC 311 is not a scheduled
 // survey: a missing report is not an absence observation, and a closed request is not a cleanup.
@@ -6,7 +6,7 @@
 // relaxes old evidence toward an uncertain site prior instead of declaring stale reports true.
 
 const DAY_MS = 86400000;
-const METHOD_VERSION = 'encampment-presence-v2';
+const METHOD_VERSION = 'encampment-presence-v3';
 
 const PARAMETERS = Object.freeze({
   prior: 0.04,
@@ -20,10 +20,6 @@ const PARAMETERS = Object.freeze({
     temporary_correction: 0.7,
     services_accepted: 0.65,
     cleanup_reported: 0.12,
-    field_present: 8,
-    field_absent: 0.25,
-    verified_present: 40,
-    verified_absent: 0.08,
   }),
   hardExclusionProbability: 0.72,
   softExclusionProbability: 0.3,
@@ -74,12 +70,11 @@ function classifyResolution(value = '', complaintType = 'Encampment') {
 function evidenceSummary(events, nowMs) {
   const recent = days => events.filter(event => nowMs - event.at <= days * DAY_MS);
   const lastOf = types => events.slice().reverse().find(event => types.includes(event.type));
-  const directPositive = lastOf(['verified_present', 'observed_encampment']);
-  const directNegative = lastOf(['verified_absent', 'cleanup_reported', 'not_observed']);
-  const latestField = lastOf(['verified_present', 'verified_absent', 'field_present', 'field_absent']);
+  const directPositive = lastOf(['observed_encampment']);
+  const directNegative = lastOf(['cleanup_reported', 'not_observed']);
   const latestAgency = lastOf(['observed_encampment', 'person_contact', 'not_observed', 'temporary_correction', 'services_accepted', 'cleanup_reported']);
   const reportDays14 = new Set(recent(14).filter(event => event.type === 'public_report').map(event => new Date(event.at).toISOString().slice(0, 10))).size;
-  return { directPositive, directNegative, latestAgency, latestField, reportDays14 };
+  return { directPositive, directNegative, latestAgency, reportDays14 };
 }
 
 function estimatePresence(inputEvents, now = new Date(), parameters = PARAMETERS) {
@@ -91,7 +86,8 @@ function estimatePresence(inputEvents, now = new Date(), parameters = PARAMETERS
   if (!events.length) {
     return {
       classification: 'unknown', label: 'Current presence unknown', presence_probability: null,
-      probability_range: null, routing_level: 'none', hard_exclusion: false,
+      presence_score: null, score_semantics: 'uncalibrated_model_score', probability_range: null, score_range: null,
+      range_semantics: 'heuristic_score_range_not_confidence_interval', routing_level: 'none', hard_exclusion: false,
       basis: 'No usable observation timeline is available.', method_version: METHOD_VERSION,
     };
   }
@@ -132,11 +128,7 @@ function estimatePresence(inputEvents, now = new Date(), parameters = PARAMETERS
   const latest = events[events.length - 1];
   const lastReport = events.slice().reverse().find(event => event.type === 'public_report');
   let basis = 'The estimate combines report recurrence, evidence age, and imperfect agency detection.';
-  if (summary.latestField && summary.latestField.at >= Math.max(summary.directPositive?.at || 0, summary.directNegative?.at || 0)) {
-    basis = summary.latestField.type.endsWith('present')
-      ? 'A nearby app user reported seeing the condition; independent checks are required before treating it as verified.'
-      : 'A nearby app user reported it gone; independent checks are required before treating absence as verified.';
-  } else if (summary.directPositive && summary.directPositive.at >= (summary.directNegative?.at || 0)) {
+  if (summary.directPositive && summary.directPositive.at >= (summary.directNegative?.at || 0)) {
     basis = 'An agency explicitly observed an encampment; confidence falls quickly as that observation ages.';
   } else if (summary.directNegative && summary.directNegative.at >= (summary.directPositive?.at || 0)) {
     basis = summary.directNegative.type === 'cleanup_reported'
@@ -149,14 +141,17 @@ function estimatePresence(inputEvents, now = new Date(), parameters = PARAMETERS
   return {
     classification, label,
     presence_probability: Math.round(probability * 100) / 100,
+    presence_score: Math.round(probability * 100) / 100,
+    score_semantics: 'uncalibrated_model_score',
     probability_range: [Math.round(low * 100) / 100, Math.round(high * 100) / 100],
+    score_range: [Math.round(low * 100) / 100, Math.round(high * 100) / 100],
+    range_semantics: 'heuristic_score_range_not_confidence_interval',
     routing_level: hard ? 'hard' : soft ? 'soft' : 'none', hard_exclusion: hard,
     report_days_last_14: summary.reportDays14,
     last_evidence_at: iso(latest.at), last_report_at: lastReport ? iso(lastReport.at) : null,
     last_observed_at: summary.directPositive ? iso(summary.directPositive.at) : null,
     last_not_observed_at: summary.directNegative ? iso(summary.directNegative.at) : null,
     last_checked_at: summary.latestAgency ? iso(summary.latestAgency.at) : null,
-    last_field_observed_at: summary.latestField ? iso(summary.latestField.at) : null,
     basis, method_version: METHOD_VERSION,
   };
 }

@@ -32,6 +32,22 @@ final class RouteModel: ObservableObject {
 
     var selectedRoute: RouteChoice? { routes.first(where: { $0.id == selectedRouteID }) ?? routes.first }
 
+    /// The nearest usable presence forecast to the map's focal point. Other evidence
+    /// stays available through map-content controls instead of competing on arrival.
+    var primaryForecast: MapFeature? {
+        let candidates = (mapFeatures[LayerDefinition.homelessness.rawValue] ?? []).filter {
+            $0.subjectType == "encampment" && $0.forecastScore != nil
+        }
+        let likelyCandidates = candidates.filter { ($0.forecastScore ?? 0) >= 0.45 }
+        let pool = likelyCandidates.isEmpty ? candidates : likelyCandidates
+        let center = CLLocation(latitude: visibleRegion.center.latitude, longitude: visibleRegion.center.longitude)
+        return pool.min { left, right in
+            let leftDistance = center.distance(from: CLLocation(latitude: left.lat, longitude: left.lng))
+            let rightDistance = center.distance(from: CLLocation(latitude: right.lat, longitude: right.lng))
+            return leftDistance < rightDistance
+        }
+    }
+
     func load() async {
         if let response = try? await api.mapLayers() { mapFeatures = response.layers }
     }
@@ -191,6 +207,23 @@ final class RouteModel: ObservableObject {
         let lats = points.map(\.latitude), lngs = points.map(\.longitude)
         let center = CLLocationCoordinate2D(latitude: (lats.min()! + lats.max()!) / 2, longitude: (lngs.min()! + lngs.max()!) / 2)
         position = .region(.init(center: center, span: .init(latitudeDelta: max(0.012, (lats.max()! - lats.min()!) * 1.45), longitudeDelta: max(0.012, (lngs.max()! - lngs.min()!) * 1.45))))
+    }
+
+    func focusForecast(_ feature: MapFeature) {
+        focusForecast(at: feature.coordinate)
+    }
+
+    func focusForecast(at coordinate: CLLocationCoordinate2D) {
+        let region = MKCoordinateRegion(
+            center: coordinate,
+            span: .init(latitudeDelta: 0.012, longitudeDelta: 0.012)
+        )
+        visibleRegion = region
+        position = .region(region)
+    }
+
+    func forecastPlaces(matching query: String) async -> [Place] {
+        await places(matching: query)
     }
 
     func loadBikes() async {

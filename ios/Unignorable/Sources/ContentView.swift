@@ -3,10 +3,13 @@ import SwiftUI
 
 private enum SearchField: Hashable { case origin, destination }
 private enum ActiveSheet: Identifiable {
-    case controls(RouteOptionFocus), directions, feature(MapFeature), reportIssue(ReportIssue)
+    case forecastLocation, planner, controls(RouteOptionFocus), mapContent, directions, feature(MapFeature), reportIssue(ReportIssue)
     var id: String {
         switch self {
+        case .forecastLocation: "forecast-location"
+        case .planner: "planner"
         case .controls(let focus): "controls-\(focus.rawValue)"
+        case .mapContent: "map-content"
         case .directions: "directions"
         case .feature(let feature): "feature-\(feature.id)"
         case .reportIssue(let issue): "report-\(issue.id)"
@@ -21,6 +24,7 @@ struct ContentView: View {
     @StateObject private var location = LocationManager()
     @State private var activeSheet: ActiveSheet?
     @State private var selectedReportMarkerID: String?
+    @State private var showPublicRecords = false
     @FocusState private var focusedField: SearchField?
 
     var body: some View {
@@ -29,9 +33,13 @@ struct ContentView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                planner
+                topBar
                 Spacer()
-                if let route = model.selectedRoute { routeCard(route) }
+                if let route = model.selectedRoute {
+                    routeCard(route)
+                } else {
+                    forecastCard
+                }
             }
         }
         .task { await model.load() }
@@ -46,7 +54,10 @@ struct ContentView: View {
         .onReceive(location.$errorMessage) { message in if let message { model.status = message } }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
+            case .forecastLocation: ForecastLocationView()
+            case .planner: plannerSheet
             case .controls(let focus): ControlsView(focus: focus)
+            case .mapContent: mapContentSheet
             case .directions: DirectionsView()
             case .feature(let feature): FeatureDetailView(feature: feature)
             case .reportIssue(let issue): ReportIssueDetailView(issue: issue)
@@ -77,7 +88,17 @@ struct ContentView: View {
                 Annotation("Stop", coordinate: via.coordinate) { endpointMarker("C", color: AppTheme.mint) }
             }
 
-            ForEach(model.visibleFeatures.filter { $0.layer != "homelessness" && $0.layer != "drugs" }) { feature in
+            if let forecast = model.primaryForecast {
+                Annotation("Presence forecast", coordinate: forecast.coordinate) {
+                    Button { activeSheet = .feature(forecast) } label: {
+                        forecastMarker(forecast)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("forecast-map-marker")
+                }
+            }
+
+            ForEach(model.visibleFeatures.filter { $0.id != model.primaryForecast?.id }) { feature in
                 Annotation("", coordinate: feature.coordinate) {
                     if feature.condition?.routingLevel == "hard"
                         || (feature.subjectType == "encampment" && model.visibleRegion.span.latitudeDelta < 0.015) {
@@ -106,7 +127,7 @@ struct ContentView: View {
                 }
             }
 
-            ForEach(reportModel.markers) { marker in
+            ForEach(showPublicRecords ? reportModel.markers : []) { marker in
                 Annotation("", coordinate: marker.coordinate) {
                     IssueDot(color: reportColor(for: marker.type), severity: marker.severity)
                         .accessibilityLabel(marker.issue == nil ? "Issue cluster; zoom in" : marker.type)
@@ -178,6 +199,197 @@ struct ContentView: View {
     private func zoomReportMarker(_ marker: ReportMarker) {
         let next = max(0.012, model.visibleRegion.span.latitudeDelta / 3)
         model.position = .region(.init(center: marker.coordinate, span: .init(latitudeDelta: next, longitudeDelta: next)))
+    }
+
+    private var topBar: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("unignorable").font(.headline.bold())
+                Text("NYC condition forecasts").font(.caption2).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button { activeSheet = .forecastLocation } label: {
+                Image(systemName: "location.magnifyingglass")
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel("Choose forecast location")
+            .accessibilityIdentifier("forecast-location-button")
+
+            Button { activeSheet = .mapContent } label: {
+                Image(systemName: "square.stack.3d.up")
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel("Map evidence and public records")
+
+            Button { activeSheet = .planner } label: {
+                Label("Walk", systemImage: "figure.walk")
+                    .font(.subheadline.bold())
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(AppTheme.coral)
+            .accessibilityIdentifier("plan-walk-button")
+        }
+        .padding(10)
+        .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+        .shadow(color: .black.opacity(0.14), radius: 10, y: 4)
+        .padding(.horizontal, 10)
+        .padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private var forecastCard: some View {
+        if let feature = model.primaryForecast {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Label("CURRENT CONDITION FORECAST", systemImage: "location.fill.viewfinder")
+                        .font(.caption2.bold())
+                        .foregroundStyle(AppTheme.coral)
+                    Spacer()
+                    if feature.isExperimentalForecast {
+                        Text("EXPERIMENTAL")
+                            .font(.caption2.bold())
+                            .foregroundStyle(AppTheme.amber)
+                    }
+                }
+
+                Text(feature.forecastTitle)
+                    .font(.title2.bold())
+                    .accessibilityIdentifier("forecast-title")
+
+                Button { activeSheet = .forecastLocation } label: {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "mappin.and.ellipse")
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(forecastLocation(feature)).font(.subheadline.bold())
+                            Text(forecastLocationArea(feature))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+                }
+                .buttonStyle(.plain)
+
+                Label(forecastFreshness(feature), systemImage: "clock")
+                    .font(.subheadline)
+
+                if feature.reportTimingIsStrongEnoughForPrimary, let timing = feature.reportTimingLabel {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("HISTORICAL REPORT PATTERN")
+                            .font(.caption2.bold())
+                            .foregroundStyle(AppTheme.muted)
+                        Label(timing, systemImage: "clock.arrow.circlepath")
+                            .font(.caption.bold())
+                        Text("This is when reports arrived—not when people will be present.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(9)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(AppTheme.raised.opacity(0.8), in: RoundedRectangle(cornerRadius: 10))
+                }
+
+                HStack(spacing: 8) {
+                    Button {
+                        model.filters.insert(.homelessness)
+                        model.visibleLayers.insert(.homelessness)
+                        activeSheet = .planner
+                    } label: {
+                        Label("Route around", systemImage: "figure.walk")
+                            .frame(maxWidth: .infinity, minHeight: 38)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.coral)
+
+                    Button { activeSheet = .feature(feature) } label: {
+                        Label("Why / verify", systemImage: "checkmark.shield")
+                            .frame(maxWidth: .infinity, minHeight: 38)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .padding(14)
+            .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: .black.opacity(0.18), radius: 12, y: -3)
+            .padding(10)
+        } else {
+            HStack(spacing: 10) {
+                ProgressView()
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Finding a forecast near map center…").font(.subheadline.bold())
+                    Text("Public evidence remains hidden until you ask for it.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(14)
+            .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .padding(10)
+        }
+    }
+
+    private var plannerSheet: some View {
+        NavigationStack {
+            ScrollView { planner.padding(.bottom, 24) }
+                .background(AppTheme.background)
+                .navigationTitle("Plan a walking route")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { activeSheet = nil } }
+                }
+        }
+        .presentationDetents([.large])
+    }
+
+    private var mapContentSheet: some View {
+        NavigationStack {
+            List {
+                Section("Modeled map evidence") {
+                    ForEach(LayerDefinition.allCases) { layer in
+                        Toggle(isOn: visibleLayerBinding(layer)) {
+                            Label(layer.title, systemImage: layer.symbol)
+                        }
+                    }
+                }
+
+                Section {
+                    Toggle("Show public-record dots", isOn: $showPublicRecords)
+                    if showPublicRecords {
+                        ForEach(ReportModel.types, id: \.self) { type in
+                            Toggle(type, isOn: reportTypeBinding(type))
+                        }
+                    }
+                } header: {
+                    Text("Raw public records")
+                } footer: {
+                    Text("A report is evidence, not proof that a condition is present now. These records never identify an individual.")
+                }
+
+                Section("Inspect") {
+                    Button { inspectReportCenter() } label: {
+                        Label("Open the record nearest map center", systemImage: "exclamationmark.bubble.fill")
+                    }
+                }
+
+                Section("Data and privacy") {
+                    Text("Address searches are sent to the Unignorable service and its public geocoder. Walking-route coordinates are sent to the routing service. The server does not retain trip history.")
+                    Text("Precise location is requested only when you choose a location action. A verification coordinate is proximity-checked and discarded; no raw location history is stored.")
+                    Link(destination: URL(string: "https://data.cityofnewyork.us/d/erm2-nwe9")!) {
+                        Label("NYC 311 source", systemImage: "arrow.up.right.square")
+                    }
+                }
+            }
+            .navigationTitle("Map evidence")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { activeSheet = nil } }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     private var planner: some View {
@@ -475,6 +687,82 @@ struct ContentView: View {
         case "Panhandling": AppTheme.amber
         default: AppTheme.muted
         }
+    }
+
+    private func forecastMarker(_ feature: MapFeature) -> some View {
+        ZStack {
+            Circle()
+                .fill(AppTheme.coral.opacity(0.2))
+                .frame(width: 50, height: 50)
+            Circle()
+                .fill(AppTheme.coral)
+                .frame(width: 28, height: 28)
+                .overlay(Circle().stroke(.white, lineWidth: 2))
+            Image(systemName: "location.fill")
+                .font(.system(size: 11, weight: .black))
+                .foregroundStyle(.white)
+        }
+        .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+        .accessibilityLabel(feature.forecastTitle)
+        .accessibilityValue(forecastLocation(feature))
+    }
+
+    private func forecastLocation(_ feature: MapFeature) -> String {
+        if let address = feature.address?.trimmingCharacters(in: .whitespacesAndNewlines), !address.isEmpty {
+            return "Near \(address)"
+        }
+        let target = CLLocation(latitude: feature.lat, longitude: feature.lng)
+        let nearby = reportModel.issues
+            .filter { $0.type == "Encampment" && $0.status == "active" }
+            .compactMap { issue -> (ReportIssue, CLLocationDistance)? in
+                guard let address = issue.addr?.trimmingCharacters(in: .whitespacesAndNewlines), !address.isEmpty else { return nil }
+                let distance = target.distance(from: CLLocation(latitude: issue.lat, longitude: issue.lng))
+                return distance <= 160 ? (issue, distance) : nil
+            }
+            .min { $0.1 < $1.1 }?
+            .0
+        if let address = nearby?.addr {
+            return "Near \(address.capitalized)"
+        }
+        return String(format: "Near map center · %.4f, %.4f", feature.lat, feature.lng)
+    }
+
+    private func forecastLocationArea(_ feature: MapFeature) -> String {
+        if let meters = feature.forecastLocationRadiusM {
+            return "Approximate area · about \(Int(meters.rounded())) m radius"
+        }
+        return "Approximate reported area · not an exact point"
+    }
+
+    private func forecastFreshness(_ feature: MapFeature) -> String {
+        guard let value = feature.nowcast?.asOf, let date = forecastDate(value) else {
+            return "Current-presence estimate"
+        }
+        return "Current-presence estimate · updated \(date.formatted(.relative(presentation: .named)))"
+    }
+
+    private func forecastDate(_ value: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+    }
+
+    private func visibleLayerBinding(_ layer: LayerDefinition) -> Binding<Bool> {
+        Binding(
+            get: { model.visibleLayers.contains(layer) },
+            set: { enabled in
+                if enabled { model.visibleLayers.insert(layer) } else { model.visibleLayers.remove(layer) }
+            }
+        )
+    }
+
+    private func reportTypeBinding(_ type: String) -> Binding<Bool> {
+        Binding(
+            get: { reportModel.enabledTypes.contains(type) },
+            set: { enabled in
+                if enabled { reportModel.enabledTypes.insert(type) } else { reportModel.enabledTypes.remove(type) }
+            }
+        )
     }
 
     private func marker(for feature: MapFeature) -> some View {

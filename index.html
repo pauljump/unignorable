@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="description" content="Build driving and walking routes around selected NYC license plate cameras and public 311 report clusters.">
-  <title>Unignorable — move through NYC with context</title>
+  <meta name="description" content="See what recurring civic condition is likely at an NYC location, when it is most often reported, and the evidence behind the forecast.">
+  <title>Unignorable — know what is likely here, and when</title>
   <link rel="stylesheet" href="/vendor/leaflet.css">
   <style>
     :root{--ink:#181916;--paper:#f3f0e8;--panel:#fffdf8;--muted:#6c6b63;--line:#d9d4c8;--red:#ff5b45;--amber:#f5aa3c;--blue:#2c7be5;--green:#328b65;--purple:#7b62d9;--shadow:0 18px 48px #17181222;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink)}
@@ -45,31 +45,51 @@
     @media(max-width:720px){.planner-top{margin-bottom:5px}.planner h1{font-size:19px}.planner-brand b{font-size:13px}.section-link{max-width:102px;overflow:hidden;text-overflow:ellipsis}.mode-picker{margin-bottom:4px}.field{margin-top:4px}.field input{min-height:34px!important}.planner-actions{margin-top:5px}.filters.open .filter-grid{max-height:185px}.results{max-height:min(48vh,430px)}.results:has(.directions[open]){max-height:min(66vh,590px)}.route-summary b{font-size:21px}.direction-step{grid-template-columns:28px 1fr auto;padding:10px 1px}.directions:not([open]) .direction-step{display:none}}
     .report-detail{display:none;position:fixed;z-index:1150;left:16px;bottom:16px;width:min(390px,calc(100vw - 32px));padding:0;overflow:auto;max-height:min(68vh,650px)}.report-detail.open{display:block}.record-open #results{display:none}.report-detail-head{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;padding:11px 13px;background:rgba(14,20,32,.98);border-bottom:1px solid var(--line)}.report-detail-head b{font-size:12px}.report-close{border:0;border-radius:8px;background:#16202f;color:var(--ink);padding:6px 9px}.report-body{padding:13px}.report-kicker{font-size:9px;font-weight:850;letter-spacing:.09em;color:var(--red)}.report-body h2{font-size:18px;line-height:1.2;letter-spacing:-.035em;margin:6px 0 4px}.report-place,.report-note{color:var(--muted);font-size:10px;line-height:1.45}.report-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:11px;overflow:hidden;margin:11px 0}.report-fact{background:#0b111c;padding:9px 5px;text-align:center}.report-fact b{display:block;font-size:16px}.report-fact span{display:block;color:var(--muted);font-size:8px;margin-top:2px}.report-headline{font-size:12px;line-height:1.45;margin:9px 0}.report-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:10px 0}.report-actions button,.report-actions a,.report-submit{display:flex;align-items:center;justify-content:center;min-height:40px;border:1px solid var(--line);border-radius:10px;background:#16202f;color:var(--ink);font-size:11px;font-weight:750;text-decoration:none;text-align:center;padding:8px}.report-actions .confirm,.report-submit{background:var(--red);border-color:var(--red);color:#fff}.report-verdict{border:1px solid var(--line);border-radius:10px;background:#0a0f18;padding:10px;font-size:11px;font-weight:750}.report-thread{display:grid;gap:6px;margin-top:7px}.report-post{border:1px solid var(--line);border-radius:9px;background:#111a28;padding:8px;font-size:10px;line-height:1.4}.report-post b{color:var(--amber)}.report-form{display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}.report-form.open{display:block}.report-form textarea{width:100%;min-height:72px;resize:vertical;border:1px solid var(--line);border-radius:10px;background:#0a0f18;color:var(--ink);padding:9px;font:inherit;font-size:11px}.report-statuses{display:flex;gap:5px;overflow-x:auto;margin:7px 0}.report-status-choice{flex:none;border:1px solid var(--line);border-radius:999px;background:#0b111c;color:var(--muted);padding:6px 8px;font-size:10px}.report-status-choice.on{border-color:var(--amber);color:var(--ink);background:#1c1608}.report-upload{display:flex;align-items:center;gap:7px;margin:7px 0;color:var(--muted);font-size:10px}.report-upload input{min-width:0;width:100%}.report-message{color:var(--amber);font-size:10px;line-height:1.4;margin-top:7px}.map-report-action{border:0;border-radius:8px;background:var(--red);color:white;padding:7px 9px;font-size:10px;font-weight:750;margin-top:7px}
     @media(max-width:720px){.report-detail{left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));width:auto;max-height:min(58vh,570px)}.report-body{padding:11px}.report-actions{grid-template-columns:1fr 1fr}}
+
+    /* Prediction-first shell: the claim is primary; tools and raw layers are opt-in. */
+    [hidden]{display:none!important}.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}.shell{width:min(410px,calc(100vw - 32px));overflow:auto;padding-right:2px}.forecast{padding:15px}.forecast-top{display:flex;align-items:center;justify-content:space-between;gap:12px}.wordmark{font-size:15px;letter-spacing:-.04em}.forecast-nav{display:flex;align-items:center;gap:6px}.forecast .icon-btn{min-width:44px;min-height:44px}.forecast-search{position:relative;margin-top:13px}.forecast-search .field{grid-template-columns:30px 1fr auto;margin:0}.forecast-search .field span{color:var(--amber)}.forecast-search .locate{margin:2px;min-width:44px;min-height:44px;padding:5px 9px}.suggestion{min-height:44px}.forecast-body{padding:17px 2px 2px}.forecast-kicker{display:flex;align-items:center;gap:7px;color:var(--red);font-size:9px;font-weight:850;letter-spacing:.12em;text-transform:uppercase}.forecast-kicker::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 0 5px #ff5a471a}.forecast h1{font-size:28px;line-height:1.03;letter-spacing:-.055em;margin:12px 0 6px}.forecast-place{color:var(--muted);font-size:12px;line-height:1.4}.forecast-window{margin:16px 0 0;padding:12px;border:1px solid #3d3018;border-radius:12px;background:#151307}.forecast-window span{display:block;color:var(--amber);font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase}.forecast-window b{display:block;margin-top:4px;font-size:17px;line-height:1.2;letter-spacing:-.025em}.forecast-window small{display:block;margin-top:5px;color:var(--muted);font-size:9px;line-height:1.35}.forecast-confidence{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;color:var(--muted);font-size:10px}.confidence-pill{padding:4px 7px;border:1px solid var(--line);border-radius:999px;color:var(--ink);font-weight:750}.forecast-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:15px}.forecast-actions button{min-height:44px;border:1px solid var(--line);border-radius:11px;background:#16202f;color:var(--ink);font-size:11px;font-weight:800;padding:8px 10px}.forecast-actions .forecast-route{background:var(--red);border-color:var(--red);color:white}.forecast-safety{margin:8px 1px 0;color:var(--muted);font-size:9px;line-height:1.4}.forecast-check{margin-top:11px;padding:12px;border:1px solid var(--line);border-radius:12px;background:#0a0f18}.forecast-check-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.forecast-check h2{font-size:14px;margin:0}.forecast-check p{margin:6px 0 10px;color:var(--muted);font-size:10px;line-height:1.45}.condition-choices{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.condition-choices button{min-height:44px;border:1px solid var(--line);border-radius:9px;background:#16202f;color:var(--ink);font-size:10px;font-weight:750}.condition-choices button:first-child{border-color:var(--red)}.condition-choices button:disabled{opacity:.5}.condition-status{min-height:14px;margin-top:8px;color:var(--amber);font-size:10px;line-height:1.4}.forecast-evidence{margin-top:11px;padding-top:10px;border-top:1px solid var(--line)}.forecast-evidence summary,.tool-summary{cursor:pointer;color:var(--amber);font-size:11px;font-weight:750;min-height:44px;display:flex;align-items:center}.forecast-evidence p{margin:2px 0 0;color:var(--muted);font-size:10px;line-height:1.5}.forecast-evidence dl{display:grid;grid-template-columns:auto 1fr;gap:5px 9px;margin:9px 0 0;font-size:10px}.forecast-evidence dt{color:var(--muted)}.forecast-evidence dd{margin:0;text-align:right}.planner{padding:12px}.planner-top{margin-bottom:9px}.planner h2{font-size:16px;letter-spacing:-.035em;margin:0}.close-tool{min-height:44px;border:0;background:transparent;color:var(--amber);font-size:11px;font-weight:750;padding:7px}.tool-drawer{pointer-events:auto}.tool-drawer>summary{list-style:none;padding:11px 14px;min-height:44px}.tool-drawer>summary::-webkit-details-marker{display:none}.tool-drawer[open]>summary{border-bottom:1px solid var(--line)}.tool-drawer .filters{border:0;border-radius:0;box-shadow:none;background:transparent}.results-back{width:100%;min-height:44px;margin-bottom:9px;border:1px solid var(--line);border-radius:10px;background:#16202f;color:var(--amber);font-size:11px;font-weight:800}.legend{width:225px}.legend details summary{cursor:pointer;font-size:10px;color:var(--amber);margin-top:6px}.legend details p{margin-top:7px}.legend .source-line{display:none}.legend details[open] .source-line{display:flex}.forecast-empty h1{font-size:23px}.forecast-empty .forecast-window{display:none}.forecast-pin{width:14px;height:14px;border:2px solid #fff;border-radius:50%;background:var(--red);box-shadow:0 0 0 6px #ff5a4738}.leaflet-control-zoom{margin-left:430px!important}
+    @media(max-width:720px){.shell{width:auto;max-height:calc(100vh - 16px);overflow:auto}.forecast{padding:12px}.forecast h1{font-size:25px}.forecast-body{padding-top:13px}.forecast-window{margin-top:12px}.forecast-actions{margin-top:12px}.planner h2{font-size:15px}.tool-drawer>summary{padding:10px 11px}.legend{display:none}.leaflet-control-zoom{margin-left:10px!important;margin-top:380px!important}.shell.has-results .forecast,.shell.has-results .tool-drawer{display:none}.shell.has-results .planner{display:none}}
   </style>
 </head>
 <body>
 <main id="app">
   <div id="map" aria-label="Interactive map of New York City civic conditions"></div>
-  <section class="shell" id="shell" aria-label="Route planner and map controls">
-    <form class="card planner" id="route-form">
-      <div class="planner-top"><h1>Where to?</h1><div class="planner-brand"><b>unignorable</b><button class="icon-btn section-link" id="report-link" type="button">Report nearby</button><button class="icon-btn" id="about-open" type="button" aria-label="About this map">ⓘ</button></div></div>
+  <section class="shell" id="shell" aria-label="Location forecast and map controls">
+    <section class="card forecast" id="forecast-card" tabindex="-1" aria-labelledby="forecast-title">
+      <div class="forecast-top"><b class="wordmark">unignorable</b><div class="forecast-nav"><button class="icon-btn section-link" id="report-link" type="button">Public record</button><button class="icon-btn" id="about-open" type="button" aria-label="About these forecasts">ⓘ</button></div></div>
+      <div class="sr-only" id="forecast-status" role="status" aria-live="polite"></div>
+      <div class="forecast-search"><label class="field"><span aria-hidden="true">⌕</span><input id="forecast-location" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="forecast-location-suggestions" placeholder="Search an NYC place" aria-label="Choose a place to forecast"><button class="locate" id="forecast-locate" type="button" title="Use current location" aria-label="Use current location">◎</button></label><div class="suggestions" id="forecast-location-suggestions" role="listbox"></div></div>
+      <div class="forecast-body forecast-empty" id="forecast-body">
+        <div class="forecast-kicker" id="forecast-kicker">Current condition estimate</div>
+        <h1 id="forecast-title">Reading this area…</h1>
+        <div class="forecast-place" id="forecast-place">Move the map or search for a place.</div>
+        <div class="forecast-window" id="forecast-window-box"><span id="forecast-window-label">Historical reporting pattern</span><b id="forecast-window">Checking for a reliable pattern…</b><small>Report timing only—not when people will be present.</small></div>
+        <div class="forecast-confidence" id="forecast-confidence"><span class="confidence-pill">Beta forecast</span><span>Public evidence, not a live inventory</span></div>
+        <div class="forecast-actions"><button class="forecast-route" id="forecast-route" type="button" aria-expanded="false" aria-controls="route-form">Plan around it</button><button id="forecast-verify" type="button">Verify what’s here</button></div>
+        <p class="forecast-safety">Verify the condition, not people. Do not photograph or characterize anyone.</p>
+        <section class="forecast-check" id="forecast-check" hidden aria-labelledby="forecast-check-title"><div class="forecast-check-head"><h2 id="forecast-check-title">Check this forecast</h2><button class="close-tool" id="forecast-check-close" type="button">Close</button></div><p>Only report the condition from this location. Do not photograph or characterize people. Your proximity is checked; no trip or raw location history is stored.</p><div class="condition-choices"><button type="button" data-condition-state="present">Still here</button><button type="button" data-condition-state="absent">Gone</button><button type="button" data-condition-state="uncertain">Can’t tell</button></div><div class="condition-status" id="condition-status" aria-live="polite"></div></section>
+        <details class="forecast-evidence" id="forecast-evidence"><summary>Why we think this</summary><p id="forecast-basis">We combine recurring condition reports, how recent they are, and public agency observations when available. Scores are uncalibrated heuristics, not measured probabilities.</p><dl><dt>Location</dt><dd id="forecast-location-detail">Approximate</dd><dt>Model score</dt><dd id="forecast-score">Loading…</dd><dt>Score range</dt><dd id="forecast-range">Loading…</dd><dt>Evidence tier</dt><dd id="forecast-tier">Loading…</dd><dt>Last signal</dt><dd id="forecast-recency">Loading…</dd><dt>Report timing</dt><dd id="forecast-time-detail">Not enough history</dd></dl></details>
+      </div>
+    </section>
+    <form class="card planner" id="route-form" hidden>
+      <div class="planner-top"><h2>Plan a route around it</h2><button class="close-tool" id="route-close" type="button">Close</button></div>
       <div class="mode-picker" role="group" aria-label="Travel mode"><button type="button" data-profile="driving" aria-pressed="true">Drive</button><button type="button" data-profile="walking" aria-pressed="false">Walk</button></div>
       <div class="route-fields"><div class="address-wrap"><label class="field"><span>A</span><input id="origin" name="origin" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="origin-suggestions" placeholder="Choose starting point" required></label><div class="suggestions" id="origin-suggestions" role="listbox"></div></div>
       <div class="address-wrap"><label class="field"><span>B</span><input id="destination" name="destination" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="destination-suggestions" placeholder="Choose destination" required></label><div class="suggestions" id="destination-suggestions" role="listbox"></div></div><button class="swap-route" id="swap-route" title="Swap start and destination" aria-label="Swap start and destination" type="button">↕</button></div>
       <div class="via-stop" id="via-stop" hidden><b>C</b><span id="via-name"></span><button id="remove-via" type="button" aria-label="Remove stop">×</button></div>
       <div class="planner-actions"><span class="route-hint" id="route-hint">Map is free · routes are $1/day or $25/year</span><button class="locate" id="locate" type="button" title="Use current location">◎</button></div>
     </form>
-    <section class="card filters" id="filter-card" aria-label="Map and route awareness filters">
-      <div class="section-head"><div><b>Route around</b><span class="layer-status" id="layer-status">1 active</span></div><div><button class="discover-toggle" id="discover-toggle" type="button" aria-expanded="false">Add a stop</button><button id="toggle-all" type="button">Clear</button><button class="layers-toggle" id="layers-toggle" type="button" aria-expanded="false" aria-controls="filters">Edit</button></div></div>
-      <div class="filter-grid" id="filters"></div>
-      <p class="layer-hint" id="layer-hint">Selected layers show on the map and shape the route.</p>
-      <div class="discover" id="discover"><p>Show useful live places near your route. Tap a pin to add it as a stop without changing your destination.</p><button class="discover-choice" id="citibike-toggle" type="button" aria-pressed="false"><span>Live Citi Bike <small>available bikes + docks</small></span><span>+</span></button></div>
-    </section>
+    <details class="card tool-drawer" id="map-tools"><summary class="tool-summary">More map layers, data and stops</summary><section class="filters" id="filter-card" aria-label="Map and route awareness filters">
+        <div class="section-head"><div><b>Show and route around</b><span class="layer-status" id="layer-status">1 selected</span></div><div><button class="discover-toggle" id="discover-toggle" type="button" aria-expanded="false">Citi Bike</button><button id="toggle-all" type="button">Clear</button><button class="layers-toggle" id="layers-toggle" type="button" aria-expanded="false" aria-controls="filters">Edit</button></div></div>
+        <div class="filter-grid" id="filters"></div>
+        <p class="layer-hint" id="layer-hint">Selected layers show on the map and shape routes.</p>
+        <div class="discover" id="discover"><p>Show live Citi Bike stations near your route, then tap a station to add it as a stop.</p><button class="discover-choice" id="citibike-toggle" type="button" aria-pressed="false"><span>Live Citi Bike <small>available bikes + docks</small></span><span>+</span></button></div>
+      </section></details>
     <section class="card results" id="results" hidden aria-live="polite"></section>
     <section class="card report-detail" id="report-detail" aria-label="Public issue record" aria-live="polite"></section>
   </section>
-  <aside class="card legend" id="legend"><b>Public observations, not a live inventory</b><p id="freshness">Loading source details…</p><div class="severity-key" aria-label="Severity outline legend"><span><i class="severity-dot"></i>lower</span><span><i class="severity-dot elevated"></i>elevated</span><span><i class="severity-dot high"></i>highest</span></div><div class="source-line"><span id="feature-count">—</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">Map/data sources</a></div></aside>
-  <div class="about" id="about" role="dialog" aria-modal="true" aria-labelledby="about-title"><article class="card"><button class="close" id="about-close" type="button">Close</button><h2 id="about-title">What this map means</h2><p>Unignorable combines public map observations with recurring NYC 311 reports. It shows license plate cameras, homelessness and encampment reports, drug activity reports, dumping, broken sidewalks, bad roads, and broken lights or signals. “Flock Safety” appears only when the public manufacturer tag says Flock.</p><p>Selected locations become street exclusions during driving or walking route generation. Routes update automatically. Walking candidates avoid ferries and are rejected when avoidance would add more than 30% travel time or 35% distance. Public reports can be wrong or stale; no layer identifies an individual or proves a condition is present now.</p><p>When 311 resolution text explicitly says NYPD or DHS responded, the popup says so and gives the count. Address searches go to OpenStreetMap Nominatim; routing uses public Valhalla. Your regular-route settings are saved only in this browser.</p><p>The exact generated line stays visible here and can be downloaded as GPX. Google and Apple receive an intentional stop plus up to three shaping points, but either app can recalculate.</p><p>Browsing the map is free. A one-time $1 pass unlocks routes for 24 hours on this browser; a one-time $25 pass unlocks them for one year.</p><div class="legacy"><a href="/issues">Full records board</a><a href="/hotspots">Accountability hotspots</a><a href="/c?t=Encampment&id=40.736%2C-73.983">Campaign 001</a><a href="https://data.cityofnewyork.us/d/erm2-nwe9" target="_blank" rel="noopener">NYC 311 source</a></div></article></div>
+  <aside class="card legend" id="legend"><b>Forecast beta</b><p>Estimates describe conditions, never people.</p><details><summary>Data, coverage and map key</summary><p id="freshness">Loading source details…</p><div class="severity-key" aria-label="Evidence outline legend"><span><i class="severity-dot"></i>lower</span><span><i class="severity-dot elevated"></i>elevated</span><span><i class="severity-dot high"></i>highest</span></div><div class="source-line"><span id="feature-count">—</span><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">Map/data sources</a></div></details></aside>
+  <div class="about" id="about" role="dialog" aria-modal="true" aria-labelledby="about-title"><article class="card"><button class="close" id="about-close" type="button">Close</button><h2 id="about-title">What the forecast means</h2><p>Unignorable estimates whether an encampment condition is likely near a place. The current-condition estimate combines recurrence, evidence age, and public agency observations when available. Its numeric output is an uncalibrated heuristic score, not a measured probability or proof that the condition is there now.</p><p>A reporting window describes only when historical reports most often arrived. It does not predict when people will be present. Approximate location and its 35–45 m uncertainty remain visible.</p><p>Verify conditions only. Do not photograph or characterize people. Nearby community submissions are saved for review and do not automatically change the forecast. No layer identifies an individual.</p><p>Routes, complete public records, static license plate-camera observations, Citi Bike stations, and all source data remain available as supporting tools.</p><p>Address searches go to OpenStreetMap Nominatim; routing uses public Valhalla. Your regular-route settings are saved only in this browser. The exact generated route can be downloaded as GPX; Apple and Google may recalculate exported routes.</p><div class="legacy"><a href="/issues">Full records board</a><a href="/hotspots">Accountability hotspots</a><a href="/c?t=Encampment&id=40.736%2C-73.983">Campaign 001</a><a href="https://data.cityofnewyork.us/d/erm2-nwe9" target="_blank" rel="noopener">NYC 311 source</a></div></article></div>
 </main>
 <script src="/vendor/leaflet.js"></script>
 <script>
@@ -88,12 +108,13 @@ const REPORT_TYPES={
   'Homeless Person Assistance':{label:'Homeless assist',color:'#4ad6c8',layer:'homelessness'},
   'Panhandling':{label:'Panhandling',color:'#ffc24b',layer:'homelessness'}
 };
-const state={data:null,enabled:new Set(['alpr']),featureGroup:null,routes:[],routeLines:[],selectedRoute:0,endpoints:null,via:null,routeRequest:0,routeTimer:null,routeController:null,profile:'driving',avoidance:null,access:null,discover:{citibike:false,group:null,timer:null},report:{issues:null,enabled:new Set(Object.keys(REPORT_TYPES)),group:null,current:null,selectedStatus:null,photo:null,promise:null,error:null}};
+const state={data:null,enabled:new Set(['homelessness']),featureGroup:null,routes:[],routeLines:[],selectedRoute:0,endpoints:null,via:null,routeRequest:0,routeTimer:null,routeController:null,profile:'driving',avoidance:null,access:null,forecast:{feature:null,group:null,anchor:null,lastAnnouncement:null},discover:{citibike:false,group:null,timer:null},report:{issues:null,enabled:new Set(),group:null,current:null,selectedStatus:null,photo:null,promise:null,error:null}};
 const PREF_KEY='unignorable-regular-route-v2';
 const canvas=L.canvas({padding:.5});
-const map=L.map('map',{zoomControl:true,renderer:canvas,minZoom:10,maxZoom:19}).setView([40.724,-73.965],12);
+const map=L.map('map',{zoomControl:true,renderer:canvas,minZoom:10,maxZoom:19}).setView([40.74482,-73.98511],15);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap &copy; CARTO'}).addTo(map);
 const routeGroup=L.featureGroup().addTo(map),endpointGroup=L.layerGroup().addTo(map);
+state.forecast.group=L.layerGroup().addTo(map);
 state.discover.group=L.layerGroup().addTo(map);
 state.report.group=L.layerGroup().addTo(map);
 const compactMap=()=>window.matchMedia('(max-width:720px)').matches;
@@ -103,6 +124,129 @@ const mins=s=>Math.max(1,Math.round(Number(s)/60));
 const miles=m=>(Number(m)/1609.344).toFixed(1);
 const stepDistance=m=>Number(m)<160.934?`${Math.max(10,Math.round(Number(m)*3.28084/10)*10)} ft`:`${miles(m)} mi`;
 function setRouteHint(message,loading=false){const planner=document.getElementById('route-form'),hint=document.getElementById('route-hint');planner.classList.toggle('loading',loading);hint.textContent=message;}
+
+function firstValue(...values){return values.find(value=>value!==undefined&&value!==null&&value!=='');}
+function validProbability(value){const number=Number(value);return Number.isFinite(number)&&number>=0&&number<=1?number:null;}
+function forecastFor(feature){
+  const nowcast=feature?.nowcast||{},condition=feature?.condition||{},window=feature?.local_time_window||nowcast.local_time_window||nowcast.time_window||null;
+  const probability=validProbability(firstValue(nowcast.uncalibrated_score,nowcast.current_probability,nowcast.live_probability,nowcast.presence_probability,condition.presence_probability));
+  const range=firstValue(nowcast.score_range,nowcast.probability_range,condition.probability_range);
+  return {nowcast,condition,window,probability,range:Array.isArray(range)&&range.length>=2?range:null};
+}
+function hourLabel(value){
+  if(typeof value==='string'&&/[^0-9.]/.test(value))return value;
+  const hour=Number(value);if(!Number.isFinite(hour))return null;
+  const normalized=((Math.round(hour*60)%1440)+1440)%1440,h=Math.floor(normalized/60),m=normalized%60;
+  return `${h%12||12}${m?`:${String(m).padStart(2,'0')}`:''} ${h<12?'AM':'PM'}`;
+}
+function reportedWindowLabel(window){
+  if(!window||typeof window!=='object')return null;
+  const supplied=firstValue(window.label,window.display_label,window.time_label);
+  if(supplied)return String(supplied);
+  const start=hourLabel(firstValue(window.start_hour,window.start)),end=hourLabel(firstValue(window.end_hour,window.end));
+  return start&&end?`${start}–${end}`:null;
+}
+function forecastHeadline(label,type){
+  const raw=String(label||''),subject='Encampment';
+  if(/^likely live now$/i.test(raw)||/^likely encampment present$/i.test(raw)||/^condition likely near this location$/i.test(raw))return `${subject} likely near this location`;
+  if(/^recurring; live status uncertain$/i.test(raw)||/^condition may be near this location$/i.test(raw))return `${subject} may be near this location`;
+  if(/^likely not live now$/i.test(raw)||/^likely not present now$/i.test(raw)||/^condition less likely near this location$/i.test(raw))return `${subject} less likely near this location`;
+  if(/^insufficient current evidence$/i.test(raw))return `${subject}: not enough current evidence`;
+  return raw&&/encampment/i.test(raw)?raw:`${subject}: ${raw||'current status uncertain'}`;
+}
+function latestTimestamp(...values){
+  const valid=values.map(value=>Date.parse(value||'')).filter(Number.isFinite);
+  return valid.length?new Date(Math.max(...valid)).toISOString():null;
+}
+function qualitativeForecast(forecast){
+  const label=String(firstValue(forecast.nowcast.label,forecast.condition.label)||'').toLowerCase(),score=forecast.probability;
+  if(label.includes('insufficient')||label.includes('uncertain')||label.includes('may be'))return 'Uncertain now';
+  if(label.includes('less likely')||label.includes('not live')||label.includes('not present')||(score!=null&&score<=.18))return 'Less likely now';
+  if(label.includes('condition likely')||label.includes('likely live')||label.includes('likely encampment')||(score!=null&&score>=.74))return 'Likely now';
+  return 'Uncertain now';
+}
+function announceForecast(message,key){if(state.forecast.lastAnnouncement===key)return;state.forecast.lastAnnouncement=key;document.getElementById('forecast-status').textContent=message;}
+function humanDate(value){
+  const date=new Date(value||'');if(!Number.isFinite(date.getTime()))return 'No dated direct signal';
+  const days=Math.max(0,Math.floor((Date.now()-date.getTime())/86400000));
+  return days===0?'Today':days===1?'Yesterday':days<14?`${days} days ago`:date.toLocaleDateString('en-US',{month:'short',day:'numeric',year:date.getFullYear()===new Date().getFullYear()?undefined:'numeric'});
+}
+function forecastCandidates(){
+  const layers=state.data?.layers||{},items=[];
+  Object.entries(layers).forEach(([layer,features])=>{if(layer==='alpr')return;(features||[]).forEach(feature=>{if(feature.subject_type==='encampment'&&Number.isFinite(Number(feature.lat))&&Number.isFinite(Number(feature.lng))&&forecastFor(feature).probability!=null)items.push({...feature,layer:feature.layer||layer});});});
+  (state.report.issues||[]).forEach(issue=>{if(issue.type==='Encampment'&&issue.status==='active'&&Number.isFinite(Number(issue.lat))&&Number.isFinite(Number(issue.lng))&&forecastFor(issue).probability!=null)items.push({...issue,layer:'homelessness',subject_type:'encampment',complaint_type:issue.type});});
+  return items;
+}
+function nearestForecast(){
+  const center=map.getCenter(),zoom=map.getZoom(),limit=zoom>=14?1200:zoom>=12?4000:Infinity;
+  let best=null,bestDistance=Infinity,bestQuality=-1;
+  for(const feature of forecastCandidates()){
+    const distance=reportDistanceMeters(center,feature),forecast=forecastFor(feature),quality=(forecast.probability!=null?3:0)+(forecast.window?2:0)+(feature.condition?1:0);
+    if(distance<bestDistance-2||(Math.abs(distance-bestDistance)<=2&&quality>bestQuality)){best=feature;bestDistance=distance;bestQuality=quality;}
+  }
+  return best&&bestDistance<=limit?{feature:best,distance:bestDistance}:null;
+}
+function relatedIssue(feature){
+  if(!feature||!state.report.issues)return null;
+  const subject=String(firstValue(feature.complaint_type,feature.type,feature.subject_type)||'').toLowerCase(),wanted=subject==='encampment'?'encampment':subject;
+  if(!wanted)return null;
+  let best=null,distance=Infinity;
+  state.report.issues.forEach(issue=>{if(issue.status!=='active'||String(issue.type||'').toLowerCase()!==wanted)return;const next=reportDistanceMeters(feature,issue);if(next<distance){best=issue;distance=next;}});
+  return distance<=160?best:null;
+}
+function forecastPlaceText(feature,nearest,spatial,uncertainty){
+  const address=firstValue(feature.addr,feature.address,feature.location_name,feature.block_label),anchor=state.forecast.anchor,radius=Number.isFinite(uncertainty)?Math.round(uncertainty):45;
+  const anchorDistance=anchor?reportDistanceMeters(anchor,feature):nearest.distance,anchorName=anchor?String(anchor.name||'selected place').split(',').slice(0,2).join(','):null;
+  let location=address?`Near ${address}`:anchor&&anchorDistance<=radius?`Near ${anchorName}`:'Nearest modeled area';
+  if(anchor&&anchorDistance>radius)location+=` · Nearest forecast, ${Math.round(anchorDistance)} m away from ${anchorName}`;
+  else if(!anchor&&nearest.distance>radius)location+=` · Nearest forecast, ${Math.round(nearest.distance)} m away from map center`;
+  else location+=anchor?' · Selected place is within the forecast uncertainty':' · Map center is within the forecast uncertainty';
+  return `${location} · approximate ±${radius} m`;
+}
+function renderForecast(){
+  const body=document.getElementById('forecast-body'),nearest=nearestForecast(),check=document.getElementById('forecast-check');state.forecast.group.clearLayers();check.hidden=true;document.getElementById('condition-status').textContent='';
+  if(!nearest){
+    state.forecast.feature=null;body.classList.add('forecast-empty');document.getElementById('forecast-kicker').textContent='Location forecast';
+    const title=state.data?'No encampment forecast near this spot':'Reading this area…';document.getElementById('forecast-title').textContent=title;document.getElementById('forecast-place').textContent=state.data?'Move the map or search another NYC place.':'Loading public condition evidence…';
+    document.getElementById('forecast-window-box').hidden=true;document.getElementById('forecast-confidence').innerHTML='<span class="confidence-pill">No current estimate</span><span>Beta · uncalibrated</span>';document.getElementById('forecast-basis').textContent='A directional forecast needs recurring, recent condition evidence near the selected place. Scores are uncalibrated heuristics, not measured probabilities.';
+    document.getElementById('forecast-score').textContent='Not available';document.getElementById('forecast-range').textContent='Not available';document.getElementById('forecast-tier').textContent='Not enough evidence';document.getElementById('forecast-recency').textContent='—';document.getElementById('forecast-location-detail').textContent='No modeled area nearby';document.getElementById('forecast-time-detail').textContent='No reliable pattern published';
+    const verify=document.getElementById('forecast-verify');verify.disabled=true;verify.textContent='Verification unavailable';announceForecast(title,'empty');return;
+  }
+  const feature=nearest.feature,forecast=forecastFor(feature),issue=relatedIssue(feature),type=firstValue(feature.subject_label,feature.complaint_type,feature.type,DEFS[feature.layer]?.label,'Recurring civic condition');
+  const label=forecastHeadline(firstValue(forecast.nowcast.label,forecast.condition.label,feature.descriptor),type),confidence=firstValue(forecast.nowcast.confidence,forecast.condition.confidence),probability=forecast.probability,windowStrength=String(forecast.window?.strength||'').toLowerCase(),timeWindow=windowStrength==='weak'?null:reportedWindowLabel(forecast.window);
+  const presenceBasis=firstValue(forecast.nowcast.basis,forecast.condition.basis,feature.forecast_basis,'Recurring condition reports establish a directional signal here, but current presence has not been independently verified.');
+  const range=forecast.range?.map(validProbability),lastSignal=latestTimestamp(forecast.nowcast.features?.last_direct_check_at,forecast.nowcast.features?.last_report_at,forecast.condition.last_field_observed_at,forecast.condition.last_checked_at,forecast.condition.last_observed_at,forecast.condition.last_not_observed_at,forecast.condition.last_report_at,forecast.condition.last_evidence_at,feature.last_seen);
+  const spatial=forecast.nowcast.spatial_uncertainty||{},uncertainty=Number(firstValue(spatial.radius_m,forecast.nowcast.spatial_uncertainty_m,feature.location_uncertainty_m,issue?.location_uncertainty_m));
+  state.forecast.feature=feature;body.classList.remove('forecast-empty');document.getElementById('forecast-kicker').textContent='Current condition estimate';document.getElementById('forecast-title').textContent=label;document.getElementById('forecast-place').textContent=forecastPlaceText(feature,nearest,spatial,uncertainty);
+  const windowBox=document.getElementById('forecast-window-box');windowBox.hidden=!timeWindow;if(timeWindow){document.getElementById('forecast-window-label').textContent='Historical reports most often arrived';document.getElementById('forecast-window').textContent=timeWindow;}
+  document.getElementById('forecast-confidence').innerHTML=`<span class="confidence-pill">${esc(qualitativeForecast(forecast))}</span><span>Beta · uncalibrated</span>`;
+  document.getElementById('forecast-basis').textContent=`${presenceBasis} Scores below are uncalibrated heuristics, not measured probabilities.`;document.getElementById('forecast-score').textContent=probability!=null?`${Math.round(probability*100)} / 100 · uncalibrated model score`:'Not available';document.getElementById('forecast-range').textContent=range&&range.every(value=>value!=null)?`${Math.round(range[0]*100)}–${Math.round(range[1]*100)} / 100 · heuristic score range`:'Not available';document.getElementById('forecast-tier').textContent=confidence?`${String(confidence)} evidence tier`:'Not assigned';document.getElementById('forecast-recency').textContent=humanDate(lastSignal);document.getElementById('forecast-location-detail').textContent=firstValue(spatial.label,Number.isFinite(uncertainty)?`Approximate ±${Math.round(uncertainty)} m area`:null,'Approximate mapped area');
+  const timeDays=Number(forecast.window?.days_in_window),sample=Number(firstValue(forecast.window?.sample_size,forecast.window?.report_days));document.getElementById('forecast-time-detail').textContent=timeWindow?[windowStrength?`${windowStrength[0].toUpperCase()+windowStrength.slice(1)} pattern`:null,Number.isFinite(timeDays)&&Number.isFinite(sample)?`${fmt(timeDays)} of ${fmt(sample)} report days`:null,'Not a presence schedule'].filter(Boolean).join(' · '):forecast.window?'Weak pattern omitted from primary card':'No reliable pattern published';
+  const canVerify=isConditionObservationFeature(feature),verify=document.getElementById('forecast-verify');verify.disabled=!canVerify;verify.textContent=canVerify?'Verify what’s here':'Verification unavailable';
+  announceForecast(label,feature.id||`${feature.lat},${feature.lng}`);
+  L.circleMarker([feature.lat,feature.lng],{renderer:canvas,radius:8,color:'#fff',weight:2,fillColor:'#ff5a47',fillOpacity:1}).bindTooltip('Forecast location',{direction:'top'}).on('click',()=>document.getElementById('forecast-evidence').open=true).addTo(state.forecast.group);
+}
+
+function isConditionObservationFeature(feature){return feature?.layer==='homelessness'&&feature?.subject_type==='encampment'&&Boolean(feature.id);}
+async function openForecastRecord(){
+  const feature=state.forecast.feature;if(!feature)return openReportMessage('No forecast is selected. Search or move the map first.');
+  await loadReportIssues();const issue=relatedIssue(feature);
+  if(issue)openReportIssue(issue);else openReportMessage('No matching public issue record is available for this forecast. The forecast evidence remains available under “Why we think this.”');
+}
+function setConditionButtonsDisabled(disabled){document.querySelectorAll('[data-condition-state]').forEach(button=>button.disabled=disabled);}
+async function submitConditionObservation(observationState){
+  const feature=state.forecast.feature,status=document.getElementById('condition-status');
+  if(!isConditionObservationFeature(feature)){status.textContent='This forecast does not support a nearby community submission.';return;}
+  if(!navigator.geolocation){status.textContent='Location is unavailable. Proximity is required to verify this forecast.';return;}
+  setConditionButtonsDisabled(true);status.textContent='Checking your proximity…';
+  navigator.geolocation.getCurrentPosition(async position=>{
+    try{
+      const response=await fetch('/api/condition-observations',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({feature_id:feature.id,state:observationState,lat:position.coords.latitude,lng:position.coords.longitude})}),payload=await response.json();
+      if(!response.ok)throw new Error(payload.error||'Could not save this observation.');
+      status.textContent=payload.duplicate?'Already submitted today.':(payload.message||'Saved for review — this does not change the forecast.');
+    }catch(error){status.textContent=error.message||'Could not save this observation.';}finally{setConditionButtonsDisabled(false);}
+  },()=>{status.textContent='Location permission is required to verify proximity. Nothing was submitted.';setConditionButtonsDisabled(false);},{enableHighAccuracy:true,timeout:10000,maximumAge:30000});
+}
 
 function savePlanner(){
   try{const origin=document.getElementById('origin'),destination=document.getElementById('destination');localStorage.setItem(PREF_KEY,JSON.stringify({profile:state.profile,filters:[...state.enabled],via:state.via,origin:{value:origin.value,place:origin._place||null},destination:{value:destination.value,place:destination._place||null}}));}catch{}
@@ -183,7 +327,7 @@ function syncLayers(){
 function renderVia(){
   const root=document.getElementById('via-stop');root.hidden=!state.via;document.getElementById('via-name').textContent=state.via?`Stop: ${state.via.name}`:'';
 }
-function syncReportLink(){document.getElementById('report-link').setAttribute('aria-label','Report or inspect the nearest public record');}
+function syncReportLink(){document.getElementById('report-link').setAttribute('aria-label','Open the matching public record for this forecast');}
 
 function reportSeverity(issue){return issue.pattern==='persistent'||Number(issue.score)>=65?'high':Number(issue.score)>=52?'elevated':'lower';}
 function reportMarkerStyle(issue,cluster=false){
@@ -199,7 +343,7 @@ async function loadReportIssues(){
   if(state.report.issues)return state.report.issues;
   if(state.report.promise)return state.report.promise;
   state.report.promise=(async()=>{
-    try{const response=await fetch('/api/report-issues');const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Public records are unavailable.');state.report.issues=payload;state.report.error=null;drawFeatures();drawReportIssues();return payload;}
+    try{const response=await fetch('/api/report-issues');const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Public records are unavailable.');state.report.issues=payload;state.report.error=null;drawFeatures();drawReportIssues();renderForecast();return payload;}
     catch(error){state.report.error=error.message||'Public records are temporarily unavailable.';return null;}
     finally{state.report.promise=null;}
   })();
@@ -217,16 +361,16 @@ function drawReportIssues(){
   visible.forEach(issue=>{const key=Math.round(issue.lat/grid)+'_'+Math.round(issue.lng/grid),weight=Math.max(1,Math.min(Number(issue.n)||1,500));let cell=cells.get(key);if(!cell){cell={lat:0,lng:0,weight:0,issue};cells.set(key,cell);}cell.lat+=issue.lat*weight;cell.lng+=issue.lng*weight;cell.weight+=weight;if(Number(issue.score)>Number(cell.issue.score))cell.issue=issue;});
   cells.forEach(cell=>{const lat=cell.lat/cell.weight,lng=cell.lng/cell.weight;L.circleMarker([lat,lng],reportMarkerStyle(cell.issue,true)).on('click',()=>map.flyTo([lat,lng],Math.min(FULL_DETAIL_ZOOM+1,zoom+3),{duration:.55})).addTo(state.report.group);});
 }
-function nearestReportIssue(lat,lng){
+function nearestReportIssue(lat,lng,includeDisabled=false){
   if(!state.report.issues)return null;
   let best=null,bestDistance=Infinity;
-  state.report.issues.forEach(issue=>{if(issue.status!=='active'||!state.report.enabled.has(issue.type))return;const distance=reportDistanceMeters({lat,lng},issue);if(distance<bestDistance||(distance===bestDistance&&Number(issue.score)>Number(best?.score||0))){best=issue;bestDistance=distance;}});
+  state.report.issues.forEach(issue=>{if(issue.status!=='active'||(!includeDisabled&&!state.report.enabled.has(issue.type)))return;const distance=reportDistanceMeters({lat,lng},issue);if(distance<bestDistance||(distance===bestDistance&&Number(issue.score)>Number(best?.score||0))){best=issue;bestDistance=distance;}});
   return best?{issue:best,distance:bestDistance}:null;
 }
 async function focusReport(lat,lng,openNearest=true){
   map.setView([lat,lng],Math.max(16,map.getZoom()));await loadReportIssues();drawReportIssues();
   if(!openNearest)return;
-  const nearest=nearestReportIssue(lat,lng);
+  const nearest=nearestReportIssue(lat,lng,true);
   if(nearest&&nearest.distance<=500)openReportIssue(nearest.issue);
   else openReportMessage(state.report.error||'No active public record within 500 m. Pan the map and inspect another spot.');
 }
@@ -278,18 +422,20 @@ async function loadCitiBike(){
 }
 
 function closeSuggestions(input){
-  const list=document.getElementById(input.getAttribute('aria-controls'));list.classList.remove('open');list.innerHTML='';input.setAttribute('aria-expanded','false');
+  const list=document.getElementById(input.getAttribute('aria-controls'));list.classList.remove('open');list.innerHTML='';input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');
 }
 
 function selectSuggestion(input,place){
-  input.value=place.name;input._place=place;closeSuggestions(input);scheduleRoute(0);
+  input.value=place.name;input._place=place;closeSuggestions(input);
+  if(input.id==='forecast-location'){state.forecast.anchor=place;map.setView([place.lat,place.lng],16);renderForecast();return;}
+  scheduleRoute(0);
 }
 
 function bindAutocomplete(input){
   const list=document.getElementById(input.getAttribute('aria-controls'));let timer=null,controller=null,places=[],active=-1,searching=false;
-  const paint=()=>{list.innerHTML=searching?'<div class="empty-search">Searching NYC addresses…</div>':places.length?places.map((place,index)=>`<button class="suggestion${index===active?' active':''}" type="button" role="option" data-index="${index}" aria-selected="${index===active}">${esc(place.name)}</button>`).join(''):'<div class="empty-search">No NYC address found. Try a street number and borough.</div>';const open=searching||input.value.trim().length>=3;list.classList.toggle('open',open);input.setAttribute('aria-expanded',String(open));};
+  const paint=()=>{list.innerHTML=searching?'<div class="empty-search">Searching NYC addresses…</div>':places.length?places.map((place,index)=>`<button class="suggestion${index===active?' active':''}" id="${input.id}-option-${index}" type="button" role="option" data-index="${index}" aria-selected="${index===active}">${esc(place.name)}</button>`).join(''):'<div class="empty-search">No NYC address found. Try a street number and borough.</div>';const open=searching||input.value.trim().length>=3;list.classList.toggle('open',open);input.setAttribute('aria-expanded',String(open));if(active>=0&&places[active])input.setAttribute('aria-activedescendant',`${input.id}-option-${active}`);else input.removeAttribute('aria-activedescendant');};
   input.addEventListener('input',()=>{
-    input._place=null;active=-1;searching=false;clearTimeout(timer);if(controller)controller.abort();invalidateRoutes();savePlanner();const query=input.value.trim();if(query.length<3){places=[];paint();return;}
+    input._place=null;active=-1;searching=false;clearTimeout(timer);if(controller)controller.abort();if(input.id==='forecast-location')state.forecast.anchor=null;else{invalidateRoutes();savePlanner();}const query=input.value.trim();if(query.length<3){places=[];paint();return;}
     timer=setTimeout(async()=>{controller=new AbortController();searching=true;paint();try{const response=await fetch('/api/geocode?q='+encodeURIComponent(query),{signal:controller.signal});places=response.ok?await response.json():[];if(input.value.trim()!==query)return;searching=false;paint();}catch(error){if(error.name!=='AbortError'){places=[];searching=false;paint();}}},300);
   });
   input.addEventListener('keydown',event=>{
@@ -352,7 +498,7 @@ function invalidateRoutes(){
 
 function renderPaywall(message=''){
   const root=document.getElementById('results');root.hidden=false;document.getElementById('shell').classList.add('has-results');
-  root.innerHTML=`<div class="paywall"><h2>Your regular route, without the parts you avoid.</h2><p>${esc(message||'The map is free. Unlock unlimited driving and walking routes on this browser.')}</p><div class="plans"><button class="plan" type="button" data-plan="day"><b>$1</b><span>24 hours · one-time</span></button><button class="plan best" type="button" data-plan="year"><b>$25</b><span>one year · one-time</span></button></div><small>Secure checkout by Stripe. Your addresses and avoidance choices stay in this browser and return after checkout.</small></div>`;
+  root.innerHTML=`<button class="results-back" type="button" data-results-back>← Back to forecast</button><div class="paywall"><h2>Your regular route, without the parts you avoid.</h2><p>${esc(message||'The map is free. Unlock unlimited driving and walking routes on this browser.')}</p><div class="plans"><button class="plan" type="button" data-plan="day"><b>$1</b><span>24 hours · one-time</span></button><button class="plan best" type="button" data-plan="year"><b>$25</b><span>one year · one-time</span></button></div><small>Secure checkout by Stripe. Your addresses and avoidance choices stay in this browser and return after checkout.</small></div>`;
   root.querySelectorAll('[data-plan]').forEach(button=>button.addEventListener('click',()=>startCheckout(button.dataset.plan,button)));
 }
 
@@ -413,13 +559,13 @@ function downloadExactRoute(route){
 
 function renderResults(message){
   const root=document.getElementById('results');root.hidden=false;document.getElementById('shell').classList.add('has-results');
-  if(message){root.innerHTML=`<div class="status">${esc(message)}</div>`;return;}
+  if(message){root.innerHTML=`<button class="results-back" type="button" data-results-back>← Back to forecast</button><div class="status">${esc(message)}</div>`;return;}
   const selected=state.routes[state.selectedRoute];
   const remaining=state.avoidance&&state.avoidance.remaining_intersections||0;
   const policy=state.enabled.size?(state.avoidance.improved?`The direct choice crossed ${fmt(state.avoidance.baseline_intersections)} high-confidence locations. This route reduces that to ${fmt(remaining)}.`:remaining?`The router tried ${fmt(state.avoidance.excluded_areas)} hard exclusions. The cleanest reasonable route still passes ${fmt(remaining)} high-confidence location${remaining===1?'':'s'}.`:`No high-confidence selected locations are crossed.`):'No avoidance selected; the fastest plausible route is recommended.';
   const steps=(selected.steps&&selected.steps.length?selected.steps:[{instruction:'Follow the highlighted avoidance route to your destination.',distance:selected.distance,duration:selected.duration}]);
   const detailsOpen=compactMap()?'':' open',first=steps[0];
-  root.innerHTML=`<div class="route-summary"><b>${mins(selected.duration)} min</b><span>${miles(selected.distance)} mi${state.via?` · via ${esc(state.via.name)}`:''}</span></div><div class="next-step"><span class="maneuver">${maneuverGlyph(first,0,steps.length)}</span><span>${esc(first.instruction)}</span><small>${first.distance?stepDistance(first.distance):''}</small></div><div class="route-outcome"><strong>${esc(metricText(selected))}</strong><br>${esc(policy)}</div><div class="route-actions"><button class="directions-open" id="show-directions" type="button">Turn-by-turn · ${steps.length} steps</button><button id="overview-route" type="button">Overview</button></div><details class="directions"${detailsOpen}><summary>All directions</summary>${steps.map((step,index)=>`<div class="direction-step"><span class="maneuver">${maneuverGlyph(step,index,steps.length)}</span><span>${esc(step.instruction)}</span><small>${step.distance?stepDistance(step.distance):''}</small></div>`).join('')}</details>${state.routes.map((route,index)=>`<button class="route ${index===state.selectedRoute?'selected':''}" type="button" data-route="${index}"><div class="route-head"><b>${mins(route.duration)} min · ${miles(route.distance)} mi</b>${route.recommended?`<span class="badge">${state.enabled.size?(route.selected_intersections?'Cleanest available':'Avoids selected'):'Fastest'}</span>`:''}</div><div class="route-stats"><span>${esc(metricText(route))}</span></div></button>`).join('')}<div class="exports"><a href="${esc(selected.export.apple)}" target="_blank" rel="noopener">Start in Apple Maps</a><a href="${esc(selected.export.google)}" target="_blank" rel="noopener">Start in Google Maps</a><a class="exact" href="#" id="download-gpx">Download exact route (GPX)</a></div><p class="warning">The highlighted in-app line and GPX are exact. Apple and Google receive the stop and shaping points, but can recalculate.</p>`;
+  root.innerHTML=`<button class="results-back" type="button" data-results-back>← Back to forecast</button><div class="route-summary"><b>${mins(selected.duration)} min</b><span>${miles(selected.distance)} mi${state.via?` · via ${esc(state.via.name)}`:''}</span></div><div class="next-step"><span class="maneuver">${maneuverGlyph(first,0,steps.length)}</span><span>${esc(first.instruction)}</span><small>${first.distance?stepDistance(first.distance):''}</small></div><div class="route-outcome"><strong>${esc(metricText(selected))}</strong><br>${esc(policy)}</div><div class="route-actions"><button class="directions-open" id="show-directions" type="button">Turn-by-turn · ${steps.length} steps</button><button id="overview-route" type="button">Overview</button></div><details class="directions"${detailsOpen}><summary>All directions</summary>${steps.map((step,index)=>`<div class="direction-step"><span class="maneuver">${maneuverGlyph(step,index,steps.length)}</span><span>${esc(step.instruction)}</span><small>${step.distance?stepDistance(step.distance):''}</small></div>`).join('')}</details>${state.routes.map((route,index)=>`<button class="route ${index===state.selectedRoute?'selected':''}" type="button" data-route="${index}"><div class="route-head"><b>${mins(route.duration)} min · ${miles(route.distance)} mi</b>${route.recommended?`<span class="badge">${state.enabled.size?(route.selected_intersections?'Cleanest available':'Avoids selected'):'Fastest'}</span>`:''}</div><div class="route-stats"><span>${esc(metricText(route))}</span></div></button>`).join('')}<div class="exports"><a href="${esc(selected.export.apple)}" target="_blank" rel="noopener">Start in Apple Maps</a><a href="${esc(selected.export.google)}" target="_blank" rel="noopener">Start in Google Maps</a><a class="exact" href="#" id="download-gpx">Download exact route (GPX)</a></div><p class="warning">The highlighted in-app line and GPX are exact. Apple and Google receive the stop and shaping points, but can recalculate.</p>`;
   root.querySelectorAll('[data-route]').forEach(button=>button.addEventListener('click',()=>selectRoute(Number(button.dataset.route))));
   document.getElementById('download-gpx').addEventListener('click',event=>{event.preventDefault();downloadExactRoute(selected);});
   document.getElementById('overview-route').addEventListener('click',fitRoute);
@@ -446,9 +592,21 @@ document.querySelectorAll('[data-profile]').forEach(button=>button.addEventListe
   state.profile=button.dataset.profile;document.querySelectorAll('[data-profile]').forEach(item=>item.setAttribute('aria-pressed',String(item===button)));
   scheduleRoute(100);
 }));
-bindAutocomplete(document.getElementById('origin'));bindAutocomplete(document.getElementById('destination'));
+bindAutocomplete(document.getElementById('forecast-location'));bindAutocomplete(document.getElementById('origin'));bindAutocomplete(document.getElementById('destination'));
 
-document.getElementById('report-link').addEventListener('click',inspectMapCenter);
+document.getElementById('forecast-route').addEventListener('click',()=>{state.enabled.add('homelessness');syncLayers();savePlanner();const form=document.getElementById('route-form');form.hidden=false;document.getElementById('forecast-route').setAttribute('aria-expanded','true');document.getElementById('map-tools').open=true;form.querySelector('input').focus();scheduleRoute(0);});
+document.getElementById('route-close').addEventListener('click',()=>{document.getElementById('route-form').hidden=true;document.getElementById('forecast-route').setAttribute('aria-expanded','false');document.getElementById('forecast-route').focus();});
+document.getElementById('forecast-locate').addEventListener('click',()=>{
+  const input=document.getElementById('forecast-location');
+  if(!navigator.geolocation){document.getElementById('forecast-place').textContent='Location is unavailable in this browser.';return;}
+  navigator.geolocation.getCurrentPosition(position=>{const place={name:'Current location',lat:position.coords.latitude,lng:position.coords.longitude};input.value=place.name;input._place=place;state.forecast.anchor=place;map.setView([place.lat,place.lng],16);renderForecast();},()=>{document.getElementById('forecast-place').textContent='Location permission was not granted. Search or move the map instead.';},{enableHighAccuracy:false,timeout:8000});
+});
+document.getElementById('forecast-verify').addEventListener('click',()=>{const check=document.getElementById('forecast-check');if(!isConditionObservationFeature(state.forecast.feature))return;check.hidden=false;check.querySelector('[data-condition-state]').focus();});
+document.getElementById('forecast-check-close').addEventListener('click',()=>{document.getElementById('forecast-check').hidden=true;document.getElementById('forecast-verify').focus();});
+document.getElementById('forecast-check').addEventListener('click',event=>{const button=event.target.closest('[data-condition-state]');if(button)submitConditionObservation(button.dataset.conditionState);});
+
+document.getElementById('report-link').addEventListener('click',openForecastRecord);
+document.getElementById('results').addEventListener('click',event=>{if(!event.target.closest('[data-results-back]'))return;invalidateRoutes();document.getElementById('route-form').hidden=true;document.getElementById('forecast-route').setAttribute('aria-expanded','false');renderForecast();document.getElementById('forecast-card').focus({preventScroll:true});});
 document.getElementById('map').addEventListener('click',event=>{const button=event.target.closest('[data-report-lat]');if(!button)return;focusReport(Number(button.dataset.reportLat),Number(button.dataset.reportLng),true);});
 document.getElementById('report-detail').addEventListener('click',event=>{
   const close=event.target.closest('[data-report-close]');if(close){closeReportIssue();return;}
@@ -464,9 +622,10 @@ document.getElementById('toggle-all').addEventListener('click',()=>{if(state.ena
 document.getElementById('layers-toggle').addEventListener('click',()=>{const card=document.getElementById('filter-card'),open=!card.classList.contains('open');card.classList.toggle('open',open);document.getElementById('layers-toggle').setAttribute('aria-expanded',String(open));document.getElementById('layers-toggle').textContent=open?'Done':'Edit';});
 document.getElementById('discover-toggle').addEventListener('click',()=>{const panel=document.getElementById('discover'),open=!panel.classList.contains('open');panel.classList.toggle('open',open);document.getElementById('discover-toggle').setAttribute('aria-expanded',String(open));});
 document.getElementById('citibike-toggle').addEventListener('click',()=>{state.discover.citibike=!state.discover.citibike;const button=document.getElementById('citibike-toggle');button.setAttribute('aria-pressed',String(state.discover.citibike));button.lastElementChild.textContent=state.discover.citibike?'−':'+';if(state.discover.citibike)loadCitiBike();else state.discover.group.clearLayers();});
-map.on('zoomend',()=>{syncLayers();drawReportIssues();});window.addEventListener('resize',()=>{syncLayers();drawReportIssues();if(state.routes.length)fitRoute();});
-map.on('moveend',()=>{syncReportLink();drawReportIssues();if(map.getZoom()>=FULL_DETAIL_ZOOM)drawFeatures();if(state.discover.citibike){clearTimeout(state.discover.timer);state.discover.timer=setTimeout(loadCitiBike,450);}});
+map.on('zoomend',()=>{syncLayers();drawReportIssues();renderForecast();});window.addEventListener('resize',()=>{syncLayers();drawReportIssues();if(state.routes.length)fitRoute();});
+map.on('moveend',()=>{syncReportLink();drawReportIssues();renderForecast();if(map.getZoom()>=FULL_DETAIL_ZOOM)drawFeatures();if(state.discover.citibike){clearTimeout(state.discover.timer);state.discover.timer=setTimeout(loadCitiBike,450);}});
 map.on('contextmenu',event=>focusReport(event.latlng.lat,event.latlng.lng,true));
+map.on('dragstart',()=>{state.forecast.anchor=null;const input=document.getElementById('forecast-location');input._place=null;input.value='';});
 document.getElementById('about-open').addEventListener('click',()=>{document.getElementById('about').classList.add('open');document.getElementById('about-close').focus();});
 document.getElementById('about-close').addEventListener('click',()=>{document.getElementById('about').classList.remove('open');document.getElementById('about-open').focus();});
 document.getElementById('about').addEventListener('click',event=>{if(event.target.id==='about')document.getElementById('about-close').click();});
@@ -486,11 +645,10 @@ async function boot(){
     const statusLine=(name,label)=>{const item=freshness[name]||{},stamp=item.refreshed_at?new Date(item.refreshed_at).toLocaleDateString('en-US'):'an unknown date';return item.status==='retained'?`${label} retained from ${stamp} after a refresh failure`:item.status==='fresh'?`${label} refreshed ${stamp}`:`${label} freshness unavailable`;};
     document.getElementById('freshness').textContent=`${statusLine('alpr','Camera map')}; ${statusLine('homelessness','311 clusters')}. Coverage is incomplete; 311 clusters require repeated reports plus recent activity.`;
   }catch{document.getElementById('freshness').textContent='Map layers are temporarily unavailable.';}
-  syncLayers();syncReportLink();scheduleRoute(0);
+  syncLayers();syncReportLink();renderForecast();
   const params=new URLSearchParams(location.search);
   const lat=Number(params.get('lat')),lng=Number(params.get('lng')),focus=Number.isFinite(lat)&&Number.isFinite(lng)?{lat,lng}:null;
   if(params.get('mode')==='report'&&focus)await focusReport(focus.lat,focus.lng,true);
-  else loadReportIssues();
 }
 boot();
 </script>

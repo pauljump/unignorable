@@ -1984,11 +1984,14 @@ async function handleRequest(req, res) {
       return send(res, 400, JSON.stringify({ ok: false, error: `You must be within ${Math.round(allowedDistance)} meters to verify this location.` }), 'application/json');
     }
     const observerHash = crypto.createHmac('sha256', accessSecret).update(clientIp(req)).digest('hex').slice(0, 24);
+    const model = feature.nowcast || feature.condition || {};
     const stored = ugc.addConditionObservation({
       featureId: feature.id, state, observedAt: new Date(), observerHash, distance: Math.round(distance),
-      modelProbability: Number(feature.condition?.presence_probability), modelVersion: feature.condition?.method_version,
+      modelScore: Number(model.current_probability ?? model.live_probability ?? model.presence_probability),
+      modelVersion: model.method_version, modelContractVersion: model.contract_version,
     });
     return send(res, 200, JSON.stringify({ ok: true, ...stored, distance_m: Math.round(distance),
+      message: 'Saved for review. Community submissions do not change the forecast.',
       summary: ugc.conditionObservationSummary(feature.id) }), 'application/json', { 'Cache-Control': 'no-store' });
   }
 

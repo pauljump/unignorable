@@ -29,6 +29,41 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertEqual(feature.locationUncertaintyM, 35)
     }
 
+    func testNestedNowcastAndReportTimingDecodeDefensively() throws {
+        let data = #"{"layers":{"homelessness":[{"id":"311-encampment-1","layer":"homelessness","subject_type":"encampment","address":"East 20th Street near Second Avenue","lat":40.74,"lng":-73.98,"location_uncertainty_m":35,"nowcast":{"method_version":"walk-nowcast-v2","rollout":"shadow","status":"beta","as_of":"2026-08-20T12:00:00.000Z","uncalibrated_score":0.82,"score_range":[0.94,0.63],"score_semantics":"uncalibrated_shadow_score","range_semantics":"heuristic_score_range_not_confidence_interval","confidence_semantics":"evidence_strength_not_statistical_confidence","current_probability":0.77,"live_probability":0.75,"probability_range":[0.9,0.6],"confidence":"medium","features":{"report_days_7":3,"report_age_days":1.5},"local_time_window":{"start_hour":7,"end_hour":10,"timezone":"America/New_York","label":"7–10 AM","report_days":24,"days_in_window":15,"effective_days_in_window":14.5,"sample_size":24,"concentration":0.625,"strength":"moderate","basis":"Most eligible report days fall in this local-time window."},"spatial_uncertainty":{"radius_m":42,"label":"About 42 m","basis":"Address-geocoded public reports."}}}]}}"#.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let response = try decoder.decode(MapLayersResponse.self, from: data)
+        let feature = try XCTUnwrap(response.layers["homelessness"]?.first)
+
+        XCTAssertEqual(feature.forecastScore, 0.82)
+        XCTAssertEqual(feature.forecastScoreRange?.lowerBound, 0.63)
+        XCTAssertEqual(feature.forecastScoreRange?.upperBound, 0.94)
+        XCTAssertEqual(feature.nowcast?.features?.reportDays7, 3)
+        XCTAssertEqual(feature.nowcast?.localTimeWindow?.sampleSize, 24)
+        XCTAssertEqual(feature.nowcast?.localTimeWindow?.effectiveDaysInWindow, 14.5)
+        XCTAssertEqual(feature.nowcast?.scoreSemantics, "uncalibrated_shadow_score")
+        XCTAssertEqual(feature.address, "East 20th Street near Second Avenue")
+        XCTAssertEqual(feature.forecastLocationRadiusM, 42)
+        XCTAssertEqual(feature.reportTimingLabel, "Historical reports most often arrived 7–10 AM")
+        XCTAssertTrue(feature.reportTimingIsStrongEnoughForPrimary)
+        XCTAssertEqual(feature.forecastTitle, "Encampment condition likely present")
+        XCTAssertTrue(feature.isExperimentalForecast)
+    }
+
+    func testMissingNowcastFallsBackWithoutInventingReportTiming() throws {
+        let data = #"{"layers":{"homelessness":[{"id":"311-encampment-1","layer":"homelessness","subject_type":"encampment","lat":40.74,"lng":-73.98,"condition":{"classification":"uncertain","label":"Uncertain","presence_probability":1.4,"probability_range":[-0.1,1.2]}}]}}"#.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let feature = try XCTUnwrap(try decoder.decode(MapLayersResponse.self, from: data).layers["homelessness"]?.first)
+
+        XCTAssertNil(feature.forecastScore)
+        XCTAssertNil(feature.forecastScoreRange)
+        XCTAssertNil(feature.reportTimingLabel)
+        XCTAssertFalse(feature.reportTimingIsStrongEnoughForPrimary)
+        XCTAssertEqual(feature.forecastTitle, "Encampment condition status uncertain")
+    }
+
     func testCompactReportIssueDecodesAndUsesOutlineSeverity() throws {
         let data = #"{"type":"Encampment","id":"40.736,-73.983","n":189,"lat":40.736,"lng":-73.983,"addr":"335 2 AVENUE","borough":"MANHATTAN","status":"active","pattern":"persistent","score":68.4,"current_days":297,"last_seen":"2026-08-10","headline":"Still active","seen":2,"closed_n":169,"returned_n":44}"#.data(using: .utf8)!
         let decoder = JSONDecoder()
