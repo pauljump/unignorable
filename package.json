@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check ugc.js && node --check condition-model.js && node --check map-core.js && node --check hb295-evidence.js && node --check scripts/build.js && node --check scripts/refresh-sensitive-sites.js && node --check scripts/refresh-map-data.js && node --check scripts/evaluate-condition-model.js && node tests/check-client.js",
+    "check": "node --check server.js && node --check ugc.js && node --check condition-model.js && node --check walk-nowcast.js && node --check map-core.js && node --check hb295-evidence.js && node --check scripts/build.js && node --check scripts/refresh-sensitive-sites.js && node --check scripts/refresh-map-data.js && node --check scripts/evaluate-condition-model.js && node tests/check-client.js",
     "refresh:map": "node scripts/refresh-map-data.js",
     "evaluate:condition": "node scripts/evaluate-condition-model.js",
     "refresh:sites": "node scripts/refresh-sensitive-sites.js",
