@@ -18,6 +18,12 @@ for (const [index, source] of scripts.entries()) {
 for (const id of ['forecast-card', 'forecast-title', 'forecast-window', 'forecast-route', 'forecast-verify', 'forecast-check', 'forecast-evidence']) {
   if (!html.includes(`id="${id}"`)) throw new Error(`prediction-first control is missing: ${id}`);
 }
+if (!/id="forecast-card"[^>]*\shidden/.test(html) || !/id="map-tools"[^>]*\shidden/.test(html)) throw new Error('the map must launch without forecast or data panels in the way');
+for (const id of ['forecast-open', 'forecast-close', 'walk-open', 'layers-open', 'layers-close']) {
+  if (!html.includes(`id="${id}"`)) throw new Error(`map-first control is missing: ${id}`);
+}
+if (!html.includes("function openWalkPlanner(){state.enabled.add('homelessness');setTravelMode('walking')")) throw new Error('walking avoidance must remain available from the clear map');
+if (!html.includes("state.profile='walking';state.enabled=new Set();")) throw new Error('saved settings must not repopulate the default map view');
 if (!html.includes('enabled:new Set()')) throw new Error('the default map should keep supporting layers out of the foreground');
 if (!html.includes('width:calc(100vw - 16px);max-width:calc(100vw - 16px)')) throw new Error('the mobile forecast shell must fit inside the viewport');
 if (!html.includes('data-clear-field="origin"') || !html.includes('data-clear-field="destination"')) throw new Error('directions need explicit clear controls');
