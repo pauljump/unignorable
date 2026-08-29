@@ -12,6 +12,20 @@ The app says **mapped ALPR cameras or corridors crossed**. It never claims that 
 - `/Users/mini-home/projects/consent-atlas` and `/Users/mini-home/Desktop/Monorepo/sidewalk` are read-only source references for this consolidation. Their Git histories, files, and runtime state are not merged, moved, archived, or deleted.
 - Legacy campaigns, receipts, moderation, hotspots, and issue APIs remain addressable, but the root and `/map` now serve the awareness map.
 
+## Current release snapshot (2026-08-29)
+
+The active product thesis is prediction-first: Unignorable should say what is likely here, where, and when, while keeping the supporting records discoverable rather than putting every data layer in front of the visitor. The map is the arrival screen; the claim is available when someone asks for it.
+
+- **Web is live** at [unignorable.polyfeeds.dev](https://unignorable.polyfeeds.dev). The default mobile and desktop view is an unobstructed map with a small dock for forecast search, walking avoidance, and optional source layers.
+- **Walking route avoidance remains available.** Tapping the walking control opens the route planner in Walking mode and selects the condition layer needed for avoidance. Directions fields have explicit clear controls.
+- **Forecast and data windows are opt-in.** The forecast card opens from search or the map forecast point; source layers open from the layers control. Saved layer selections do not repopulate the launch map.
+- **Current web release:** commit `d66c360` (`fix: make map the default mobile view`) on branch `deploy/prediction-first-20260821`.
+- **Rollback:** branch `backup/pre-prediction-first-20260820` preserves the pre-prediction-first version. Runtime data remains outside Git at `/Users/mini-home/.local/share/unignorable`.
+- **Verification:** the client checks pass and the full suite passes 36/36 when run with the production runtime data directory. Deployment is managed through the control-plane fleet registry.
+- **iOS:** the native SwiftUI + MapKit client has a successful unsigned archive and passing unit/UI checks. It is not yet in TestFlight or the App Store; remaining release work is signing, privacy URL, and the StoreKit/paywall decision.
+
+The immediate next decision is an on-device pass: confirm that the clear-map arrival, forecast-point inspection, and walking route flow communicate the thesis without restoring the old panel-heavy surface. After that, finish the iOS distribution gates or proceed with a focused assisted-311/campaign follow-up.
+
 ## Architecture
 
 The shared backend remains dependency-free Node 22. The web client uses self-hosted Leaflet; the iPhone client is native SwiftUI + MapKit.
