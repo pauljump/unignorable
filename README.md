@@ -26,6 +26,8 @@ The active product thesis is prediction-first: Unignorable should say what is li
 
 The immediate next decision is an on-device pass: confirm that the clear-map arrival, forecast-point inspection, and walking route flow communicate the thesis without restoring the old panel-heavy surface. After that, finish the iOS distribution gates or proceed with a focused assisted-311/campaign follow-up.
 
+Atlanta is currently an evidence-foundation extension rather than a second live map. The HB 295 interpretation, conservative evidence checklist, ATL311 source investigation, historical GitHub sources, and recommended Open Records path are documented in [ATLANTA-EXTENSION.md](./ATLANTA-EXTENSION.md).
+
 ## Architecture
 
 The shared backend remains dependency-free Node 22. The web client uses self-hosted Leaflet; the iPhone client is native SwiftUI + MapKit.
