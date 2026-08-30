@@ -61,6 +61,13 @@ struct APIClient {
         return try await perform(request)
     }
 
+    func conditionLoop(for feature: MapFeature) async throws -> ConditionLoop {
+        var parts = URLComponents(url: baseURL.appending(path: "/api/condition-loop"), resolvingAgainstBaseURL: false)!
+        parts.queryItems = [.init(name: "feature_id", value: feature.id)]
+        let response: ConditionLoopResponse = try await get(parts.url!)
+        return response.loop
+    }
+
     func citiBike(near place: Place) async throws -> [CitiBikeStation] {
         var parts = URLComponents(url: baseURL.appending(path: "/api/discover/citibike"), resolvingAgainstBaseURL: false)!
         parts.queryItems = [.init(name: "lat", value: String(place.lat)), .init(name: "lng", value: String(place.lng))]

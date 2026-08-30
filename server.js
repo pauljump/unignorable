@@ -576,6 +576,88 @@ const issueMeta = (issueKey) => {
            board: i.board, agency: i.agency, lat: i.lat, lng: i.lng };
 };
 
+// One condition is the product's atomic unit. Public records, nearby checks, campaigns, and
+// outcomes are different states of that same object—not separate modes of the app.
+function relatedIssueForFeature(feature) {
+  if (!feature) return null;
+  const subject = String(feature.complaint_type || feature.type || feature.subject_type || '').toLowerCase();
+  const wanted = subject === 'encampment' ? 'encampment' : subject;
+  if (!wanted) return null;
+  let best = null, bestDistance = Infinity, bestActive = false;
+  for (const issue of ISSUES) {
+    if (String(issue.type || '').toLowerCase() !== wanted) continue;
+    const distance = distanceMeters(Number(feature.lat), Number(feature.lng), Number(issue.lat), Number(issue.lng));
+    if (!Number.isFinite(distance) || distance > 160) continue;
+    const active = issue.status === 'active';
+    if ((active && !bestActive) || (active === bestActive && distance < bestDistance)) {
+      best = issue; bestDistance = distance; bestActive = active;
+    }
+  }
+  return best ? { issue: best, distance_m: Math.round(bestDistance) } : null;
+}
+
+function communityCheckRollup(featureId) {
+  const rows = ugc.conditionObservationSummary(featureId);
+  const out = { total: 0, pending: 0, reviewed: 0, present: 0, absent: 0, uncertain: 0, last_observed_at: null };
+  for (const row of rows) {
+    const observations = Number(row.observations) || 0;
+    out.total += observations;
+    if (row.review_status === 'approved') out.reviewed += observations;
+    else if (row.review_status === 'unreviewed') out.pending += observations;
+    if (Object.hasOwn(out, row.state)) out[row.state] += observations;
+    if (row.last_observed_at && (!out.last_observed_at || row.last_observed_at > out.last_observed_at)) out.last_observed_at = row.last_observed_at;
+  }
+  return out;
+}
+
+function conditionLoopRecord(feature) {
+  const related = relatedIssueForFeature(feature);
+  const issue = related && related.issue;
+  const issueKey = issue && key(issue.type, issue.id);
+  const checks = communityCheckRollup(feature.id);
+  let thread = { verdict: 'unverified', corrob: 0, lastTs: null };
+  let campaign = null, actions = { total: 0, byType: {}, thisWeek: { total: 0, byType: {} } };
+  if (issueKey) {
+    try { thread = ugc.thread(issueKey); } catch {}
+    try { campaign = ugc.getCampaign(issueKey); } catch {}
+    try { actions = ugc.actionCounts(issueKey); } catch {}
+  }
+  const checked = checks.total > 0 || thread.verdict !== 'unverified';
+  const acted = Boolean(campaign) || actions.total > 0;
+  const outcome = issue?.status === 'resolved' || thread.verdict === 'cleared' || campaign?.status === 'won';
+  const stageIndex = outcome ? 3 : acted ? 2 : checked ? 1 : 0;
+  const stages = [
+    { id: 'detected', label: 'Detected', detail: 'Public evidence produces a dated, approximate condition estimate.' },
+    { id: 'checked', label: 'Checked', detail: 'A nearby person checks the condition; submissions require review.' },
+    { id: 'action', label: 'Action', detail: 'The record names the responsible office and tracks each escalation.' },
+    { id: 'outcome', label: 'Outcome', detail: 'People confirm what changed, and the result becomes new evidence.' },
+  ].map((stage, index) => ({ ...stage, state: index < stageIndex ? 'complete' : index === stageIndex ? 'current' : 'next' }));
+  let nextAction;
+  if (stageIndex === 0) nextAction = { id: 'check', mode: 'verify', label: 'Check this place' };
+  else if (stageIndex === 1 && issue) nextAction = { id: 'act', mode: 'record', label: 'Make the city answer' };
+  else if (stageIndex === 2 && issue) nextAction = { id: 'escalate', mode: 'record', label: 'Join the next action' };
+  else if (stageIndex === 3) nextAction = { id: 'confirm_outcome', mode: 'verify', label: 'Confirm the outcome' };
+  else nextAction = { id: 'share', mode: 'share', label: 'Recruit a nearby check' };
+  const recordUrl = issue ? `/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}` : null;
+  return {
+    condition_id: feature.id,
+    stage: stages[stageIndex].id,
+    stage_index: stageIndex,
+    stages,
+    next_action: { ...nextAction, href: nextAction.mode === 'record' ? recordUrl : null },
+    checks: { ...checks, forecast_unchanged: true, review_required: true },
+    record: issue ? {
+      type: issue.type, id: issue.id, href: recordUrl, distance_m: related.distance_m, status: issue.status,
+      reports: Number(issue.n) || 0, city_closures: Number(issue.closed_n) || 0,
+      returns_after_closure: Number(issue.returned_n) || 0, current_days: Number(issue.current_days) || 0,
+      headline: issue.headline || null,
+    } : null,
+    campaign: campaign ? { active: campaign.status === 'active', status: campaign.status, started_at: campaign.started_at } : null,
+    actions,
+    community_verdict: thread.verdict,
+  };
+}
+
 // ---------- The RECEIPT: a public, named, dated accountability page for ONE Issue ----------
 // Server-rendered (so it unfurls on X/iMessage and prints clean). Names the PUBLIC OFFICIAL in
 // their OFFICIAL capacity using the city's OWN 311 record. Never names the people in the encampment.
@@ -1555,7 +1637,7 @@ function renderArea(area) {
   .lead{font-size:18px;line-height:1.42;margin:12px 0 0;color:var(--ink)}
   .indict{font-size:16px;line-height:1.5;background:var(--card);border:1px solid var(--line);border-left:3px solid var(--alarm);border-radius:10px;padding:14px 16px;margin:18px 0}
   .indict b{color:var(--alarm)}
-  #amap{height:260px;border-radius:12px;border:1px solid var(--line);margin:16px 0 4px;background:#0a0f17}
+  #amap{height:260px;border-radius:12px;border:1px solid var(--line);margin:16px 0 4px;background:#0a0f17}.leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.68) contrast(1.15) saturate(.55)}
   .leaflet-container{background:#0a0f17}
   .tchips{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px}
   .tchip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:5px 11px}
@@ -1628,7 +1710,7 @@ function renderArea(area) {
 var PTS=${JSON.stringify(pts)}, BB=${JSON.stringify(bb)}, AID=${JSON.stringify(area.id)};
 (function(){
   var m=L.map('amap',{zoomControl:true,preferCanvas:true,scrollWheelZoom:false});
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © CARTO',maxZoom:19}).addTo(m);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>',maxZoom:19}).addTo(m);
   var cv=L.canvas({padding:.5});
   PTS.forEach(function(p){
     L.circleMarker([p.lat,p.lng],{renderer:cv,radius:Math.min(22,4+Math.sqrt(p.n)*0.9),
@@ -1781,6 +1863,60 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
   const a = 0.5 - Math.cos((lat2 - lat1) * p) / 2
     + Math.cos(lat1 * p) * Math.cos(lat2 * p) * (1 - Math.cos((lng2 - lng1) * p)) / 2;
   return 12742000 * Math.asin(Math.sqrt(a));
+}
+
+function forecastShareRecord(feature) {
+  const nowcast = feature.nowcast || {}, condition = feature.condition || {};
+  const rawLabel = String(nowcast.label || condition.label || feature.descriptor || 'Current status uncertain');
+  const label = /^condition likely near this location$/i.test(rawLabel)
+    ? 'Encampment likely near this location'
+    : /^condition may be near this location$/i.test(rawLabel)
+      ? 'Encampment may be near this location'
+      : /^condition less likely near this location$/i.test(rawLabel)
+        ? 'Encampment less likely near this location' : rawLabel;
+  const place = titleCase(feature.address || feature.addr || feature.location_name || feature.block_label || 'this approximate NYC block');
+  const reports = Number(feature.count ?? feature.n) || 0;
+  const reportDays = Number(feature.distinct_report_days ?? feature.report_days_90 ?? feature.report_days) || 0;
+  const window = nowcast.local_time_window || nowcast.time_window || feature.local_time_window || null;
+  const windowLabel = window && (window.label || window.display_label || window.time_label)
+    || (window && Number.isFinite(Number(window.start_hour)) && Number.isFinite(Number(window.end_hour))
+      ? `${hourLabel(Number(window.start_hour))}–${hourLabel(Number(window.end_hour))}` : null);
+  const score = Number(nowcast.uncalibrated_score ?? nowcast.current_probability ?? condition.presence_probability);
+  const scoreText = Number.isFinite(score) ? ` Uncalibrated beta score ${Math.round(score * 100)}/100.` : '';
+  const loop = conditionLoopRecord(feature), record = loop.record;
+  const accountability = record
+    ? `NYC marked ${fmtN(record.city_closures)} reports closed here; ${fmtN(record.returns_after_closure)} were followed by another report. `
+    : '';
+  const locationClaim = label.replace(/\s+near this location$/i, '');
+  const description = `${accountability}Unignorable estimates ${locationClaim.toLowerCase()} near ${place}. ${fmtN(reports)} source reports across ${fmtN(reportDays)} report days inform this forecast.${windowLabel ? ` Reports most often arrived ${windowLabel}.` : ''} Approximate public-data estimate, not proof of current presence.${scoreText}`;
+  return { label, place, reports, reportDays, windowLabel, description, loop };
+}
+
+function hourLabel(hour) {
+  const normalized = ((Math.round(Number(hour) * 60) % 1440) + 1440) % 1440;
+  const h = Math.floor(normalized / 60), minutes = normalized % 60;
+  return `${h % 12 || 12}${minutes ? `:${String(minutes).padStart(2, '0')}` : ''} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+function renderForecastShare(feature) {
+  const data = forecastShareRecord(feature);
+  const lat = Number(feature.lat).toFixed(6), lng = Number(feature.lng).toFixed(6);
+  const shareUrl = `${PUBLIC_ORIGIN}/f?id=${encodeURIComponent(feature.id || '')}&lat=${lat}&lng=${lng}`;
+  const appUrl = `${PUBLIC_ORIGIN}/?forecast=1&lat=${lat}&lng=${lng}&place=${encodeURIComponent(data.place)}`;
+  const actionUrl = data.loop.record ? `${PUBLIC_ORIGIN}${data.loop.record.href}` : null;
+  const loopStages = ['Detected', 'Checked', 'Action', 'Outcome'];
+  const loopIndex = Math.max(0, Math.min(loopStages.length - 1, Number(data.loop.stage_index) || 0));
+  const loopMarkup = loopStages.map((stage, index) => {
+    const stateClass = index < loopIndex ? 'complete' : index === loopIndex ? 'current' : '';
+    return `<span class="${stateClass}">${stage}</span>`;
+  }).join('');
+  const facts = data.loop.record
+    ? `<div class="fact"><b>${fmtN(data.loop.record.reports)}</b><span>reports</span></div><div class="fact"><b>${fmtN(data.loop.record.city_closures)}</b><span>city closures</span></div><div class="fact"><b>${fmtN(data.loop.record.returns_after_closure)}</b><span>returns after closure</span></div>`
+    : `<div class="fact"><b>${fmtN(data.reports)}</b><span>source reports</span></div><div class="fact"><b>${fmtN(data.reportDays)}</b><span>report days</span></div><div class="fact"><b>${esc(data.windowLabel || '—')}</b><span>common report time</span></div>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,follow"><title>${esc(data.label)} · ${esc(data.place)} · unignorable</title>
+<meta name="description" content="${esc(data.description)}"><meta property="og:type" content="article"><meta property="og:title" content="${esc(data.label)} · ${esc(data.place)}"><meta property="og:description" content="${esc(data.description)}"><meta property="og:url" content="${esc(shareUrl)}"><meta property="og:site_name" content="unignorable"><meta property="og:image" content="${esc(PUBLIC_ORIGIN)}/assets/share-card.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="The ticket closed. The condition came back. See it, check it, make the city answer."><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(data.label)} · ${esc(data.place)}"><meta name="twitter:description" content="${esc(data.description)}"><meta name="twitter:image" content="${esc(PUBLIC_ORIGIN)}/assets/share-card.png"><link rel="canonical" href="${esc(shareUrl)}">
+<style>:root{--bg:#0b0d10;--card:#14171c;--ink:#e8eaed;--mut:#969ba4;--line:#2b3038;--alarm:#ff5b45;--amber:#ffb020;--green:#4ad6c8}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}.wrap{max-width:680px;margin:0 auto;padding:20px 18px 72px}.mast{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:6px 0 18px}.word{color:var(--ink);font-weight:800;letter-spacing:.06em;font-size:14px;text-decoration:none}.word b{color:var(--alarm)}.tag{font-size:11px;color:var(--mut)}.eyebrow{margin-top:38px;color:var(--alarm);font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.hero h1{font-size:42px;line-height:1.02;letter-spacing:-.055em;margin:9px 0 10px}.place{color:var(--mut);font-size:15px}.card{margin-top:26px;padding:18px;border:1px solid var(--line);border-left:3px solid var(--alarm);border-radius:12px;background:var(--card)}.card p{margin:0;font-size:18px;line-height:1.45}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);margin-top:16px}.fact{background:var(--card);padding:11px 8px;text-align:center}.fact b{display:block;font-size:22px}.fact span{display:block;color:var(--mut);font-size:10px;margin-top:3px}.loop{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:18px}.loop span{padding-top:8px;border-top:3px solid var(--line);color:var(--mut);font-size:9px;font-weight:800;text-align:center;text-transform:uppercase}.loop span.complete{border-color:var(--green);color:var(--green)}.loop span.current{border-color:var(--alarm);color:var(--ink)}.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px}.btn{display:inline-block;padding:11px 15px;border-radius:9px;background:var(--amber);color:#090a0c;text-decoration:none;font-weight:800;font-size:14px}.btn.alarm{background:var(--alarm);color:#fff}.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}.fine{margin-top:18px;color:var(--mut);font-size:12px;line-height:1.5}@media(max-width:520px){.hero h1{font-size:34px}}</style></head><body><main class="wrap"><div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">UN<b>IGNOR</b>ABLE</a><span class="tag">a public forecast</span></div><section class="hero"><div class="eyebrow">${esc(loopStages[loopIndex])}. Now finish the loop.</div><h1>${esc(data.label)}.</h1><div class="place">Near ${esc(data.place)} · NYC</div></section><section class="card"><p>${esc(data.description)}</p><div class="facts">${facts}</div><div class="loop">${loopMarkup}</div></section><div class="actions"><a class="btn" href="${esc(appUrl)}">Check this place</a>${actionUrl ? `<a class="btn alarm" href="${esc(actionUrl)}">Make the city answer</a>` : ''}<a class="btn ghost" href="${esc(PUBLIC_ORIGIN)}/map">Explore the map</a></div><p class="fine">Unignorable describes conditions, never people. Locations are approximate; the forecast is beta and uncalibrated. Nearby checks require review and never silently change the forecast. The permanent record tracks action until people confirm an outcome.</p></main></body></html>`;
 }
 
 function renderCampaignStart(selectedIssue) {
@@ -1964,6 +2100,14 @@ async function handleRequest(req, res) {
       return res.end(MAP_LAYERS_GZ);
     }
     return send(res, 200, MAP_LAYERS_RAW, 'application/json', { 'Cache-Control': 'public, max-age=300' });
+  }
+
+  if (u.pathname === '/api/condition-loop' && req.method === 'GET') {
+    const feature = MAP_FEATURE_BY_ID.get(String(u.searchParams.get('feature_id') || ''));
+    if (!feature || feature.layer !== 'homelessness' || feature.subject_type !== 'encampment') {
+      return send(res, 404, '{"ok":false,"error":"unknown condition"}', 'application/json');
+    }
+    return send(res, 200, JSON.stringify({ ok: true, loop: conditionLoopRecord(feature) }), 'application/json', { 'Cache-Control': 'no-store' });
   }
 
   if (u.pathname === '/api/condition-observations' && req.method === 'POST') {
@@ -2173,6 +2317,12 @@ async function handleRequest(req, res) {
     } catch { return send(res, 404, 'not found', 'text/plain'); }
   }
 
+  if (u.pathname === '/assets/share-card.png') {
+    try {
+      return send(res, 200, fs.readFileSync(path.join(DIR, 'assets', 'share-card.png')), 'image/png', { 'Cache-Control': 'public, max-age=31536000, immutable' });
+    } catch { return send(res, 404, 'not found', 'text/plain'); }
+  }
+
   if (u.pathname.startsWith('/photos/')) {
     const name = path.basename(u.pathname);
     const ext = name.split('.').pop();
@@ -2357,7 +2507,15 @@ async function handleRequest(req, res) {
   if (u.pathname === '/api/review') {
     if (!authed(req, u)) return send(res, 401, '{"ok":false}', 'application/json');
     const items = ugc.pending().map(p => ({ ...p, issue: issueMeta(p.issue_key) }));
-    return send(res, 200, JSON.stringify({ ok: true, count: items.length, items }), 'application/json');
+    const conditionItems = ugc.pendingConditionObservations().map(item => {
+      const feature = MAP_FEATURE_BY_ID.get(item.feature_id);
+      const related = relatedIssueForFeature(feature);
+      return { ...item, feature: feature ? {
+        id: feature.id, lat: feature.lat, lng: feature.lng, descriptor: feature.descriptor || null,
+        location_uncertainty_m: feature.location_uncertainty_m || null,
+      } : null, issue: related ? issueMeta(key(related.issue.type, related.issue.id)) : null };
+    });
+    return send(res, 200, JSON.stringify({ ok: true, count: items.length + conditionItems.length, items, condition_items: conditionItems }), 'application/json');
   }
   if (u.pathname === '/api/review/decide' && req.method === 'POST') {
     if (!authed(req, u)) return send(res, 401, '{"ok":false}', 'application/json');
@@ -2365,7 +2523,15 @@ async function handleRequest(req, res) {
     if (!['approve', 'reject'].includes(action)) return send(res, 400, '{"ok":false}', 'application/json');
     const row = ugc.decide(id, action);
     if (row && action === 'reject' && row.photo) { try { fs.unlinkSync(path.join(PHOTO_DIR, row.photo)); } catch {} }
-    return send(res, 200, JSON.stringify({ ok: !!row, count: ugc.pendingCount() }), 'application/json');
+    return send(res, 200, JSON.stringify({ ok: !!row, count: ugc.pendingCount() + ugc.pendingConditionObservationCount() }), 'application/json');
+  }
+  if (u.pathname === '/api/review/condition/decide' && req.method === 'POST') {
+    if (!authed(req, u)) return send(res, 401, '{"ok":false}', 'application/json');
+    const { id, action } = await readBody(req);
+    if (!['approve', 'reject'].includes(action)) return send(res, 400, '{"ok":false}', 'application/json');
+    const row = ugc.decideConditionObservation(id, action);
+    return send(res, 200, JSON.stringify({ ok: !!row, item: row,
+      count: ugc.pendingCount() + ugc.pendingConditionObservationCount() }), 'application/json');
   }
   if (u.pathname === '/review') {
     if (!authed(req, u)) return send(res, 401, 'unauthorized', 'text/plain', { 'Cache-Control': 'no-store' });
@@ -2417,6 +2583,23 @@ async function handleRequest(req, res) {
     params.set('mode', 'report');
     res.writeHead(302, { ...SECURITY_HEADERS, Location: `/?${params}`, 'Cache-Control': 'no-store' });
     return res.end();
+  }
+  // Short, crawlable forecast receipt used by the share card and X previews. The map remains
+  // the interactive product; this page makes the claim legible before someone clicks through.
+  if (u.pathname === '/f' || u.pathname === '/forecast') {
+    let feature = MAP_FEATURE_BY_ID.get(String(u.searchParams.get('id') || ''));
+    const lat = Number(u.searchParams.get('lat')), lng = Number(u.searchParams.get('lng'));
+    if (!feature && Number.isFinite(lat) && Number.isFinite(lng) && NYC_POINT({ lat, lng })) {
+      let nearest = Infinity;
+      for (const candidate of Object.values(MAP_LAYERS?.layers || {}).flat()) {
+        if (candidate?.subject_type !== 'encampment') continue;
+        const distance = distanceMeters(lat, lng, Number(candidate.lat), Number(candidate.lng));
+        if (distance < nearest) { nearest = distance; feature = candidate; }
+      }
+      if (nearest > 1200) feature = null;
+    }
+    if (!feature || feature.subject_type !== 'encampment') return send(res, 404, 'No forecast at this location.', 'text/plain');
+    return send(res, 200, renderForecastShare(feature), 'text/html; charset=utf-8', { 'Cache-Control': 'public, max-age=300' });
   }
   if (u.pathname === '/report.html' || u.pathname === '/issues') {
     return send(res, 200, fs.readFileSync(path.join(DIR, 'report.html')), 'text/html; charset=utf-8');

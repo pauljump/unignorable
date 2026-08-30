@@ -21,6 +21,8 @@ test('HB 295 checklist reports missing proof instead of treating 311 closure as 
   assert.equal(result.records[0].category, 'illegal public camping');
   assert.match(result.evidence_gaps.join(' '), /mitigation expenses|fair-market-value/i);
   assert.match(result.warning, /not a legal conclusion/i);
+  assert.match(result.warning, /not a reporter bounty/i);
+  assert.match(result.remedy, /not payment for submitting a report/i);
 });
 
 test('complete checklist requires a damage path and matching tax year', () => {

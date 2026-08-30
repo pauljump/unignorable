@@ -25,6 +25,8 @@
   .ptag.still_here{background:#3a1d1d;color:#ff8b7a}
   .ptag.worse{background:#3a2a16;color:var(--amber)}
   .ptag.cleaned,.ptag.gone{background:#163a2a;color:var(--green)}
+  .ptag.present{background:#3a1d1d;color:#ff8b7a}.ptag.absent{background:#163a2a;color:var(--green)}
+  .ptag.uncertain{background:#252b35;color:var(--dim)}
   .text{font-size:14.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
   .text.empty{color:var(--dim);font-style:italic}
   .meta{margin-top:12px;padding-top:11px;border-top:1px solid var(--line);font-size:12px;color:var(--dim);line-height:1.5}
@@ -42,7 +44,7 @@
 <body>
 <header>
   <h1>un<b>ignor</b>able — review</h1>
-  <div class="sub"><span class="count" id="count">—</span> pending · approve = publish + queue for 311 · reject = discard</div>
+  <div class="sub"><span class="count" id="count">—</span> pending · community reports + proximity-checked model evidence</div>
 </header>
 <div class="wrap" id="wrap"><div class="empty-state">Loading…</div></div>
 <script>
@@ -58,13 +60,25 @@ async function load(){
        if(r.status===401){document.getElementById('wrap').innerHTML='<div class="err">Not authorized.</div>';return;}
        data = await r.json(); }
   catch(e){ document.getElementById('wrap').innerHTML='<div class="err">Could not load.</div>'; return; }
-  render(data.items||[]);
+  render(data.items||[], data.condition_items||[]);
 }
-function render(items){
-  document.getElementById('count').textContent = items.length;
+function render(items, conditionItems){
+  document.getElementById('count').textContent = items.length + conditionItems.length;
   const w = document.getElementById('wrap');
-  if(!items.length){ w.innerHTML='<div class="empty-state">✓ All clear.<br>Nothing waiting for review.</div>'; return; }
-  w.innerHTML = items.map(p=>{
+  if(!items.length&&!conditionItems.length){ w.innerHTML='<div class="empty-state">✓ All clear.<br>Nothing waiting for review.</div>'; return; }
+  const checks = conditionItems.map(p=>{
+    const i = p.issue||{}, f=p.feature||{};
+    const loc = [i.type, i.addr, i.borough, i.council!=null?('Council '+i.council):null].filter(Boolean).map(esc).join(' · ');
+    const score = Number.isFinite(Number(p.model_score))?Math.round(Number(p.model_score)*100)+'/100':'not recorded';
+    return `<div class="card" id="condition-card-${p.id}"><div class="body">
+      <span class="ptag ${esc(p.state)}">Nearby check · ${esc(p.state)}</span>
+      <div class="text">A person within ${Math.round(Number(p.distance_m)||0)} m submitted this condition check. Model score at submission: ${score}.</div>
+      <div class="meta"><b>${loc||esc(f.descriptor||f.id||'Mapped condition')}</b><br>observed ${ago(p.observed_at)} · ${esc(p.model_version||'model version unavailable')} · raw location discarded</div>
+      <div class="acts"><button class="ok" onclick="decideCondition(${p.id},'approve',this)">Approve evidence</button><button class="no" onclick="decideCondition(${p.id},'reject',this)">Reject</button></div>
+      <div class="note">Approval marks this as reviewed calibration evidence. It still does not silently change the live forecast; model updates remain versioned and evaluated separately.</div>
+    </div></div>`;
+  }).join('');
+  const reports = items.map(p=>{
     const i = p.issue||{};
     const loc = [i.type, i.addr, i.borough, i.council!=null?('Council '+i.council):null].filter(Boolean).map(esc).join(' · ');
     return `<div class="card" id="card-${p.id}">
@@ -81,6 +95,7 @@ function render(items){
       </div>
     </div>`;
   }).join('');
+  w.innerHTML = checks + reports;
 }
 async function decide(id, action, btn){
   const card = document.getElementById('card-'+id);
@@ -92,8 +107,22 @@ async function decide(id, action, btn){
     const t = await r.json();
     if(t.ok){ card.style.transition='opacity .2s'; card.style.opacity='0';
       setTimeout(()=>{ card.remove(); document.getElementById('count').textContent=t.count;
-        if(!document.querySelector('.card')) render([]); },200); }
+        if(!document.querySelector('.card')) render([],[]); },200); }
     else { [...card.querySelectorAll('button')].forEach(b=>b.disabled=false); btn.textContent=action==='approve'?'Approve':'Reject'; }
+  }catch(e){ [...card.querySelectorAll('button')].forEach(b=>b.disabled=false); }
+}
+async function decideCondition(id, action, btn){
+  const card = document.getElementById('condition-card-'+id);
+  [...card.querySelectorAll('button')].forEach(b=>b.disabled=true);
+  btn.textContent = action==='approve'?'Approving…':'Rejecting…';
+  try{
+    const r = await fetch('/api/review/condition/decide',{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,action})});
+    const t = await r.json();
+    if(t.ok){ card.style.transition='opacity .2s'; card.style.opacity='0';
+      setTimeout(()=>{ card.remove(); document.getElementById('count').textContent=t.count;
+        if(!document.querySelector('.card')) render([],[]); },200); }
+    else { [...card.querySelectorAll('button')].forEach(b=>b.disabled=false); btn.textContent=action==='approve'?'Approve evidence':'Reject'; }
   }catch(e){ [...card.querySelectorAll('button')].forEach(b=>b.disabled=false); }
 }
 load();

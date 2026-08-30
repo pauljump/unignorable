@@ -80,7 +80,13 @@ test('health and public assets are available with security headers', async () =>
   assert.match(rootHtml, /Download exact route \(GPX\)/);
   assert.match(rootHtml, /aria-autocomplete="list"/);
   assert.match(rootHtml, /routes are \$1\/day or \$25\/year/);
-  assert.match(rootHtml, /id="report-link" type="button">Public record<\/button>/);
+  assert.match(rootHtml, /id="report-link" type="button">Action record<\/button>/);
+  assert.match(rootHtml, /id="forecast-share"/);
+  assert.match(rootHtml, /id="forecast-share-x"/);
+  assert.match(rootHtml, /One condition · one loop/);
+  assert.match(rootHtml, /Detected[\s\S]*Checked[\s\S]*Action[\s\S]*Outcome/);
+  assert.match(rootHtml, /fetch\(`\/api\/condition-loop\?feature_id=/);
+  assert.match(rootHtml, /params\.get\('forecast'\)/);
   assert.doesNotMatch(rootHtml, /id="report-panel"/);
   assert.doesNotMatch(rootHtml, /report-mode/);
   assert.match(rootHtml, /Public record \+ field updates/);
@@ -88,7 +94,6 @@ test('health and public assets are available with security headers', async () =>
   assert.match(rootHtml, /data-report-confirm/);
   assert.match(rootHtml, /map\.on\('contextmenu'/);
   assert.match(rootHtml, /--paper:#080b11/);
-  assert.match(rootHtml, /basemaps\.cartocdn\.com\/dark_all/);
   assert.match(rootHtml, /radius:cluster\?3:2\.5/);
   assert.match(rootHtml, /FULL_DETAIL_ZOOM=14/);
   assert.match(rootHtml, /Evidence outline legend/);
@@ -113,8 +118,27 @@ test('health and public assets are available with security headers', async () =>
   assert.match(rootHtml, /L\.circleMarker\(\[state\.endpoints\.origin/);
   assert.match(rootHtml, /Turn-by-turn · \$\{steps\.length\} steps/);
   assert.match(rootHtml, /Finding your \$\{state\.profile\} route/);
-  assert.match(rootHtml, /leaflet-tile-pane\{filter:brightness\(1\.22\)/);
+  assert.match(rootHtml, /tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png/);
+  assert.match(rootHtml, /leaflet-tile-pane\{filter:invert\(1\) hue-rotate\(180deg\)/);
+  assert.doesNotMatch(rootHtml, /basemaps\.cartocdn\.com/);
   assert.doesNotMatch(rootHtml, /pulse\.polyfeeds/);
+
+  const forecastShare = await fetch(`${origin}/f?id=311-encampment-1`);
+  assert.equal(forecastShare.status, 200);
+  const forecastShareHtml = await forecastShare.text();
+  assert.match(forecastShareHtml, /property="og:title"/);
+  assert.match(forecastShareHtml, /summary_large_image/);
+  assert.match(forecastShareHtml, /\/assets\/share-card\.png/);
+  assert.match(forecastShareHtml, /a public forecast/);
+  assert.match(forecastShareHtml, /Check this place/);
+  assert.match(forecastShareHtml, /Make the city answer/);
+  assert.match(forecastShareHtml, /city closures/);
+  assert.match(forecastShareHtml, /Approximate public-data estimate/);
+  assert.doesNotMatch(forecastShareHtml, /undefined|null/);
+  const shareCard = await fetch(`${origin}/assets/share-card.png`);
+  assert.equal(shareCard.status, 200);
+  assert.equal(shareCard.headers.get('content-type'), 'image/png');
+  assert.equal(Buffer.from(await shareCard.arrayBuffer()).subarray(1, 4).toString(), 'PNG');
 
   const atlanta = await fetch(`${origin}/api/jurisdiction?city=atlanta`);
   assert.equal(atlanta.status, 200);
@@ -122,7 +146,16 @@ test('health and public assets are available with security headers', async () =>
   assert.equal(atlantaData.jurisdiction.id, 'atlanta');
   assert.equal(atlantaData.jurisdiction.legal_context.statute, 'O.C.G.A. § 36-60-34');
   assert.equal(atlantaData.jurisdiction.legal_context.effective_date, '2026-07-01');
+  assert.equal(atlantaData.jurisdiction.legal_context.remedy_adapter.reporter_reward, false);
   assert.equal(atlantaData.checklist_schema.example.attorney_review_ready, false);
+
+  const conditionLoop = await fetch(`${origin}/api/condition-loop?feature_id=311-encampment-1`);
+  assert.equal(conditionLoop.status, 200);
+  const conditionLoopData = (await conditionLoop.json()).loop;
+  assert.deepEqual(conditionLoopData.stages.map(item => item.id), ['detected', 'checked', 'action', 'outcome']);
+  assert.equal(conditionLoopData.record.id, '40.746,-73.987');
+  assert.equal(conditionLoopData.record.city_closures, 1587);
+  assert.equal(conditionLoopData.checks.forecast_unchanged, true);
 
   const access = await fetch(`${origin}/api/access`);
   assert.equal(access.status, 200);
@@ -148,7 +181,8 @@ test('health and public assets are available with security headers', async () =>
   assert.match(reportHtml, /fetch\('\/api\/post'/);
   assert.match(reportHtml, /URLSearchParams\(location\.search\).*app-shell/);
   assert.match(reportHtml, /radius:cluster\?3:2\.5/);
-  assert.match(reportHtml, /leaflet-tile-pane\{filter:brightness\(1\.22\)/);
+  assert.match(reportHtml, /tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png/);
+  assert.match(reportHtml, /leaflet-tile-pane\{filter:invert\(1\) hue-rotate\(180deg\)/);
   assert.doesNotMatch(reportHtml, /function radius\(/);
 
   const vendor = await fetch(`${origin}/vendor/leaflet.js`);
@@ -345,10 +379,11 @@ test('nearby community submissions are saved unreviewed, deduplicated, and dista
   assert.match(firstPayload.message, /saved for review/i);
   assert.match(firstPayload.message, /do not change the forecast/i);
   const observationDb = new DatabaseSync(path.join(dataDir, 'ugc.db'), { readOnly: true });
-  const stored = observationDb.prepare(`SELECT provenance,review_status,model_score,model_version,model_contract_version,model_probability
+  const stored = observationDb.prepare(`SELECT id,provenance,review_status,model_score,model_version,model_contract_version,model_probability
     FROM condition_observations WHERE feature_id=? ORDER BY id DESC LIMIT 1`).get(body.feature_id);
   observationDb.close();
-  assert.deepEqual({ ...stored }, {
+  const { id: observationId, ...storedFields } = stored;
+  assert.deepEqual({ ...storedFields }, {
     provenance: 'community_unreviewed', review_status: 'unreviewed', model_score: 0.79,
     model_version: 'walk-nowcast-v3-shadow', model_contract_version: 'condition-forecast-v1', model_probability: null,
   });
@@ -362,6 +397,22 @@ test('nearby community submissions are saved unreviewed, deduplicated, and dista
     body: JSON.stringify({ ...body, lat: 40.72, lng: -74.01 }),
   });
   assert.equal(far.status, 400);
+
+  const review = await fetch(`${origin}/api/review`, { headers: { cookie: `unig_review=${reviewKey}` } });
+  assert.equal(review.status, 200);
+  const reviewPayload = await review.json();
+  assert.ok(reviewPayload.condition_items.some(item => item.id === observationId));
+  const decision = await fetch(`${origin}/api/review/condition/decide`, {
+    method: 'POST', headers: { 'content-type': 'application/json', cookie: `unig_review=${reviewKey}` },
+    body: JSON.stringify({ id: observationId, action: 'approve' }),
+  });
+  assert.equal(decision.status, 200);
+  const decisionPayload = await decision.json();
+  assert.equal(decisionPayload.item.review_status, 'approved');
+  assert.equal(decisionPayload.item.provenance, 'community_reviewed');
+  const loop = (await (await fetch(`${origin}/api/condition-loop?feature_id=${body.feature_id}`)).json()).loop;
+  assert.ok(loop.checks.reviewed >= 1);
+  assert.ok(loop.stage_index >= 1);
 });
 
 test('Campaign 001 separates reporting evidence from observation and issues permanent action receipts', async () => {

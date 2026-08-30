@@ -77,6 +77,14 @@ const qConditionInsert = db.prepare(`INSERT OR IGNORE INTO condition_observation
 const qConditionSummary = db.prepare(`SELECT state,provenance,review_status,count(*) observations,count(distinct observer_hash) observers,
   max(observed_at) last_observed_at FROM condition_observations
   WHERE feature_id=? AND observed_at>=? GROUP BY state,provenance,review_status`);
+const qConditionPending = db.prepare(`SELECT id,feature_id,state,observed_at,distance_m,model_score,model_version,
+  model_contract_version,provenance,review_status FROM condition_observations
+  WHERE review_status='unreviewed' ORDER BY id ASC LIMIT 300`);
+const qConditionPendingCount = db.prepare(`SELECT COUNT(*) AS n FROM condition_observations WHERE review_status='unreviewed'`);
+const qConditionGetOne = db.prepare(`SELECT id,feature_id,state,observed_at,distance_m,model_score,model_version,
+  model_contract_version,provenance,review_status FROM condition_observations WHERE id=?`);
+const qConditionSetReview = db.prepare(`UPDATE condition_observations SET review_status=?,provenance=?
+  WHERE id=? AND review_status='unreviewed'`);
 
 // A walk opportunity is deliberately not an observation. It records only that an opted-in
 // navigator passed a mapped site closely enough to have had an opportunity to see it. The raw
@@ -343,6 +351,24 @@ function conditionObservationSummary(featureId, days = 30) {
   return qConditionSummary.all(featureId, since);
 }
 
+function pendingConditionObservations() {
+  return qConditionPending.all();
+}
+
+function pendingConditionObservationCount() {
+  return qConditionPendingCount.get().n;
+}
+
+function decideConditionObservation(id, action) {
+  const row = qConditionGetOne.get(id);
+  if (!row || row.review_status !== 'unreviewed') return null;
+  const approved = action === 'approve';
+  const result = qConditionSetReview.run(approved ? 'approved' : 'rejected',
+    approved ? 'community_reviewed' : 'community_rejected', id);
+  if (Number(result.changes) !== 1) return null;
+  return qConditionGetOne.get(id);
+}
+
 function addWalkOpportunity({ featureId, observedAt, observerHash, distanceBucket, modelProbability, modelVersion }) {
   const timestamp = new Date(observedAt).toISOString();
   const result = qOpportunityInsert.run(featureId, timestamp, timestamp.slice(0, 10), new Date().toISOString(), observerHash, distanceBucket, Number.isFinite(modelProbability) ? modelProbability : null, modelVersion || null);
@@ -459,6 +485,7 @@ function confirmActionReceipt(token) {
 
 module.exports = { addPost, addSeen, thread, countsAll, pending, pendingCount, decide,
   addConditionObservation, conditionObservationSummary, addWalkOpportunity, walkOpportunitySummary,
+  pendingConditionObservations, pendingConditionObservationCount, decideConditionObservation,
   addWalkFrictionEvent, walkFrictionSummary,
   startCampaign, getCampaign, setCampaignStatus, allCampaigns, addCampaignOrganizer,
   logAction, actionCounts, hasAction, firstActionTs,

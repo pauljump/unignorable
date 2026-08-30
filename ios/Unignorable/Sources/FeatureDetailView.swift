@@ -8,10 +8,51 @@ struct FeatureDetailView: View {
     @StateObject private var location = LocationManager()
     @State private var pendingObservation: String?
     @State private var observationStatus: String?
+    @State private var conditionLoop: ConditionLoop?
 
     var body: some View {
         NavigationStack {
             List {
+                if feature.subjectType == "encampment" {
+                    Section("One condition · one loop") {
+                        if let conditionLoop {
+                            HStack(spacing: 5) {
+                                ForEach(conditionLoop.stages) { stage in
+                                    VStack(spacing: 4) {
+                                        Capsule()
+                                            .fill(loopColor(stage.state))
+                                            .frame(height: 4)
+                                        Text(stage.label)
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundStyle(stage.state == "next" ? .secondary : .primary)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                            }
+                            Text(loopSummary(conditionLoop))
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            Button {
+                                if conditionLoop.nextAction.mode == "record" {
+                                    dismiss()
+                                    navigation.openReport(lat: feature.lat, lng: feature.lng)
+                                } else {
+                                    observationStatus = "Choose Still here, Gone, or Can't tell under Check this location."
+                                }
+                            } label: {
+                                Label(conditionLoop.nextAction.label, systemImage: conditionLoop.nextAction.mode == "record" ? "megaphone.fill" : "location.viewfinder")
+                            }
+                            if let record = conditionLoop.record {
+                                Text("\(record.reports) reports · \(record.cityClosures) city closures · \(record.returnsAfterClosure) returns after closure")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            ProgressView("Connecting forecast, checks, action, and outcome…")
+                        }
+                    }
+                }
+
                 Section {
                     LabeledContent("Layer", value: layer.title)
                     if let manufacturer = feature.manufacturer, !manufacturer.isEmpty {
@@ -124,6 +165,7 @@ struct FeatureDetailView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
         .presentationDetents([.medium])
+        .task(id: feature.id) { await refreshConditionLoop() }
         .onReceive(location.$coordinate) { coordinate in
             guard let coordinate, let state = pendingObservation else { return }
             pendingObservation = nil
@@ -179,6 +221,30 @@ struct FeatureDetailView: View {
         .disabled(pendingObservation != nil)
     }
 
+    private func loopColor(_ state: String) -> Color {
+        switch state {
+        case "complete": .teal
+        case "current": .pink
+        default: Color.secondary.opacity(0.3)
+        }
+    }
+
+    private func loopSummary(_ loop: ConditionLoop) -> String {
+        switch loop.stage {
+        case "detected": "Public evidence found a recurring condition. A nearby check is the highest-value next step."
+        case "checked": loop.checks.pending > 0
+            ? "\(loop.checks.pending) nearby check\(loop.checks.pending == 1 ? " is" : "s are") awaiting review. The permanent record is ready for action."
+            : "A nearby check now connects this forecast to the permanent accountability record."
+        case "action": "The accountability record is active. Keep escalating until someone confirms the outcome."
+        default: "An outcome was reported. A fresh nearby check determines whether it held."
+        }
+    }
+
+    @MainActor
+    private func refreshConditionLoop() async {
+        conditionLoop = try? await APIClient().conditionLoop(for: feature)
+    }
+
     @MainActor
     private func submit(_ state: String, coordinate: CLLocationCoordinate2D) async {
         do {
@@ -186,6 +252,7 @@ struct FeatureDetailView: View {
             observationStatus = result.duplicate
                 ? "Already submitted today. It is saved for review and does not change this forecast."
                 : "Saved for review. This community check does not change the forecast."
+            await refreshConditionLoop()
         } catch {
             observationStatus = error.localizedDescription
         }

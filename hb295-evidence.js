@@ -76,7 +76,8 @@ function buildHB295Checklist(input = {}) {
   return {
     statute: 'O.C.G.A. § 36-60-34',
     bill: 'GA HB 295 (2025-2026 Regular Session)',
-    warning: 'This is an evidence checklist for attorney review, not a legal conclusion or claim filing.',
+    remedy: 'A qualifying real-property owner may seek compensation from the local government; this is not payment for submitting a report.',
+    warning: 'This is an evidence checklist for attorney review, not a reporter bounty and not a legal conclusion, valuation, or claim filing.',
     coverage: {
       owner: { status: checklistStatus(ownerDocumented), owner_type: input.owner_type || null },
       parcel: { status: checklistStatus(parcelDocumented), parcel_id: input.parcel_id || null, property_address: input.property_address || null },

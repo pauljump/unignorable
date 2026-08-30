@@ -2,7 +2,7 @@
   "name": "unignorable",
   "version": "1.0.0",
   "private": true,
-  "description": "NYC public-data map with driving and walking avoidance routes",
+  "description": "Real-time accountability loop for recurring civic conditions",
   "engines": {
     "node": ">=22.5"
   },

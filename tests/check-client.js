@@ -15,7 +15,7 @@ for (const [index, source] of scripts.entries()) {
   }
 }
 
-for (const id of ['forecast-card', 'forecast-title', 'forecast-window', 'forecast-route', 'forecast-verify', 'forecast-check', 'forecast-evidence']) {
+for (const id of ['forecast-card', 'forecast-title', 'forecast-window', 'forecast-route', 'forecast-loop', 'forecast-loop-track', 'forecast-verify', 'forecast-check', 'forecast-evidence']) {
   if (!html.includes(`id="${id}"`)) throw new Error(`prediction-first control is missing: ${id}`);
 }
 if (!/id="forecast-card"[^>]*\shidden/.test(html) || !/id="map-tools"[^>]*\shidden/.test(html)) throw new Error('the map must launch without forecast or data panels in the way');
@@ -55,7 +55,9 @@ if (bootStart < 0 || bootEnd < 0) throw new Error('client boot function is missi
 const bootSource = html.slice(bootStart, bootEnd);
 if (bootSource.includes('loadReportIssues')) throw new Error('legacy report data must not load during normal boot');
 if (!html.includes("getElementById('report-link').addEventListener('click',openForecastRecord)")) throw new Error('public records must open through a type-matched forecast action');
-if (!html.includes("getElementById('forecast-verify').addEventListener('click',()=>{const check=")) throw new Error('primary verification must open the forecast calibration control');
+if (!html.includes("getElementById('forecast-verify').addEventListener('click',event=>{const mode=")) throw new Error('the primary next action must advance the condition loop');
+if (!html.includes("fetch(`/api/condition-loop?feature_id=")) throw new Error('the forecast must load its joined condition lifecycle');
+if (!html.includes('One condition · one loop') || !html.includes('Detected</span><span class="loop-step">Checked')) throw new Error('the forecast must make the four-state lifecycle visible');
 if (!html.includes("getElementById('results').addEventListener('click'")) throw new Error('route results must implement the back-to-forecast action');
 if (/% estimated presence|% probability/.test(html)) throw new Error('uncalibrated scores must not be presented as probabilities');
 if (!html.includes('uncalibrated model score') || !html.includes('heuristic score range')) throw new Error('numeric forecast scores need explicit uncalibrated labels');

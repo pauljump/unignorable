@@ -258,6 +258,59 @@ struct ConditionObservationResponse: Decodable, Sendable {
     let duplicate: Bool
 }
 
+struct ConditionLoopResponse: Decodable, Sendable {
+    let ok: Bool
+    let loop: ConditionLoop
+}
+
+struct ConditionLoop: Decodable, Sendable {
+    let stage: String
+    let stageIndex: Int
+    let stages: [ConditionLoopStage]
+    let nextAction: ConditionLoopAction
+    let checks: ConditionLoopChecks
+    let record: ConditionLoopRecord?
+    let campaign: ConditionLoopCampaign?
+}
+
+struct ConditionLoopStage: Decodable, Identifiable, Sendable {
+    let id: String
+    let label: String
+    let state: String
+}
+
+struct ConditionLoopAction: Decodable, Sendable {
+    let id: String
+    let mode: String
+    let label: String
+    let href: String?
+}
+
+struct ConditionLoopChecks: Decodable, Sendable {
+    let total: Int
+    let pending: Int
+    let reviewed: Int
+    let forecastUnchanged: Bool
+    let reviewRequired: Bool
+}
+
+struct ConditionLoopRecord: Decodable, Sendable {
+    let type: String
+    let id: String
+    let href: String
+    let status: String
+    let reports: Int
+    let cityClosures: Int
+    let returnsAfterClosure: Int
+    let currentDays: Int
+}
+
+struct ConditionLoopCampaign: Decodable, Sendable {
+    let active: Bool
+    let status: String
+    let startedAt: String
+}
+
 struct CitiBikeStation: Codable, Identifiable, Sendable {
     let id: String
     let name: String

@@ -8,6 +8,10 @@ Georgia HB 295 became effective July 1, 2026 and enacted O.C.G.A. § 36-60-34. I
 
 That is a legal evidence workflow, not a new 311 category. A recurring ATL311 record may help establish chronology or location, but it does not by itself establish a statutory policy/pattern/practice, a public nuisance, causation, damages, or the identity of an offender.
 
+It is also **not a reward for reporting**. The potential recipient is a qualifying fee-simple owner or leaseholder who documents mitigation expenses or reduced fair-market value; the local government is the potential payer after accepting a claim, settling it, or losing the resulting action. In Unignorable's common lifecycle, HB 295 is an Atlanta-specific **Action-stage remedy adapter** after detection and evidence review. It does not change the forecast, pay a checker, or replace independent outcome confirmation.
+
+If Unignorable later pilots a community-funded resolution pledge, keep it legally and operationally separate: never pay for reports, require an independently specified resolution test, prevent self-dealing, disclose the funder, and release funds only after a hold period. That is not part of the current Atlanta foundation.
+
 ## Current integration seam
 
 - `config/jurisdictions/atlanta.json` records Atlanta's official city-limit and council-district GIS sources, the ATL311 entry point, and the HB 295 claim fields.

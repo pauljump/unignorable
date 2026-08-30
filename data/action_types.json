@@ -64,8 +64,8 @@
   },
   {
     "id": "bounty",
-    "title": "Add a resolution bounty",
-    "desc": "Coming soon: put up a reward for documented resolution.",
+    "title": "Fund a resolution pledge",
+    "desc": "Future pilot: release a community-funded pledge only after independently verified resolution—not for reporting and not as city compensation.",
     "icon": "🏆",
     "kind": "coming",
     "enabled": false,

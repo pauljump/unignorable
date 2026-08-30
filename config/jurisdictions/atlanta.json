@@ -55,6 +55,13 @@
       "frequency": "once per parcel per tax year",
       "payment_cap": "ad valorem property taxes paid on the parcel and levied by that local government in the prior tax year"
     },
-    "product_boundary": "Evidence organization only; not a legal conclusion, claim filing, valuation, or representation."
+    "remedy_adapter": {
+      "loop_stage": "action",
+      "recipient": "eligible real-property owner",
+      "payer": "local government after an accepted claim, settlement, or court award",
+      "reporter_reward": false,
+      "purpose": "Organize owner, parcel, chronology, causation, and damages evidence for attorney review."
+    },
+    "product_boundary": "Evidence organization only; not a reporter bounty, legal conclusion, claim filing, valuation, or representation."
   }
 }
