@@ -98,7 +98,7 @@ The dated WebMCP implementation commit adds the tool-registration module, page b
 - [x] Shared visible UI and explicit human-control boundaries
 - [x] Demo script and Devpost copy
 - [x] Open-source license in the local submission branch
-- [ ] Deploy this WebMCP commit to the live URL
+- [x] Deploy this WebMCP commit to the live URL and verify all five tools in the in-app browser
 - [ ] Make the GitHub repository public (it is currently private)
 - [ ] Record a public, audio-narrated demo under three minutes
 - [ ] Join Devpost and submit before **September 3, 2026 at 1:00 PM PDT**
