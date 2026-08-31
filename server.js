@@ -199,7 +199,8 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'Permissions-Policy': 'camera=(self), geolocation=(self), microphone=()',
+  'Origin-Agent-Cluster': '?1',
+  'Permissions-Policy': 'camera=(self), geolocation=(self), microphone=(), tools=(self)',
 };
 const send = (res, code, body, type, extra = {}) => {
   res.writeHead(code, { ...SECURITY_HEADERS, 'Content-Type': type, ...extra });
@@ -2315,6 +2316,12 @@ async function handleRequest(req, res) {
     try {
       return send(res, 200, fs.readFileSync(path.join(DIR, 'vendor', name)), types[name], { 'Cache-Control': 'public, max-age=31536000, immutable' });
     } catch { return send(res, 404, 'not found', 'text/plain'); }
+  }
+
+  if (u.pathname === '/webmcp.js') {
+    return send(res, 200, fs.readFileSync(path.join(DIR, 'webmcp.js')), 'text/javascript; charset=utf-8', {
+      'Cache-Control': 'public, max-age=300',
+    });
   }
 
   if (u.pathname === '/assets/share-card.png') {

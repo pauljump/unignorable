@@ -22,8 +22,9 @@ The active product thesis is **close the loop**: Unignorable should say what is 
 - **Walking route avoidance remains available.** Tapping the walking control opens the route planner in Walking mode and selects the condition layer needed for avoidance. Directions fields have explicit clear controls.
 - **Forecast and data windows are opt-in.** The forecast card opens from search or the map forecast point; source layers open from the layers control. Saved layer selections do not repopulate the launch map.
 - **Current web release:** the condition accountability loop is deployed from branch `deploy/prediction-first-20260821`; production uses the keyless OpenStreetMap standard tile layer with visible attribution.
+- **WebMCP is implemented locally:** compatible agent browsers discover four top-level site tools for nearby evidence search, condition inspection, current-context reading, and human-controlled next-step preparation. The tools reuse the visible map and existing APIs; they never submit observations, contact officials, start checkout, or publish.
 - **Rollback:** branch `backup/pre-prediction-first-20260820` preserves the pre-prediction-first version. Runtime data remains outside Git at `/Users/mini-home/.local/share/unignorable`.
-- **Verification:** the client checks pass and the full suite passes 36/36 when run with the production runtime data directory. Deployment is managed through the control-plane fleet registry.
+- **Verification:** the client checks pass and the full suite passes 39/39 when run with the production runtime data directory. Deployment is managed through the control-plane fleet registry.
 - **iOS:** the native SwiftUI + MapKit client has a successful unsigned archive and passing unit/UI checks. It is not yet in TestFlight or the App Store; remaining release work is signing, privacy URL, and the StoreKit/paywall decision.
 
 The immediate validation is a one-block canary: measure whether forecast viewers complete a nearby check, whether reviewed checks convert into a tracked action, and whether the campaign produces a durable confirmed outcome. Walking is one evidence-recruitment channel; it is not the product's identity. Location-triggered prompts remain an explicit opt-in native follow-up, not background tracking by default.
@@ -36,6 +37,7 @@ The shared backend remains dependency-free Node 22. The web client uses self-hos
 
 ```text
 index.html                    full-screen Leaflet map, autocomplete, driving/walking, exact GPX export
+webmcp.js                     page-native WebMCP tool registration and narrow safety contracts
 ios/                          native iPhone app, XcodeGen project, MapKit canvas and SwiftUI controls
 server.js                     static app, geocode/route proxies, scoring endpoints, legacy routes
 map-core.js                   pure route intersection, scoring, recommendation, export URLs
@@ -93,6 +95,17 @@ REVIEW_KEY=test-only-key PORT=8000 npm start
 - `POST /api/routes` — paid driving or walking avoidance candidates, optional intermediate stop, verified selected-layer intersections, maneuvers, and map exports
 - `GET /api/condition-loop?feature_id=…` — one condition's Detected → Checked → Action → Outcome state and next useful action
 - `POST /api/condition-observations` — proximity-checked, deduplicated community submission saved as unreviewed material; it does not change the forecast
+
+## WebMCP site tools
+
+When `document.modelContext` is available, the top-level map registers four imperative WebMCP tools:
+
+- `unignorable_find_nearby` — read-only search across seven public evidence categories near an NYC place.
+- `unignorable_inspect_condition` — centers the visible map on one modeled condition and returns its evidence, uncertainty, lifecycle, and public URLs.
+- `unignorable_read_current_condition` — reads the map and lifecycle currently selected by the person or agent.
+- `unignorable_prepare_condition_action` — opens the visible nearby-check, share-receipt, accountability-record, or walking-route interface for a person to complete.
+
+The action tool is intentionally preparation-only. WebMCP cannot assert that a condition is present, request geolocation, submit a community check, contact an official, create an action receipt, purchase route access, copy text, or post to a social network. Public and community-derived output is marked as untrusted content. See [WEBMCP-SUBMISSION.md](./WEBMCP-SUBMISSION.md) for the challenge narrative and demo runbook.
 
 The route request accepts only `alpr`, `homelessness`, `drugs`, `dumping`, `sidewalk`, `street`, and `signals`. Homelessness and drug points are aggregated report clusters, never identified individuals. Popups say NYPD or DHS responded only when public 311 resolution text explicitly says so.
 

@@ -50,7 +50,7 @@ if (!html.includes('data-condition-state="present"') || !html.includes('data-con
 if (!html.includes('data-results-back')) throw new Error('route results must provide a path back to the forecast');
 if (!html.includes('report:{issues:null,enabled:new Set()')) throw new Error('legacy report markers must default off');
 const bootStart = html.indexOf('async function boot(){');
-const bootEnd = html.indexOf('\nboot();', bootStart);
+const bootEnd = html.indexOf('\nappReady=boot();', bootStart);
 if (bootStart < 0 || bootEnd < 0) throw new Error('client boot function is missing');
 const bootSource = html.slice(bootStart, bootEnd);
 if (bootSource.includes('loadReportIssues')) throw new Error('legacy report data must not load during normal boot');
@@ -69,5 +69,8 @@ if (!html.includes('Do not photograph or characterize people')) throw new Error(
 if (!html.includes("setAttribute('aria-activedescendant'")) throw new Error('autocomplete must expose its active option');
 if (/id="forecast-card"[^>]*aria-live/.test(html)) throw new Error('the entire forecast card must not be a live region');
 if (!html.includes('.forecast-actions button{min-height:44px') || !html.includes('.results-back{width:100%;min-height:44px')) throw new Error('new interactive targets must be at least 44px tall');
+if (!html.includes('window.UnignorableWebMCPBridge=') || !html.includes('<script src="/webmcp.js"></script>')) throw new Error('the map must expose and load its WebMCP bridge');
+if (!html.includes('No location permission was requested.') || !html.includes('Nothing was posted.')) throw new Error('WebMCP action preparation must state its human-control boundary');
+if (!html.includes('appReady=boot();')) throw new Error('WebMCP tools must share the application readiness promise');
 
 console.log(`client check passed (${scripts.length} inline scripts)`);

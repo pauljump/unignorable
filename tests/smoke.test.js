@@ -68,6 +68,8 @@ test('health and public assets are available with security headers', async () =>
 
   const root = await fetch(origin, { redirect: 'manual' });
   assert.equal(root.status, 200);
+  assert.equal(root.headers.get('origin-agent-cluster'), '?1');
+  assert.match(root.headers.get('permissions-policy'), /tools=\(self\)/);
   const rootHtml = await root.text();
   assert.match(rootHtml, /id="forecast-card"/);
   assert.match(rootHtml, /Current condition estimate/);
@@ -122,6 +124,16 @@ test('health and public assets are available with security headers', async () =>
   assert.match(rootHtml, /leaflet-tile-pane\{filter:invert\(1\) hue-rotate\(180deg\)/);
   assert.doesNotMatch(rootHtml, /basemaps\.cartocdn\.com/);
   assert.doesNotMatch(rootHtml, /pulse\.polyfeeds/);
+  assert.match(rootHtml, /src="\/webmcp\.js"/);
+  assert.match(rootHtml, /id="webmcp-status"/);
+
+  const webmcp = await fetch(`${origin}/webmcp.js`);
+  assert.equal(webmcp.status, 200);
+  assert.match(webmcp.headers.get('content-type'), /text\/javascript/);
+  const webmcpSource = await webmcp.text();
+  assert.match(webmcpSource, /document\.modelContext/);
+  assert.match(webmcpSource, /unignorable_find_nearby/);
+  assert.match(webmcpSource, /unignorable_prepare_condition_action/);
 
   const forecastShare = await fetch(`${origin}/f?id=311-encampment-1`);
   assert.equal(forecastShare.status, 200);
