@@ -72,5 +72,8 @@ if (!html.includes('.forecast-actions button{min-height:44px') || !html.includes
 if (!html.includes('window.UnignorableWebMCPBridge=') || !html.includes('<script src="/webmcp.js"></script>')) throw new Error('the map must expose and load its WebMCP bridge');
 if (!html.includes('No location permission was requested.') || !html.includes('Nothing was posted.')) throw new Error('WebMCP action preparation must state its human-control boundary');
 if (!html.includes('appReady=boot();')) throw new Error('WebMCP tools must share the application readiness promise');
+if (!html.includes('id="webmcp-mission"') || !html.includes('function webMcpPlanCivicAudit(')) throw new Error('the agent-compiled civic field audit must have a shared visible surface');
+if (!html.includes('Machine: reconcile records and prioritize uncertainty. Human: verify only the condition')) throw new Error('the civic field audit must preserve the machine/human truth boundary');
+if (!html.includes('seenRecords.has(key)')) throw new Error('the civic field audit must not spend multiple stops on one accountability record');
 
 console.log(`client check passed (${scripts.length} inline scripts)`);

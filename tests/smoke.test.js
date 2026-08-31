@@ -133,6 +133,7 @@ test('health and public assets are available with security headers', async () =>
   const webmcpSource = await webmcp.text();
   assert.match(webmcpSource, /document\.modelContext/);
   assert.match(webmcpSource, /unignorable_find_nearby/);
+  assert.match(webmcpSource, /unignorable_plan_civic_field_audit/);
   assert.match(webmcpSource, /unignorable_prepare_condition_action/);
 
   const forecastShare = await fetch(`${origin}/f?id=311-encampment-1`);

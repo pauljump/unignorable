@@ -6,11 +6,12 @@ Unignorable turns fragmented public evidence about recurring civic conditions in
 
 The agent does the synthesis that is tedious for a person: search a place, compare nearby public evidence, inspect recurrence and uncertainty, reconcile city closures with returns after closure, and identify the next useful transition. The person does what the agent cannot legitimately do: physically verify a condition, authorize outward communication, choose a route, and judge whether an outcome held.
 
-This is not a chatbot bolted onto a map. The website itself exposes four bounded tools through the draft WebMCP API, and every state-changing tool opens the existing visible interface for human review.
+This is not a chatbot bolted onto a map. The website itself exposes five bounded tools through the draft WebMCP API. Its distinctive tool compiles a real-world civic field audit: it weighs forecast uncertainty, repeated returns after official closure, lifecycle state, and walking effort to decide which human checks would create the most accountability value. Every state-changing tool opens the existing visible interface for human review.
 
 ## Why it fits the challenge
 
 - **Shared context:** the agent and person operate the same Leaflet map, selected condition, public record, and action UI.
+- **A new human-agent primitive:** instead of automating another web form, the agent allocates scarce human attention across real-world truth checks that a browser agent cannot honestly perform.
 - **Less scraping, more semantics:** the agent receives structured evidence, model caveats, lifecycle state, and stable condition IDs rather than inferring meaning from markers and prose.
 - **Human authority:** no tool can claim a field observation, request location permission, contact an official, create an action receipt, buy access, or publish to X.
 - **Real public value:** a resident can ask one natural-language question—“What keeps happening near this block, and what can I do?”—and move from public evidence to a safe next step.
@@ -22,6 +23,7 @@ This is not a chatbot bolted onto a map. The website itself exposes four bounded
 | --- | --- | --- | --- |
 | `unignorable_find_nearby` | Seven public evidence categories near an NYC place | None | None |
 | `unignorable_inspect_condition` | Forecast, uncertainty, evidence, lifecycle, record, next step | Centers map and opens forecast | None |
+| `unignorable_plan_civic_field_audit` | Nearby lifecycles, uncertainty, closure contradictions, and walking effort | Renders an ordered civic field audit | None; every field claim remains human |
 | `unignorable_read_current_condition` | Current map and selected lifecycle context | None | None |
 | `unignorable_prepare_condition_action` | Selected condition and action context | Opens check, receipt, record, or route UI | None; a person must complete the action |
 
@@ -37,15 +39,15 @@ Open the live map and say:
 
 Show the unobstructed map and the four-stage loop.
 
-### 0:25–1:05 — Agent discovery and search
+### 0:25–1:15 — Compile a real-world audit
 
-In ChatGPT’s in-app browser or a WebMCP-enabled Chrome build, show the four available site tools. Ask:
+In ChatGPT’s in-app browser or a WebMCP-enabled Chrome build, show the five available site tools. Ask:
 
-> Find recurring civic-condition evidence within 1,000 meters of Penn Station. Prioritize anything with a condition lifecycle.
+> Build me a 30-minute civic field audit starting at Penn Station. Prioritize places where city closures were followed by more reports. Do not submit anything.
 
-The agent calls `unignorable_find_nearby` and returns structured, caveated public evidence without moving the page.
+The agent calls `unignorable_plan_civic_field_audit`. Unignorable reconciles the nearby public records and visibly renders an ordered audit. Point out the split printed on the page: the machine ranks the evidence; humans decide what is true outside the browser.
 
-### 1:05–1:45 — One condition, fully explained
+### 1:15–1:50 — One stop, fully explained
 
 Ask:
 
@@ -53,7 +55,7 @@ Ask:
 
 The agent calls `unignorable_inspect_condition`. The map visibly centers on the approximate area and opens the same forecast card the person can inspect. Emphasize that the numeric score is uncalibrated and the location is approximate.
 
-### 1:45–2:30 — Agent prepares; human decides
+### 1:50–2:30 — Agent prepares; human decides
 
 Ask:
 
@@ -83,7 +85,7 @@ A resident can ask what recurring civic evidence exists near a place and what de
 
 ### How WebMCP is implemented
 
-The top-level page imperatively registers four tools with `document.modelContext.registerTool`. Tool handlers call a narrow bridge into the same application logic and APIs used by the visible map. Inputs use bounded JSON Schemas with `additionalProperties: false`; public outputs are marked untrusted; page-view tools describe their exact UI effect; registration and execution support cancellation. The app also sends an explicit `Origin-Agent-Cluster: ?1` header and a `tools=(self)` permissions policy.
+The top-level page imperatively registers five tools with `document.modelContext.registerTool`. Tool handlers call a narrow bridge into the same application logic and APIs used by the visible map. The field-audit tool performs bounded multi-condition synthesis and renders the result in the shared page; it does not turn the agent into a witness. Inputs use bounded JSON Schemas with `additionalProperties: false`; public outputs are marked untrusted; page-view tools describe their exact UI effect; registration and execution support cancellation. The app also sends an explicit `Origin-Agent-Cluster: ?1` header and a `tools=(self)` permissions policy.
 
 ### Meaningful extension after challenge launch
 

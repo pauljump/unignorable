@@ -22,7 +22,7 @@ The active product thesis is **close the loop**: Unignorable should say what is 
 - **Walking route avoidance remains available.** Tapping the walking control opens the route planner in Walking mode and selects the condition layer needed for avoidance. Directions fields have explicit clear controls.
 - **Forecast and data windows are opt-in.** The forecast card opens from search or the map forecast point; source layers open from the layers control. Saved layer selections do not repopulate the launch map.
 - **Current web release:** the condition accountability loop is deployed from branch `deploy/prediction-first-20260821`; production uses the keyless OpenStreetMap standard tile layer with visible attribution.
-- **WebMCP is implemented locally:** compatible agent browsers discover four top-level site tools for nearby evidence search, condition inspection, current-context reading, and human-controlled next-step preparation. The tools reuse the visible map and existing APIs; they never submit observations, contact officials, start checkout, or publish.
+- **WebMCP is implemented locally:** compatible agent browsers discover five top-level site tools. The differentiated workflow compiles a time-bounded civic field audit by combining forecast uncertainty, returns after city closure, lifecycle state, and walking effort, then assigns record synthesis to the agent and every real-world truth claim to a nearby person. The tools reuse the visible map and existing APIs; they never submit observations, contact officials, start checkout, or publish.
 - **Rollback:** branch `backup/pre-prediction-first-20260820` preserves the pre-prediction-first version. Runtime data remains outside Git at `/Users/mini-home/.local/share/unignorable`.
 - **Verification:** the client checks pass and the full suite passes 39/39 when run with the production runtime data directory. Deployment is managed through the control-plane fleet registry.
 - **iOS:** the native SwiftUI + MapKit client has a successful unsigned archive and passing unit/UI checks. It is not yet in TestFlight or the App Store; remaining release work is signing, privacy URL, and the StoreKit/paywall decision.
@@ -98,10 +98,11 @@ REVIEW_KEY=test-only-key PORT=8000 npm start
 
 ## WebMCP site tools
 
-When `document.modelContext` is available, the top-level map registers four imperative WebMCP tools:
+When `document.modelContext` is available, the top-level map registers five imperative WebMCP tools:
 
 - `unignorable_find_nearby` — read-only search across seven public evidence categories near an NYC place.
 - `unignorable_inspect_condition` — centers the visible map on one modeled condition and returns its evidence, uncertainty, lifecycle, and public URLs.
+- `unignorable_plan_civic_field_audit` — compiles a 15–90 minute human field audit around the most useful next lifecycle transitions, and renders it in the shared map UI.
 - `unignorable_read_current_condition` — reads the map and lifecycle currently selected by the person or agent.
 - `unignorable_prepare_condition_action` — opens the visible nearby-check, share-receipt, accountability-record, or walking-route interface for a person to complete.
 

@@ -56,6 +56,29 @@
       execute: (input, options) => bridge.inspectCondition(input, options?.signal),
     },
     {
+      name: 'unignorable_plan_civic_field_audit',
+      title: 'Compile a civic field audit',
+      description: 'Turn fragmented public records near an NYC place into a bounded, visible human field audit. Ranks modeled conditions by forecast uncertainty, repeated returns after city closure, lifecycle state, and walking effort; assigns the agent the record synthesis and nearby people the real-world truth checks. Produces an approximate plan only and performs no observation, complaint, message, purchase, route request, or post.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          place: { type: 'string', minLength: 3, maxLength: 180, description: 'The NYC address, intersection, landmark, or neighborhood where the field audit starts and ends.' },
+          walking_minutes: { type: 'integer', minimum: 15, maximum: 90, default: 30, description: 'Total approximate time budget, including three minutes at each stop.' },
+          objective: {
+            type: 'string',
+            enum: ['highest_leverage', 'verify_uncertain', 'challenge_closure_loop', 'confirm_outcomes'],
+            default: 'highest_leverage',
+            description: 'The lifecycle transition the audit should prioritize.',
+          },
+          max_stops: { type: 'integer', minimum: 1, maximum: 4, default: 3, description: 'Maximum number of human truth-check stops.' },
+        },
+        required: ['place'],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: false, untrustedContentHint: true },
+      execute: (input, options) => bridge.planCivicAudit(input, options?.signal),
+    },
+    {
       name: 'unignorable_read_current_condition',
       title: 'Read the current condition',
       description: 'Read the condition, lifecycle, and map context currently selected in Unignorable without changing the page or any stored data.',
