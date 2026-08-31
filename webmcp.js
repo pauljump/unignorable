@@ -27,7 +27,7 @@
     {
       name: 'unignorable_find_nearby',
       title: 'Find nearby public evidence',
-      description: 'Search an NYC place for nearby recurring civic-condition evidence and mapped license plate cameras. Encampment results are bounded reported-location envelopes that consolidate very close address-geocode variants; they are not physical-instance identifiers or proof a condition is present. The tool does not move the map, request location permission, or change data.',
+      description: 'Search an NYC place for nearby recurring civic-condition evidence and mapped license plate cameras. Encampment results are bounded reported-location envelopes that consolidate nearby variants and strongly matching same-segment address estimates within a hard 65-meter diameter; they are not physical-instance identifiers or proof a condition is present. The tool does not move the map, request location permission, or change data.',
       inputSchema: {
         type: 'object',
         properties: {
