@@ -77,6 +77,8 @@ const qConditionInsert = db.prepare(`INSERT OR IGNORE INTO condition_observation
 const qConditionSummary = db.prepare(`SELECT state,provenance,review_status,count(*) observations,count(distinct observer_hash) observers,
   max(observed_at) last_observed_at FROM condition_observations
   WHERE feature_id=? AND observed_at>=? GROUP BY state,provenance,review_status`);
+const qReviewedConditionsSince = db.prepare(`SELECT state,observed_at,observation_day FROM condition_observations
+  WHERE feature_id=? AND review_status='approved' AND observed_at>=? ORDER BY observed_at ASC`);
 const qConditionPending = db.prepare(`SELECT id,feature_id,state,observed_at,distance_m,model_score,model_version,
   model_contract_version,provenance,review_status FROM condition_observations
   WHERE review_status='unreviewed' ORDER BY id ASC LIMIT 300`);
@@ -351,6 +353,11 @@ function conditionObservationSummary(featureId, days = 30) {
   return qConditionSummary.all(featureId, since);
 }
 
+function reviewedConditionObservationsSince(featureId, since) {
+  const timestamp = new Date(since).toISOString();
+  return qReviewedConditionsSince.all(featureId, timestamp);
+}
+
 function pendingConditionObservations() {
   return qConditionPending.all();
 }
@@ -484,7 +491,8 @@ function confirmActionReceipt(token) {
 }
 
 module.exports = { addPost, addSeen, thread, countsAll, pending, pendingCount, decide,
-  addConditionObservation, conditionObservationSummary, addWalkOpportunity, walkOpportunitySummary,
+  addConditionObservation, conditionObservationSummary, reviewedConditionObservationsSince,
+  addWalkOpportunity, walkOpportunitySummary,
   pendingConditionObservations, pendingConditionObservationCount, decideConditionObservation,
   addWalkFrictionEvent, walkFrictionSummary,
   startCampaign, getCampaign, setCampaignStatus, allCampaigns, addCampaignOrganizer,

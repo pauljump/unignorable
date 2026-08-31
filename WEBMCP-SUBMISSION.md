@@ -2,7 +2,7 @@
 
 ## Submission thesis
 
-Unignorable turns fragmented public evidence about recurring civic conditions into one visible, accountable lifecycle: **Detected → Checked → Action → Outcome**. WebMCP makes that lifecycle operable by a person and agent sharing the same live map.
+Unignorable turns fragmented public evidence about recurring civic conditions into one visible durable-resolution lifecycle: **Detected → Checked → Action → Clear → Held**. A city closure is not success; reviewed clear checks on distinct days after the claim and a site-specific quiet window must show the result held, and recurrence reopens the loop. WebMCP makes that lifecycle operable by a person and agent sharing the same live map.
 
 The agent does the synthesis that is tedious for a person: search a place, compare nearby public evidence, inspect recurrence and uncertainty, reconcile city closures with returns after closure, and identify the next useful transition. The person does what the agent cannot legitimately do: physically verify a condition, authorize outward communication, choose a route, and judge whether an outcome held.
 
@@ -69,7 +69,7 @@ Optionally prepare `nearby_check` to show the three human choices without trigge
 
 ### 2:30–2:55 — Close the loop
 
-Show Detected → Checked → Action → Outcome and conclude:
+Show Detected → Checked → Action → Clear → Held and conclude:
 
 > WebMCP gives public evidence an agent-readable shape, while Unignorable keeps truth claims and civic action under human control. The objective is not more reports or outrage. It is more verified, durably resolved condition-days per active block.
 

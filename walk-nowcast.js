@@ -9,8 +9,8 @@
 const { estimatePresence } = require('./condition-model');
 
 const DAY_MS = 86_400_000;
-const METHOD_VERSION = 'walk-nowcast-v3-shadow';
-const CONTRACT_VERSION = 'condition-forecast-v1';
+const METHOD_VERSION = 'walk-nowcast-v4-shadow';
+const CONTRACT_VERSION = 'condition-forecast-v2';
 const LOCAL_TIME_ZONE = 'America/New_York';
 const TIME_WINDOW_HOURS = 3;
 const TIME_WINDOW_LOOKBACK_DAYS = 90;
@@ -197,16 +197,62 @@ function evidenceFeatures(events, nowMs) {
   };
 }
 
+// Current presence and site persistence are different targets. A quiet month can make a live
+// nowcast weak without erasing years of recurrence at the same address-geocoded site. Keeping the
+// targets separate also prevents a single imperfect non-detection from being presented as if the
+// long-run site history never existed.
+function recurringSitePattern(events, nowMs) {
+  const days = publicReportDays(events);
+  const dayKeys = days.map(day => localParts(day.at).day);
+  const activeMonths = new Set(dayKeys.map(day => day.slice(0, 7))).size;
+  const activeYears = new Set(dayKeys.map(day => day.slice(0, 4))).size;
+  const firstAt = days[0]?.at || null, lastAt = days.at(-1)?.at || null;
+  const spanDays = firstAt == null || lastAt == null ? 0 : Math.max(0, (lastAt - firstAt) / DAY_MS);
+  const negativeChecks = events.filter(event => ['not_observed', 'cleanup_reported'].includes(event.type));
+  let returnsAfterNegative = 0;
+  for (const negative of negativeChecks) {
+    if (days.some(day => day.at > negative.at && day.at - negative.at <= 45 * DAY_MS)) returnsAfterNegative += 1;
+  }
+  const reportDays = days.length;
+  // Evidence-strength score only. The thresholds are inspectable product rules, not a calibrated
+  // probability: duration, repeated active months, and post-check recurrence must all contribute.
+  const durationSignal = clamp(spanDays / (365 * 2));
+  const monthSignal = clamp(Math.log1p(activeMonths) / Math.log(25));
+  const daySignal = clamp(Math.log1p(reportDays) / Math.log(61));
+  const returnSignal = clamp(Math.log1p(returnsAfterNegative) / Math.log(11));
+  const score = round(0.22 * durationSignal + 0.30 * monthSignal + 0.30 * daySignal + 0.18 * returnSignal);
+  const classification = spanDays >= 180 && activeMonths >= 6 && reportDays >= 12
+    ? 'persistent_recurring'
+    : spanDays >= 60 && activeMonths >= 3 && reportDays >= 5 ? 'recurring' : 'limited_history';
+  return {
+    classification,
+    label: classification === 'persistent_recurring' ? 'Persistent recurring site'
+      : classification === 'recurring' ? 'Recurring site history' : 'Limited site history',
+    evidence_strength: score,
+    score_semantics: 'uncalibrated_recurrence_evidence_strength',
+    distinct_report_days: reportDays,
+    active_months: activeMonths,
+    active_years: activeYears,
+    history_span_days: Math.round(spanDays),
+    negative_checks_followed_by_report: returnsAfterNegative,
+    first_report_at: firstAt == null ? null : new Date(firstAt).toISOString(),
+    last_report_at: lastAt == null ? null : new Date(lastAt).toISOString(),
+    current_presence_separate: true,
+  };
+}
+
 function confidenceTier(features) {
   if (features.positive_evidence_signal >= 0.75 || features.negative_evidence_signal >= 0.75) return 'high';
   if (features.positive_evidence_signal >= 0.35 || features.negative_evidence_signal >= 0.35 || features.report_days_7 >= 2 || features.report_days_14 >= 3) return 'medium';
   return 'low';
 }
 
-function labelFor(probability, confidence) {
+function labelFor(probability, confidence, sitePattern) {
   if (probability >= 0.74 && confidence !== 'low') return 'Condition likely near this location';
   if (probability >= 0.45) return 'Condition may be near this location';
   if (probability <= 0.18 && confidence !== 'low') return 'Condition less likely near this location';
+  if (sitePattern?.classification === 'persistent_recurring') return 'Persistent recurring site; current status needs a fresh check';
+  if (sitePattern?.classification === 'recurring') return 'Recurring site; current status needs a fresh check';
   return 'Insufficient current evidence';
 }
 
@@ -228,10 +274,12 @@ function estimateWalkNowcast(inputEvents, now = new Date(), options = {}) {
       probability_range: null, score_range: null, range_semantics: 'heuristic_score_range_not_confidence_interval',
       confidence: 'low', confidence_semantics: 'evidence_strength_not_statistical_confidence',
       local_time_window: timeWindow, spatial_uncertainty: spatialUncertainty,
+      site_pattern: recurringSitePattern(events, nowMs),
       features: evidenceFeatures(events, nowMs), basis: 'No usable observation timeline is available.' };
   }
 
   const features = evidenceFeatures(events, nowMs);
+  const sitePattern = recurringSitePattern(events, nowMs);
   const adjustment = 0.42 * (features.recency_signal - 0.5) + 0.36 * (features.frequency_signal - 0.28)
     + 0.24 * (features.cadence_signal - 0.35) + 0.82 * features.positive_evidence_signal - 0.66 * features.negative_evidence_signal;
   const score = clamp(logistic(logit(legacy.presence_probability) + adjustment), 0.01, 0.99);
@@ -242,16 +290,17 @@ function estimateWalkNowcast(inputEvents, now = new Date(), options = {}) {
 
   return {
     contract_version: CONTRACT_VERSION, method_version: METHOD_VERSION, rollout: 'shadow', status: 'beta',
-    as_of: new Date(nowMs).toISOString(), label: labelFor(score, confidence),
+    as_of: new Date(nowMs).toISOString(), label: labelFor(score, confidence, sitePattern),
     score_semantics: 'uncalibrated_shadow_score', uncalibrated_score: round(score),
     current_probability: round(score), live_probability: round(score),
     range_semantics: 'heuristic_score_range_not_confidence_interval',
     score_range: [round(clamp(score - radius)), round(clamp(score + radius))],
     probability_range: [round(clamp(score - radius)), round(clamp(score + radius))], confidence,
     confidence_semantics: 'evidence_strength_not_statistical_confidence',
-    local_time_window: timeWindow, spatial_uncertainty: spatialUncertainty, features,
-    basis: 'Beta shadow score combines time-decayed recurrence, report cadence, and public agency observations. It is uncalibrated, is not a field-confirmed live status or probability, and is not used for routing.',
+    local_time_window: timeWindow, spatial_uncertainty: spatialUncertainty, features, site_pattern: sitePattern,
+    observation_model: { imperfect_detection: true, negative_check_proves_absence: false, current_presence_separate_from_site_persistence: true },
+    basis: `${sitePattern.label} is estimated separately from current presence. The current beta shadow score combines time-decayed recurrence, report cadence, and imperfect public agency observations. It is uncalibrated, is not a field-confirmed live status or probability, and is not used for routing.`,
   };
 }
 
-module.exports = { CONTRACT_VERSION, METHOD_VERSION, LOCAL_TIME_ZONE, evidenceFeatures, localTimeWindow, estimateWalkNowcast };
+module.exports = { CONTRACT_VERSION, METHOD_VERSION, LOCAL_TIME_ZONE, evidenceFeatures, recurringSitePattern, localTimeWindow, estimateWalkNowcast };

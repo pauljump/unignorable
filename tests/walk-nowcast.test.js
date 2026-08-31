@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { METHOD_VERSION, localTimeWindow, estimateWalkNowcast } = require('../walk-nowcast');
+const { METHOD_VERSION, recurringSitePattern, localTimeWindow, estimateWalkNowcast } = require('../walk-nowcast');
 const { estimatePresence, routingLevel } = require('../condition-model');
 
 const NOW = new Date('2026-08-20T16:00:00Z');
@@ -23,7 +23,7 @@ test('forecast contract exposes beta probability, uncertainty, and honest labels
     locationMethod: 'NYC 311 address-geocoded coordinate',
   });
   assert.equal(result.method_version, METHOD_VERSION);
-  assert.equal(result.contract_version, 'condition-forecast-v1');
+  assert.equal(result.contract_version, 'condition-forecast-v2');
   assert.equal(result.rollout, 'shadow');
   assert.equal(result.status, 'beta');
   assert.equal(result.current_probability, result.live_probability);
@@ -112,6 +112,22 @@ test('no-evidence forecast keeps the same nullable contract', () => {
   assert.equal(result.local_time_window, null);
   assert.equal(result.spatial_uncertainty.radius_m, 45);
   assert.equal(result.confidence, 'low');
+});
+
+test('persistent site history is not erased by weak current evidence', () => {
+  const events = [];
+  for (let year = 2022; year <= 2026; year += 1) {
+    for (const month of [1, 3, 5, 7]) events.push(report(`${year}-${String(month).padStart(2, '0')}-05`, [7]));
+  }
+  events.push({ type: 'not_observed', at: '2026-07-05T13:00:00Z' });
+  const pattern = recurringSitePattern(events.map(event => ({ ...event, at: Date.parse(event.at) })), NOW.getTime());
+  assert.equal(pattern.classification, 'persistent_recurring');
+  assert.equal(pattern.current_presence_separate, true);
+  const result = estimateWalkNowcast(events, NOW);
+  assert.equal(result.site_pattern.classification, 'persistent_recurring');
+  assert.match(result.label, /persistent recurring site/i);
+  assert.match(result.label, /fresh check/i);
+  assert.equal(result.observation_model.negative_check_proves_absence, false);
 });
 
 test('shadow forecast cannot silently alter hard route exclusions', () => {

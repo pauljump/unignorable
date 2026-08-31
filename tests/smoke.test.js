@@ -74,7 +74,7 @@ test('health and public assets are available with security headers', async () =>
   assert.match(rootHtml, /id="forecast-card"/);
   assert.match(rootHtml, /Current condition estimate/);
   assert.match(rootHtml, /Historical reports most often arrived/);
-  assert.match(rootHtml, /uncalibrated model score/);
+  assert.match(rootHtml, /uncalibrated current score/);
   assert.doesNotMatch(rootHtml, /% estimated presence/);
   assert.match(rootHtml, /Plan a route around it/);
   assert.match(rootHtml, /Homeless \/ encampment reports/);
@@ -85,8 +85,8 @@ test('health and public assets are available with security headers', async () =>
   assert.match(rootHtml, /id="report-link" type="button">Action record<\/button>/);
   assert.match(rootHtml, /id="forecast-share"/);
   assert.match(rootHtml, /id="forecast-share-x"/);
-  assert.match(rootHtml, /One condition · one loop/);
-  assert.match(rootHtml, /Detected[\s\S]*Checked[\s\S]*Action[\s\S]*Outcome/);
+  assert.match(rootHtml, /Resolve it · prove it held/);
+  assert.match(rootHtml, /Detected[\s\S]*Checked[\s\S]*Action[\s\S]*Clear[\s\S]*Held/);
   assert.match(rootHtml, /fetch\(`\/api\/condition-loop\?feature_id=/);
   assert.match(rootHtml, /params\.get\('forecast'\)/);
   assert.doesNotMatch(rootHtml, /id="report-panel"/);
@@ -107,7 +107,8 @@ test('health and public assets are available with security headers', async () =>
   assert.match(rootHtml, /id="filter-card"/);
   assert.match(rootHtml, /id="layers-toggle"/);
   assert.match(rootHtml, /Selected layers show on the map and shape routes/);
-  assert.match(rootHtml, /map\.on\('zoomend',\(\)=>\{syncLayers\(\);drawReportIssues\(\);renderForecast\(\);\}\)/);
+  assert.match(rootHtml, /map\.on\('zoomend',\(\)=>\{syncLayers\(\);drawReportIssues\(\);\}\)/);
+  assert.doesNotMatch(rootHtml, /map\.on\('moveend',[\s\S]{0,120}renderForecast\(\)/);
   assert.doesNotMatch(rootHtml, /else loadReportIssues\(\)/);
   assert.match(rootHtml, /fetch\('\/api\/condition-observations'/);
   assert.match(rootHtml, /data-condition-state="present"/);
@@ -165,7 +166,7 @@ test('health and public assets are available with security headers', async () =>
   const conditionLoop = await fetch(`${origin}/api/condition-loop?feature_id=311-encampment-1`);
   assert.equal(conditionLoop.status, 200);
   const conditionLoopData = (await conditionLoop.json()).loop;
-  assert.deepEqual(conditionLoopData.stages.map(item => item.id), ['detected', 'checked', 'action', 'outcome']);
+  assert.deepEqual(conditionLoopData.stages.map(item => item.id), ['detected', 'checked', 'action', 'clear', 'held']);
   assert.equal(conditionLoopData.record.id, '40.746,-73.987');
   assert.equal(conditionLoopData.record.city_closures, 1587);
   assert.equal(conditionLoopData.checks.forecast_unchanged, true);
@@ -425,7 +426,11 @@ test('nearby community submissions are saved unreviewed, deduplicated, and dista
   assert.equal(decisionPayload.item.provenance, 'community_reviewed');
   const loop = (await (await fetch(`${origin}/api/condition-loop?feature_id=${body.feature_id}`)).json()).loop;
   assert.ok(loop.checks.reviewed >= 1);
+  assert.equal(loop.checks.reviewed_present, 1);
   assert.ok(loop.stage_index >= 1);
+  assert.equal(loop.objective.name, 'durable_condition_resolution');
+  assert.equal(loop.durable_resolution.recurrence_reopens_loop, true);
+  assert.equal(loop.durable_resolution.verified_held, false);
 });
 
 test('Campaign 001 separates reporting evidence from observation and issues permanent action receipts', async () => {

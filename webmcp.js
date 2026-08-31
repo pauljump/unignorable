@@ -45,7 +45,7 @@
     {
       name: 'unignorable_inspect_condition',
       title: 'Inspect a condition lifecycle',
-      description: 'Open one modeled condition on the visible map and return its dated evidence, uncertainty, Detected-to-Outcome lifecycle, permanent record, and recommended next step. Changes page view only; it does not submit, contact, purchase, or publish.',
+      description: 'Open one modeled condition on the visible map and return its dated evidence, uncertainty, Detected-to-Held lifecycle, durable-resolution proof, permanent record, and recommended next step. A closure is not success unless reviewed checks and the recurrence window show it held. Changes page view only; it does not submit, contact, purchase, or publish.',
       inputSchema: {
         type: 'object',
         properties: { condition_id: conditionId },
@@ -58,7 +58,7 @@
     {
       name: 'unignorable_plan_civic_field_audit',
       title: 'Compile a civic field audit',
-      description: 'Turn fragmented public records near an NYC place into a bounded, visible human field audit. Ranks modeled conditions by forecast uncertainty, repeated returns after city closure, lifecycle state, and walking effort; assigns the agent the record synthesis and nearby people the real-world truth checks. Produces an approximate plan only and performs no observation, complaint, message, purchase, route request, or post.',
+      description: 'Turn fragmented public records near an NYC place into a bounded, visible human field audit that minimizes verified recurring condition burden. Ranks conditions by uncertainty, recurrence after action, missing durable-resolution proof, lifecycle state, and walking effort; assigns record synthesis to the agent and every real-world truth claim to nearby people. Produces an approximate plan only and performs no observation, complaint, message, purchase, route request, or post.',
       inputSchema: {
         type: 'object',
         properties: {

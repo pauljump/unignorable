@@ -28,7 +28,10 @@ if (!html.includes('enabled:new Set()')) throw new Error('the default map should
 if (!html.includes('width:calc(100vw - 16px);max-width:calc(100vw - 16px)')) throw new Error('the mobile forecast shell must fit inside the viewport');
 if (!html.includes('data-clear-field="origin"') || !html.includes('data-clear-field="destination"')) throw new Error('directions need explicit clear controls');
 if (!html.includes('function clearRouteField(id)')) throw new Error('clearing a direction must reset its saved route state');
-if (!html.includes('Tap to inspect this forecast')) throw new Error('the forecast map dot needs an explicit tap target affordance');
+if (!html.includes("document.getElementById('forecast-card').scrollTo({top:0") || html.includes('evidence.scrollIntoView')) throw new Error('the forecast dot must open the URL-backed sheet at its stable top without forcing a nested evidence scroll');
+if (!html.includes('touch-action:pan-y') || !html.includes('-webkit-overflow-scrolling:touch')) throw new Error('the mobile forecast sheet must own a momentum-enabled vertical scroll surface');
+if (!html.includes("const center=state.forecast.anchor,limit=1200;if(!center)return null")) throw new Error('forecast selection must be anchored to an explicit place, not the moving map center');
+if (!html.includes("history[push?'pushState':'replaceState']") || !html.includes("window.addEventListener('popstate'")) throw new Error('forecast selections must have restorable URLs and browser history');
 if (!html.includes("feature?.local_time_window||nowcast.local_time_window")) throw new Error('the client must accept the nested forecast time-window contract');
 if (!html.includes('nowcast.uncalibrated_score') || !html.includes('nowcast.score_range')) throw new Error('the client must prefer the explicit uncalibrated score contract');
 if (!html.includes("'Historical reports most often arrived'")) throw new Error('historical report timing must not be presented as an exact future prediction');
@@ -40,6 +43,7 @@ assert.equal(forecastHeadline('Likely encampment present', 'Encampment'), 'Encam
 assert.equal(forecastHeadline('Condition likely near this location', 'Encampment'), 'Encampment likely near this location');
 assert.equal(forecastHeadline('Condition may be near this location', 'Encampment'), 'Encampment may be near this location');
 assert.equal(forecastHeadline('Condition less likely near this location', 'Encampment'), 'Encampment less likely near this location');
+assert.equal(forecastHeadline('Persistent recurring site; current status needs a fresh check', 'Encampment'), 'Persistent recurring site · check current status');
 assert.match(forecastHeadline('Insufficient current evidence', 'Encampment'), /^Encampment:/);
 const latestTimestampSource = html.match(/function latestTimestamp\(\.\.\.values\)\{[\s\S]*?\n\}/)?.[0];
 if (!latestTimestampSource) throw new Error('latest signal timestamp selector is missing');
@@ -57,10 +61,10 @@ if (bootSource.includes('loadReportIssues')) throw new Error('legacy report data
 if (!html.includes("getElementById('report-link').addEventListener('click',openForecastRecord)")) throw new Error('public records must open through a type-matched forecast action');
 if (!html.includes("getElementById('forecast-verify').addEventListener('click',event=>{const mode=")) throw new Error('the primary next action must advance the condition loop');
 if (!html.includes("fetch(`/api/condition-loop?feature_id=")) throw new Error('the forecast must load its joined condition lifecycle');
-if (!html.includes('One condition · one loop') || !html.includes('Detected</span><span class="loop-step">Checked')) throw new Error('the forecast must make the four-state lifecycle visible');
+if (!html.includes('Resolve it · prove it held') || !html.includes('Detected</span><span class="loop-step">Checked') || !html.includes('<span class="loop-step">Held</span>')) throw new Error('the forecast must make the five-state durable-resolution lifecycle visible');
 if (!html.includes("getElementById('results').addEventListener('click'")) throw new Error('route results must implement the back-to-forecast action');
 if (/% estimated presence|% probability/.test(html)) throw new Error('uncalibrated scores must not be presented as probabilities');
-if (!html.includes('uncalibrated model score') || !html.includes('heuristic score range')) throw new Error('numeric forecast scores need explicit uncalibrated labels');
+if (!html.includes('uncalibrated current score') || !html.includes('heuristic score range')) throw new Error('numeric forecast scores need explicit uncalibrated labels');
 if (!html.includes("windowStrength==='weak'?null")) throw new Error('weak historical windows must stay off the primary card');
 if (!html.includes("state.enabled.add('homelessness')")) throw new Error('planning around a forecast must select its routing layer');
 if (!html.includes('lastSignal=latestTimestamp(')) throw new Error('last signal must compare all available timestamps');

@@ -584,26 +584,33 @@ function relatedIssueForFeature(feature) {
   const subject = String(feature.complaint_type || feature.type || feature.subject_type || '').toLowerCase();
   const wanted = subject === 'encampment' ? 'encampment' : subject;
   if (!wanted) return null;
-  let best = null, bestDistance = Infinity, bestActive = false;
+  let best = null, bestDistance = Infinity;
+  // Identity beats workflow status. The old join preferred any active record within 160 m over a
+  // resolved record at the exact geocode, which could splice two blocks into one lifecycle. The
+  // feature's disclosed uncertainty defines the join envelope; resolved records remain valid
+  // accountability history and must not be displaced merely because a neighbor is still active.
+  const maxDistance = Math.max(55, Math.min(90, Number(feature.location_uncertainty_m || 45) + 30));
   for (const issue of ISSUES) {
     if (String(issue.type || '').toLowerCase() !== wanted) continue;
     const distance = distanceMeters(Number(feature.lat), Number(feature.lng), Number(issue.lat), Number(issue.lng));
-    if (!Number.isFinite(distance) || distance > 160) continue;
-    const active = issue.status === 'active';
-    if ((active && !bestActive) || (active === bestActive && distance < bestDistance)) {
-      best = issue; bestDistance = distance; bestActive = active;
-    }
+    if (!Number.isFinite(distance) || distance > maxDistance) continue;
+    if (distance < bestDistance) { best = issue; bestDistance = distance; }
   }
   return best ? { issue: best, distance_m: Math.round(bestDistance) } : null;
 }
 
 function communityCheckRollup(featureId) {
   const rows = ugc.conditionObservationSummary(featureId);
-  const out = { total: 0, pending: 0, reviewed: 0, present: 0, absent: 0, uncertain: 0, last_observed_at: null };
+  const out = { total: 0, pending: 0, reviewed: 0, present: 0, absent: 0, uncertain: 0,
+    reviewed_present: 0, reviewed_absent: 0, reviewed_uncertain: 0, last_observed_at: null };
   for (const row of rows) {
     const observations = Number(row.observations) || 0;
     out.total += observations;
-    if (row.review_status === 'approved') out.reviewed += observations;
+    if (row.review_status === 'approved') {
+      out.reviewed += observations;
+      const reviewedKey = `reviewed_${row.state}`;
+      if (Object.hasOwn(out, reviewedKey)) out[reviewedKey] += observations;
+    }
     else if (row.review_status === 'unreviewed') out.pending += observations;
     if (Object.hasOwn(out, row.state)) out[row.state] += observations;
     if (row.last_observed_at && (!out.last_observed_at || row.last_observed_at > out.last_observed_at)) out.last_observed_at = row.last_observed_at;
@@ -625,19 +632,45 @@ function conditionLoopRecord(feature) {
   }
   const checked = checks.total > 0 || thread.verdict !== 'unverified';
   const acted = Boolean(campaign) || actions.total > 0;
-  const outcome = issue?.status === 'resolved' || thread.verdict === 'cleared' || campaign?.status === 'won';
-  const stageIndex = outcome ? 3 : acted ? 2 : checked ? 1 : 0;
+  const clearClaimCandidates = [];
+  if (issue?.status === 'resolved' && Number.isFinite(Date.parse(issue.last_seen || ''))) {
+    clearClaimCandidates.push({ at: Date.parse(issue.last_seen), basis: 'public_record_last_seen_proxy' });
+  }
+  if (thread.verdict === 'cleared' && Number.isFinite(Date.parse(thread.lastTs || ''))) {
+    clearClaimCandidates.push({ at: Date.parse(thread.lastTs), basis: 'community_clear_claim' });
+  }
+  if (campaign?.status === 'won' && Number.isFinite(Date.parse(campaign.won_at || ''))) {
+    clearClaimCandidates.push({ at: Date.parse(campaign.won_at), basis: 'campaign_outcome_claim' });
+  }
+  clearClaimCandidates.sort((a, b) => b.at - a.at);
+  const clearClaim = clearClaimCandidates[0] || null;
+  let reviewedAfterClaim = [];
+  if (clearClaim) {
+    try { reviewedAfterClaim = ugc.reviewedConditionObservationsSince(feature.id, clearClaim.at); } catch {}
+  }
+  const absenceChecksAfterClaim = reviewedAfterClaim.filter(row => row.state === 'absent');
+  const absenceDaysAfterClaim = new Set(absenceChecksAfterClaim.map(row => row.observation_day)).size;
+  const presentAfterClaim = reviewedAfterClaim.some(row => row.state === 'present');
+  const contradictedClear = issue?.status === 'active' || thread.verdict === 'still_here' || presentAfterClaim;
+  const claimedClear = !contradictedClear && clearClaim !== null;
+  const silenceDays = Number.isFinite(Number(issue?.silence)) ? Number(issue.silence)
+    : Number.isFinite(Date.parse(issue?.last_seen || '')) ? Math.max(0, Math.floor((Date.now() - Date.parse(issue.last_seen)) / 86400000)) : null;
+  const recurrenceWindowDays = Math.max(30, Math.min(120, Math.round((Number(issue?.cadence) || 30) * 2)));
+  const durable = Boolean(claimedClear && absenceDaysAfterClaim >= 2 && silenceDays != null && silenceDays >= recurrenceWindowDays);
+  const stageIndex = durable ? 4 : claimedClear ? 3 : acted ? 2 : checked ? 1 : 0;
   const stages = [
     { id: 'detected', label: 'Detected', detail: 'Public evidence produces a dated, approximate condition estimate.' },
     { id: 'checked', label: 'Checked', detail: 'A nearby person checks the condition; submissions require review.' },
     { id: 'action', label: 'Action', detail: 'The record names the responsible office and tracks each escalation.' },
-    { id: 'outcome', label: 'Outcome', detail: 'People confirm what changed, and the result becomes new evidence.' },
+    { id: 'clear', label: 'Clear', detail: 'A real-world outcome is claimed and must be independently checked.' },
+    { id: 'held', label: 'Held', detail: 'Repeated reviewed checks plus a site-specific quiet window support durable resolution.' },
   ].map((stage, index) => ({ ...stage, state: index < stageIndex ? 'complete' : index === stageIndex ? 'current' : 'next' }));
   let nextAction;
   if (stageIndex === 0) nextAction = { id: 'check', mode: 'verify', label: 'Check this place' };
   else if (stageIndex === 1 && issue) nextAction = { id: 'act', mode: 'record', label: 'Make the city answer' };
   else if (stageIndex === 2 && issue) nextAction = { id: 'escalate', mode: 'record', label: 'Join the next action' };
-  else if (stageIndex === 3) nextAction = { id: 'confirm_outcome', mode: 'verify', label: 'Confirm the outcome' };
+  else if (stageIndex === 3) nextAction = { id: 'confirm_outcome', mode: 'verify', label: 'Prove it stayed clear' };
+  else if (stageIndex === 4) nextAction = { id: 'monitor_outcome', mode: 'verify', label: 'Keep it resolved' };
   else nextAction = { id: 'share', mode: 'share', label: 'Recruit a nearby check' };
   const recordUrl = issue ? `/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}` : null;
   return {
@@ -647,6 +680,32 @@ function conditionLoopRecord(feature) {
     stages,
     next_action: { ...nextAction, href: nextAction.mode === 'record' ? recordUrl : null },
     checks: { ...checks, forecast_unchanged: true, review_required: true },
+    objective: {
+      name: 'durable_condition_resolution',
+      minimize: 'verified recurring condition burden over time',
+      guardrail: feature.subject_type === 'encampment'
+        ? 'Resolve the public-space condition through humane, lawful services and accountable action; a person is never the condition to eliminate.'
+        : 'Measure and resolve the condition without identifying or targeting people.',
+      success: 'Reviewed checks support absence, the site-specific recurrence window passes, and any recurrence automatically reopens the loop.',
+    },
+    durable_resolution: {
+      state: durable ? 'verified_held' : contradictedClear && acted ? 'reopened' : claimedClear ? 'claimed_not_proven' : 'not_reached',
+      claimed_clear: claimedClear,
+      clear_claim_at: clearClaim ? new Date(clearClaim.at).toISOString() : null,
+      clear_claim_time_semantics: clearClaim?.basis || null,
+      verified_held: durable,
+      reviewed_absence_checks: absenceChecksAfterClaim.length,
+      reviewed_absence_days: absenceDaysAfterClaim,
+      reviewed_present_after_claim: presentAfterClaim,
+      quiet_days: silenceDays,
+      required_quiet_days: recurrenceWindowDays,
+      recurrence_reopens_loop: true,
+      metrics: {
+        current_run_days: Number(issue?.current_days) || 0,
+        returns_after_closure: Number(issue?.returned_n) || 0,
+        time_to_durable_resolution_days: durable && issue?.first_seen ? Math.max(0, Math.floor((Date.now() - Date.parse(issue.first_seen)) / 86400000)) : null,
+      },
+    },
     record: issue ? {
       type: issue.type, id: issue.id, href: recordUrl, distance_m: related.distance_m, status: issue.status,
       reports: Number(issue.n) || 0, city_closures: Number(issue.closed_n) || 0,
@@ -1903,9 +1962,9 @@ function renderForecastShare(feature) {
   const data = forecastShareRecord(feature);
   const lat = Number(feature.lat).toFixed(6), lng = Number(feature.lng).toFixed(6);
   const shareUrl = `${PUBLIC_ORIGIN}/f?id=${encodeURIComponent(feature.id || '')}&lat=${lat}&lng=${lng}`;
-  const appUrl = `${PUBLIC_ORIGIN}/?forecast=1&lat=${lat}&lng=${lng}&place=${encodeURIComponent(data.place)}`;
+  const appUrl = `${PUBLIC_ORIGIN}/?mode=forecast&id=${encodeURIComponent(feature.id || '')}&lat=${lat}&lng=${lng}&place=${encodeURIComponent(data.place)}`;
   const actionUrl = data.loop.record ? `${PUBLIC_ORIGIN}${data.loop.record.href}` : null;
-  const loopStages = ['Detected', 'Checked', 'Action', 'Outcome'];
+  const loopStages = ['Detected', 'Checked', 'Action', 'Clear', 'Held'];
   const loopIndex = Math.max(0, Math.min(loopStages.length - 1, Number(data.loop.stage_index) || 0));
   const loopMarkup = loopStages.map((stage, index) => {
     const stateClass = index < loopIndex ? 'complete' : index === loopIndex ? 'current' : '';
@@ -1917,7 +1976,7 @@ function renderForecastShare(feature) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,follow"><title>${esc(data.label)} · ${esc(data.place)} · unignorable</title>
 <meta name="description" content="${esc(data.description)}"><meta property="og:type" content="article"><meta property="og:title" content="${esc(data.label)} · ${esc(data.place)}"><meta property="og:description" content="${esc(data.description)}"><meta property="og:url" content="${esc(shareUrl)}"><meta property="og:site_name" content="unignorable"><meta property="og:image" content="${esc(PUBLIC_ORIGIN)}/assets/share-card.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="The ticket closed. The condition came back. See it, check it, make the city answer."><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(data.label)} · ${esc(data.place)}"><meta name="twitter:description" content="${esc(data.description)}"><meta name="twitter:image" content="${esc(PUBLIC_ORIGIN)}/assets/share-card.png"><link rel="canonical" href="${esc(shareUrl)}">
-<style>:root{--bg:#0b0d10;--card:#14171c;--ink:#e8eaed;--mut:#969ba4;--line:#2b3038;--alarm:#ff5b45;--amber:#ffb020;--green:#4ad6c8}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}.wrap{max-width:680px;margin:0 auto;padding:20px 18px 72px}.mast{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:6px 0 18px}.word{color:var(--ink);font-weight:800;letter-spacing:.06em;font-size:14px;text-decoration:none}.word b{color:var(--alarm)}.tag{font-size:11px;color:var(--mut)}.eyebrow{margin-top:38px;color:var(--alarm);font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.hero h1{font-size:42px;line-height:1.02;letter-spacing:-.055em;margin:9px 0 10px}.place{color:var(--mut);font-size:15px}.card{margin-top:26px;padding:18px;border:1px solid var(--line);border-left:3px solid var(--alarm);border-radius:12px;background:var(--card)}.card p{margin:0;font-size:18px;line-height:1.45}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);margin-top:16px}.fact{background:var(--card);padding:11px 8px;text-align:center}.fact b{display:block;font-size:22px}.fact span{display:block;color:var(--mut);font-size:10px;margin-top:3px}.loop{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:18px}.loop span{padding-top:8px;border-top:3px solid var(--line);color:var(--mut);font-size:9px;font-weight:800;text-align:center;text-transform:uppercase}.loop span.complete{border-color:var(--green);color:var(--green)}.loop span.current{border-color:var(--alarm);color:var(--ink)}.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px}.btn{display:inline-block;padding:11px 15px;border-radius:9px;background:var(--amber);color:#090a0c;text-decoration:none;font-weight:800;font-size:14px}.btn.alarm{background:var(--alarm);color:#fff}.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}.fine{margin-top:18px;color:var(--mut);font-size:12px;line-height:1.5}@media(max-width:520px){.hero h1{font-size:34px}}</style></head><body><main class="wrap"><div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">UN<b>IGNOR</b>ABLE</a><span class="tag">a public forecast</span></div><section class="hero"><div class="eyebrow">${esc(loopStages[loopIndex])}. Now finish the loop.</div><h1>${esc(data.label)}.</h1><div class="place">Near ${esc(data.place)} · NYC</div></section><section class="card"><p>${esc(data.description)}</p><div class="facts">${facts}</div><div class="loop">${loopMarkup}</div></section><div class="actions"><a class="btn" href="${esc(appUrl)}">Check this place</a>${actionUrl ? `<a class="btn alarm" href="${esc(actionUrl)}">Make the city answer</a>` : ''}<a class="btn ghost" href="${esc(PUBLIC_ORIGIN)}/map">Explore the map</a></div><p class="fine">Unignorable describes conditions, never people. Locations are approximate; the forecast is beta and uncalibrated. Nearby checks require review and never silently change the forecast. The permanent record tracks action until people confirm an outcome.</p></main></body></html>`;
+<style>:root{--bg:#0b0d10;--card:#14171c;--ink:#e8eaed;--mut:#969ba4;--line:#2b3038;--alarm:#ff5b45;--amber:#ffb020;--green:#4ad6c8}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}.wrap{max-width:680px;margin:0 auto;padding:20px 18px 72px}.mast{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:6px 0 18px}.word{color:var(--ink);font-weight:800;letter-spacing:.06em;font-size:14px;text-decoration:none}.word b{color:var(--alarm)}.tag{font-size:11px;color:var(--mut)}.eyebrow{margin-top:38px;color:var(--alarm);font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.hero h1{font-size:42px;line-height:1.02;letter-spacing:-.055em;margin:9px 0 10px}.place{color:var(--mut);font-size:15px}.card{margin-top:26px;padding:18px;border:1px solid var(--line);border-left:3px solid var(--alarm);border-radius:12px;background:var(--card)}.card p{margin:0;font-size:18px;line-height:1.45}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);margin-top:16px}.fact{background:var(--card);padding:11px 8px;text-align:center}.fact b{display:block;font-size:22px}.fact span{display:block;color:var(--mut);font-size:10px;margin-top:3px}.loop{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:18px}.loop span{padding-top:8px;border-top:3px solid var(--line);color:var(--mut);font-size:9px;font-weight:800;text-align:center;text-transform:uppercase}.loop span.complete{border-color:var(--green);color:var(--green)}.loop span.current{border-color:var(--alarm);color:var(--ink)}.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px}.btn{display:inline-block;padding:11px 15px;border-radius:9px;background:var(--amber);color:#090a0c;text-decoration:none;font-weight:800;font-size:14px}.btn.alarm{background:var(--alarm);color:#fff}.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}.fine{margin-top:18px;color:var(--mut);font-size:12px;line-height:1.5}@media(max-width:520px){.hero h1{font-size:34px}}</style></head><body><main class="wrap"><div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">UN<b>IGNOR</b>ABLE</a><span class="tag">a public forecast</span></div><section class="hero"><div class="eyebrow">${esc(loopStages[loopIndex])}. Resolve it. Prove it held.</div><h1>${esc(data.label)}.</h1><div class="place">Near ${esc(data.place)} · NYC</div></section><section class="card"><p>${esc(data.description)}</p><div class="facts">${facts}</div><div class="loop">${loopMarkup}</div></section><div class="actions"><a class="btn" href="${esc(appUrl)}">Check this place</a>${actionUrl ? `<a class="btn alarm" href="${esc(actionUrl)}">Make the city answer</a>` : ''}<a class="btn ghost" href="${esc(PUBLIC_ORIGIN)}/map">Explore the map</a></div><p class="fine">Unignorable describes conditions, never people. Locations are approximate; the forecast is beta and uncalibrated. A city closure is not durable resolution. Reviewed clear checks on distinct days after the claim and a site-specific quiet window must show the outcome held; recurrence reopens the loop.</p></main></body></html>`;
 }
 
 function renderCampaignStart(selectedIssue) {

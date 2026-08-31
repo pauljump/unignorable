@@ -433,9 +433,10 @@ async function main() {
       walk_nowcast: {
         version: WALK_NOWCAST_METHOD_VERSION,
         rollout: 'shadow',
-        rule: 'The beta shadow forecast is an uncalibrated score over public 311 and agency evidence. Its optional three-hour window says when reports were most often submitted in NYC local time over the last 90 days. Each local day contributes one total unit distributed across its reported hours; weak, diffuse, all-day, and disconnected tied patterns are omitted.',
+        contract: 'Long-run site recurrence and current presence are separate targets. A quiet interval can weaken the current score without erasing a persistent multi-year site history. A public not-found response is modeled as an imperfect non-detection, never proof of absence.',
+        rule: 'The beta shadow forecast publishes an inspectable recurrence evidence-strength classification beside an uncalibrated current score over public 311 and agency evidence. Its optional three-hour window says when reports were most often submitted in NYC local time over the last 90 days. Each local day contributes one total unit distributed across its reported hours; weak, diffuse, all-day, and disconnected tied patterns are omitted.',
         validation_status: 'No independently audited held-out ground-truth label set currently exists. The displayed score and range must not be described as a probability or confidence interval.',
-        promotion_gate: 'No promotion gate is defined. Establish an independently audited held-out label set and evaluation protocol before considering probability language or routing use.',
+        promotion_gate: 'Before probability language or routing use, collect independently reviewed presence and absence checks, split evaluation forward in time and by site, and publish calibration, Brier score, log loss, subgroup error, and abstention coverage against the frozen baseline.',
         routing: 'The forecast remains display-only shadow data. Route scoring and hard exclusions continue to use the independently versioned condition model.',
       },
       caveats: [
