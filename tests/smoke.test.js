@@ -125,7 +125,7 @@ test('health and public assets are available with security headers', async () =>
   assert.match(rootHtml, /leaflet-tile-pane\{filter:invert\(1\) hue-rotate\(180deg\)/);
   assert.doesNotMatch(rootHtml, /basemaps\.cartocdn\.com/);
   assert.doesNotMatch(rootHtml, /pulse\.polyfeeds/);
-  assert.match(rootHtml, /src="\/webmcp\.js"/);
+  assert.match(rootHtml, /src="\/webmcp\.js\?v=condition-v2"/);
   assert.match(rootHtml, /id="webmcp-status"/);
 
   const webmcp = await fetch(`${origin}/webmcp.js`);

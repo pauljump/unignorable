@@ -73,7 +73,7 @@ if (!html.includes('Do not photograph or characterize people')) throw new Error(
 if (!html.includes("setAttribute('aria-activedescendant'")) throw new Error('autocomplete must expose its active option');
 if (/id="forecast-card"[^>]*aria-live/.test(html)) throw new Error('the entire forecast card must not be a live region');
 if (!html.includes('.forecast-actions button{min-height:44px') || !html.includes('.results-back{width:100%;min-height:44px')) throw new Error('new interactive targets must be at least 44px tall');
-if (!html.includes('window.UnignorableWebMCPBridge=') || !html.includes('<script src="/webmcp.js"></script>')) throw new Error('the map must expose and load its WebMCP bridge');
+if (!html.includes('window.UnignorableWebMCPBridge=') || !html.includes('<script src="/webmcp.js?v=condition-v2"></script>')) throw new Error('the map must expose and load its versioned WebMCP bridge');
 if (!html.includes('No location permission was requested.') || !html.includes('Nothing was posted.')) throw new Error('WebMCP action preparation must state its human-control boundary');
 if (!html.includes('appReady=boot();')) throw new Error('WebMCP tools must share the application readiness promise');
 if (!html.includes('id="webmcp-mission"') || !html.includes('function webMcpPlanCivicAudit(')) throw new Error('the agent-compiled civic field audit must have a shared visible surface');
