@@ -751,7 +751,7 @@ const WEBMCP_CATEGORIES=['encampment','drug_activity','illegal_dumping','broken_
 let appReady;
 function webMcpCategory(feature){return feature?.subject_type==='encampment'?'encampment':WEBMCP_CATEGORY_BY_LAYER[feature?.layer]||null;}
 function webMcpFeatures(){return Object.values(state.data?.layers||{}).flat().filter(feature=>webMcpCategory(feature)&&Number.isFinite(Number(feature.lat))&&Number.isFinite(Number(feature.lng)));}
-function webMcpFeatureById(conditionId){return webMcpFeatures().find(feature=>String(feature.id)===String(conditionId))||null;}
+function webMcpFeatureById(conditionId){return webMcpFeatures().find(feature=>String(feature.id)===String(conditionId)||(feature.id_aliases||[]).some(alias=>String(alias)===String(conditionId)))||null;}
 function webMcpFeatureSummary(feature,distance=null){
   const category=webMcpCategory(feature),forecast=forecastFor(feature),score=forecast.probability,range=forecast.range?.map(validProbability),reports=Number(feature.count),uncertainty=Number(firstValue(feature.location_uncertainty_m,forecast.nowcast?.spatial_uncertainty_m,category==='encampment'?45:null));
   const label=category==='license_plate_camera'?(feature.manufacturer?`${feature.manufacturer} license plate camera`:'License plate camera; manufacturer not tagged'):String(firstValue(feature.complaint_type,feature.descriptor,DEFS[feature.layer]?.label,'Public civic evidence'));
