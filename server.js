@@ -100,8 +100,12 @@ let MAP_LAYERS = null;
 try { MAP_LAYERS = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'map-layers.json'), 'utf8')); } catch {}
 const MAP_LAYERS_RAW = MAP_LAYERS ? Buffer.from(JSON.stringify(MAP_LAYERS)) : null;
 const MAP_LAYERS_GZ = MAP_LAYERS_RAW ? zlib.gzipSync(MAP_LAYERS_RAW) : null;
-const MAP_FEATURE_BY_ID = new Map(Object.values(MAP_LAYERS?.layers || {}).flat()
-  .filter(feature => feature?.id).map(feature => [feature.id, feature]));
+const MAP_FEATURE_BY_ID = new Map();
+for (const feature of Object.values(MAP_LAYERS?.layers || {}).flat()) {
+  if (!feature?.id) continue;
+  MAP_FEATURE_BY_ID.set(feature.id, feature);
+  for (const alias of feature.id_aliases || []) MAP_FEATURE_BY_ID.set(alias, feature);
+}
 
 // Live discovery is intentionally separate from the durable civic-map artifact. These are
 // public, customer-facing availability signals, cached briefly and never stored as trip history.
@@ -599,8 +603,9 @@ function relatedIssueForFeature(feature) {
   return best ? { issue: best, distance_m: Math.round(bestDistance) } : null;
 }
 
-function communityCheckRollup(featureId) {
-  const rows = ugc.conditionObservationSummary(featureId);
+function communityCheckRollup(feature) {
+  const featureIds = [feature.id, ...(feature.id_aliases || [])];
+  const rows = ugc.conditionObservationSummary(featureIds);
   const out = { total: 0, pending: 0, reviewed: 0, present: 0, absent: 0, uncertain: 0,
     reviewed_present: 0, reviewed_absent: 0, reviewed_uncertain: 0, last_observed_at: null };
   for (const row of rows) {
@@ -622,7 +627,8 @@ function conditionLoopRecord(feature) {
   const related = relatedIssueForFeature(feature);
   const issue = related && related.issue;
   const issueKey = issue && key(issue.type, issue.id);
-  const checks = communityCheckRollup(feature.id);
+  const featureIds = [feature.id, ...(feature.id_aliases || [])];
+  const checks = communityCheckRollup(feature);
   let thread = { verdict: 'unverified', corrob: 0, lastTs: null };
   let campaign = null, actions = { total: 0, byType: {}, thisWeek: { total: 0, byType: {} } };
   if (issueKey) {
@@ -646,7 +652,7 @@ function conditionLoopRecord(feature) {
   const clearClaim = clearClaimCandidates[0] || null;
   let reviewedAfterClaim = [];
   if (clearClaim) {
-    try { reviewedAfterClaim = ugc.reviewedConditionObservationsSince(feature.id, clearClaim.at); } catch {}
+    try { reviewedAfterClaim = ugc.reviewedConditionObservationsSince(featureIds, clearClaim.at); } catch {}
   }
   const absenceChecksAfterClaim = reviewedAfterClaim.filter(row => row.state === 'absent');
   const absenceDaysAfterClaim = new Set(absenceChecksAfterClaim.map(row => row.observation_day)).size;

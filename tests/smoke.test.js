@@ -125,7 +125,7 @@ test('health and public assets are available with security headers', async () =>
   assert.match(rootHtml, /leaflet-tile-pane\{filter:invert\(1\) hue-rotate\(180deg\)/);
   assert.doesNotMatch(rootHtml, /basemaps\.cartocdn\.com/);
   assert.doesNotMatch(rootHtml, /pulse\.polyfeeds/);
-  assert.match(rootHtml, /src="\/webmcp\.js\?v=condition-v2"/);
+  assert.match(rootHtml, /src="\/webmcp\.js\?v=location-v3"/);
   assert.match(rootHtml, /id="webmcp-status"/);
 
   const webmcp = await fetch(`${origin}/webmcp.js`);
@@ -170,6 +170,9 @@ test('health and public assets are available with security headers', async () =>
   assert.equal(conditionLoopData.record.id, '40.746,-73.987');
   assert.equal(conditionLoopData.record.city_closures, 1587);
   assert.equal(conditionLoopData.checks.forecast_unchanged, true);
+  const legacyConditionLoop = await fetch(`${origin}/api/condition-loop?feature_id=311-encampment-legacy-1`);
+  assert.equal(legacyConditionLoop.status, 200);
+  assert.equal((await legacyConditionLoop.json()).loop.condition_id, '311-encampment-1');
 
   const access = await fetch(`${origin}/api/access`);
   assert.equal(access.status, 200);

@@ -4,7 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pointInGeoJSON, routeIntersectsPoint, featureRisk, scoreRoute, chooseRecommended, plausibleRoutes, exportUrls, simplifyWalkingSteps, LAYER_RADII } = require('../map-core');
 const { manufacturer, layerFor, supported, resolutionEvidence, conditionEvidence,
-  parseNycWallTime, nycLocalDay, recordReportedLocation, reportedLocationLabel } = require('../scripts/refresh-map-data');
+  parseNycWallTime, nycLocalDay, recordReportedLocation, reportedLocationLabel,
+  consolidateReportedLocationSites, REPORTED_LOCATION_ENVELOPE_M } = require('../scripts/refresh-map-data');
 const { classifyResolution, estimatePresence, routingLevel } = require('../condition-model');
 
 const line = [[-74, 40.7], [-73.99, 40.7]];
@@ -143,6 +144,27 @@ test('forecast locations retain the newest non-empty 311 address with an honest 
   const approximate = { _address: null, _addressAt: -Infinity, _borough: null, _boroughAt: -Infinity };
   recordReportedLocation(approximate, { incident_address: null, borough: 'STATEN ISLAND' }, 100);
   assert.equal(reportedLocationLabel(approximate), 'Approximate reported location in Staten Island');
+});
+
+test('nearby address-geocode variants consolidate without chain-merging a block', () => {
+  const site = (id, lng, count, day) => ({
+    id, lat: 40.75, lng, count, first_seen: `${day}T08:00:00.000`, last_seen: `${day}T08:00:00.000`,
+    _address: id, _addressAt: parseNycWallTime(`${day}T08:00:00.000`), _borough: 'MANHATTAN', _boroughAt: 1,
+    _reportDays: new Map([[day, { at: parseNycWallTime(`${day}T08:00:00.000`), count, local_hours: new Set([8]) }]]),
+    _events: new Map(), _idAliases: new Set([id]), _reportedCoordinateGroups: 1, _maxCoordinateOffsetM: 0,
+    responses: { nypd_responded: 0, nypd_observed_encampment: 0, dhs_outreach: 0 },
+  });
+  const anchor = site('anchor', -73.99, 20, '2026-08-01');
+  const nearby = site('nearby', -73.98988, 5, '2026-08-02');
+  const chainedOnly = site('chained-only', -73.98972, 4, '2026-08-03');
+  const result = consolidateReportedLocationSites([nearby, chainedOnly, anchor], REPORTED_LOCATION_ENVELOPE_M);
+  assert.equal(result.length, 2);
+  assert.equal(result[0].id, 'anchor');
+  assert.equal(result[0].count, 25);
+  assert.deepEqual([...result[0]._idAliases].sort(), ['anchor', 'nearby']);
+  assert.equal(result[0]._reportedCoordinateGroups, 2);
+  assert.ok(result[0]._maxCoordinateOffsetM > 9 && result[0]._maxCoordinateOffsetM < 11);
+  assert.equal(result[1].id, 'chained-only');
 });
 
 test('NYC source wall times parse deterministically across standard time, DST, and repeated hours', () => {

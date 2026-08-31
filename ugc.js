@@ -77,8 +77,9 @@ const qConditionInsert = db.prepare(`INSERT OR IGNORE INTO condition_observation
 const qConditionSummary = db.prepare(`SELECT state,provenance,review_status,count(*) observations,count(distinct observer_hash) observers,
   max(observed_at) last_observed_at FROM condition_observations
   WHERE feature_id=? AND observed_at>=? GROUP BY state,provenance,review_status`);
-const qReviewedConditionsSince = db.prepare(`SELECT state,observed_at,observation_day FROM condition_observations
-  WHERE feature_id=? AND review_status='approved' AND observed_at>=? ORDER BY observed_at ASC`);
+const qReviewedConditionsSince = db.prepare(`SELECT state,max(observed_at) observed_at,observation_day FROM condition_observations
+  WHERE feature_id=? AND review_status='approved' AND observed_at>=?
+  GROUP BY state,observation_day,observer_hash ORDER BY observed_at ASC`);
 const qConditionPending = db.prepare(`SELECT id,feature_id,state,observed_at,distance_m,model_score,model_version,
   model_contract_version,provenance,review_status FROM condition_observations
   WHERE review_status='unreviewed' ORDER BY id ASC LIMIT 300`);
@@ -348,14 +349,30 @@ function addConditionObservation({ featureId, state, observedAt, observerHash, d
     provenance: 'community_unreviewed', review_status: 'unreviewed', forecast_unchanged: true };
 }
 
+function normalizedFeatureIds(featureId) {
+  return [...new Set((Array.isArray(featureId) ? featureId : [featureId]).map(String).filter(Boolean))];
+}
+
 function conditionObservationSummary(featureId, days = 30) {
   const since = new Date(Date.now() - Math.max(1, days) * 86400000).toISOString();
-  return qConditionSummary.all(featureId, since);
+  const ids = normalizedFeatureIds(featureId);
+  if (ids.length <= 1) return ids.length ? qConditionSummary.all(ids[0], since) : [];
+  const placeholders = ids.map(() => '?').join(',');
+  return db.prepare(`SELECT state,provenance,review_status,
+    count(distinct observer_hash || '|' || observation_day) observations,
+    count(distinct observer_hash) observers,max(observed_at) last_observed_at
+    FROM condition_observations WHERE feature_id IN (${placeholders}) AND observed_at>=?
+    GROUP BY state,provenance,review_status`).all(...ids, since);
 }
 
 function reviewedConditionObservationsSince(featureId, since) {
   const timestamp = new Date(since).toISOString();
-  return qReviewedConditionsSince.all(featureId, timestamp);
+  const ids = normalizedFeatureIds(featureId);
+  if (ids.length <= 1) return ids.length ? qReviewedConditionsSince.all(ids[0], timestamp) : [];
+  const placeholders = ids.map(() => '?').join(',');
+  return db.prepare(`SELECT state,max(observed_at) observed_at,observation_day FROM condition_observations
+    WHERE feature_id IN (${placeholders}) AND review_status='approved' AND observed_at>=?
+    GROUP BY state,observation_day,observer_hash ORDER BY observed_at ASC`).all(...ids, timestamp);
 }
 
 function pendingConditionObservations() {

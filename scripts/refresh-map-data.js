@@ -35,6 +35,7 @@ const LAYER_NAMES = Object.freeze(['homelessness', 'drugs', 'dumping', 'sidewalk
 const RESPONSE_TYPES = new Set(['Encampment', 'Homeless Person Assistance', 'Drug Activity']);
 const TYPES = [...new Set(Object.values(REGISTRY).flatMap(byType => Object.keys(byType)))];
 const MIN_REPORTS = 5, MIN_SPAN_DAYS = 30, RECENT_DAYS = 180, LOOKBACK_YEARS = 5;
+const REPORTED_LOCATION_ENVELOPE_M = 20;
 const SIDEWALK_DB = process.env.DB || path.join(process.env.SIDEWALK_DIR || '/Users/mini-home/Desktop/Monorepo/sidewalk', 'data', 'sidewalk.db');
 const NYC_WALL_FORMATTER = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23',
   year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -213,6 +214,64 @@ function reportedLocationLabel(item) {
   return borough ? `Approximate reported location in ${borough}` : 'Approximate reported location';
 }
 
+function reportedLocationDistanceMeters(a, b) {
+  const rad = Math.PI / 180, lat1 = Number(a.lat) * rad, lat2 = Number(b.lat) * rad;
+  const dLat = (Number(b.lat) - Number(a.lat)) * rad, dLng = (Number(b.lng) - Number(a.lng)) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function mergeReportedLocationSite(target, source) {
+  const offset = reportedLocationDistanceMeters(target, source);
+  target.count += source.count;
+  if (!target.first_seen || source.first_seen < target.first_seen) target.first_seen = source.first_seen;
+  if (!target.last_seen || source.last_seen > target.last_seen) target.last_seen = source.last_seen;
+  if (source._address && source._addressAt > target._addressAt) {
+    target._address = source._address; target._addressAt = source._addressAt;
+  }
+  if (source._borough && source._boroughAt > target._boroughAt) {
+    target._borough = source._borough; target._boroughAt = source._boroughAt;
+  }
+  for (const [day, incoming] of source._reportDays) {
+    const current = target._reportDays.get(day);
+    if (!current) target._reportDays.set(day, incoming);
+    else {
+      current.at = Math.max(current.at, incoming.at); current.count += incoming.count;
+      for (const hour of incoming.local_hours) current.local_hours.add(hour);
+    }
+  }
+  for (const [eventKey, incoming] of source._events) {
+    const current = target._events.get(eventKey);
+    if (!current) target._events.set(eventKey, incoming);
+    else { current.at = Math.max(current.at, incoming.at); current.count += incoming.count; }
+  }
+  for (const name of Object.keys(target.responses)) target.responses[name] += Number(source.responses[name]) || 0;
+  for (const id of source._idAliases) target._idAliases.add(id);
+  target._reportedCoordinateGroups += source._reportedCoordinateGroups;
+  target._maxCoordinateOffsetM = Math.max(target._maxCoordinateOffsetM, source._maxCoordinateOffsetM, offset);
+  return target;
+}
+
+// Public 311 coordinates are address geocodes with more uncertainty than their decimal precision
+// implies. Consolidate very close variants into one bounded reported-location envelope. Anchors are
+// chosen by evidence volume and never move while assigning neighbors, preventing DBSCAN-style
+// chain merging from turning a sequence of nearby reports into one whole-block site.
+function consolidateReportedLocationSites(input, radiusM = REPORTED_LOCATION_ENVELOPE_M) {
+  const ordered = [...input].sort((a, b) => Number(b.count) - Number(a.count)
+    || parseNycWallTime(b.last_seen) - parseNycWallTime(a.last_seen) || String(a.id).localeCompare(String(b.id)));
+  const envelopes = [];
+  for (const site of ordered) {
+    let best = null, bestDistance = Infinity;
+    for (const envelope of envelopes) {
+      const distance = reportedLocationDistanceMeters(envelope, site);
+      if (distance <= radiusM && distance < bestDistance) { best = envelope; bestDistance = distance; }
+    }
+    if (best) mergeReportedLocationSite(best, site);
+    else envelopes.push(site);
+  }
+  return envelopes;
+}
+
 function buildEncampmentSites(now = new Date()) {
   if (!fs.existsSync(SIDEWALK_DB)) return null;
   const db = new DatabaseSync(SIDEWALK_DB, { readOnly: true });
@@ -229,11 +288,13 @@ function buildEncampmentSites(now = new Date()) {
     // carries a wider uncertainty radius because 311 publishes an address geocode, not a GPS fix.
     const roundedLat = Number(lat.toFixed(4)), roundedLng = Number(lng.toFixed(4));
     const key = `${roundedLat.toFixed(4)}|${roundedLng.toFixed(4)}`;
+    const siteId = `311-encampment-${roundedLat.toFixed(4)}-${roundedLng.toFixed(4)}`;
     const item = sites.get(key) || {
-      id: `311-encampment-${roundedLat.toFixed(4)}-${roundedLng.toFixed(4)}`,
+      id: siteId,
       layer: 'homelessness', subject_type: 'encampment', lat, lng, count: 0,
       first_seen: null, last_seen: null, _reportDays: new Map(), _events: new Map(),
       _address: null, _addressAt: -Infinity, _borough: null, _boroughAt: -Infinity,
+      _idAliases: new Set([siteId]), _reportedCoordinateGroups: 1, _maxCoordinateOffsetM: 0,
       responses: { nypd_responded: 0, nypd_observed_encampment: 0, dhs_outreach: 0 },
     };
     item.count += 1;
@@ -272,7 +333,7 @@ function buildEncampmentSites(now = new Date()) {
   db.close();
 
   const output = [];
-  for (const item of sites.values()) {
+  for (const item of consolidateReportedLocationSites(sites.values())) {
     if (!pointInGeoJSON(item, NYC_BOUNDARY)) continue;
     const events = [
       ...[...item._reportDays.values()].map(report => ({ type: 'public_report', ...report, local_hours: [...report.local_hours] })),
@@ -282,8 +343,10 @@ function buildEncampmentSites(now = new Date()) {
     // Shadow only: it is exposed for app experimentation and offline evaluation, but condition
     // remains the sole source for map inclusion and route avoidance. No promotion path exists
     // until an independently audited held-out label set and evaluation protocol are established.
-    const locationUncertaintyM = item._address ? 35 : 45;
-    const locationMethod = 'NYC 311 reported coordinate, clustered to approximately 11 meters';
+    const locationUncertaintyM = Math.min(65, (item._address ? 35 : 45) + Math.ceil(item._maxCoordinateOffsetM));
+    const locationMethod = item._reportedCoordinateGroups > 1
+      ? 'Nearby NYC 311 address geocodes consolidated into a bounded reported-location envelope'
+      : 'NYC 311 address-geocoded reported location';
     const nowcast = estimateWalkNowcast(events, now, { locationUncertaintyM, locationMethod });
     const lastAgeDays = Math.max(0, (now.getTime() - parseNycWallTime(item.last_seen)) / 86400000);
     // Old, low-probability locations are neither useful map points nor route constraints. Keep
@@ -300,6 +363,14 @@ function buildEncampmentSites(now = new Date()) {
       nowcast,
       location_uncertainty_m: locationUncertaintyM,
       location_method: locationMethod,
+      id_aliases: [...item._idAliases].filter(id => id !== item.id).sort(),
+      location_identity: {
+        semantics: 'reported_location_envelope_not_physical_instance',
+        reported_coordinate_groups: item._reportedCoordinateGroups,
+        consolidation_radius_m: REPORTED_LOCATION_ENVELOPE_M,
+        max_coordinate_offset_m: Math.round(item._maxCoordinateOffsetM),
+        chain_merging: false,
+      },
       source: 'NYC 311', source_url: 'https://data.cityofnewyork.us/d/erm2-nwe9',
     });
   }
@@ -428,7 +499,7 @@ async function main() {
         rule: 'Encampment presence is a versioned model score updated only by distinct 311 report days, explicit public-agency observations, imperfect not-found checks, and evidence age. Community submissions are stored as unreviewed material and never enter this model or route exclusions.',
         persistence: 'Old evidence relaxes toward an uncertain site prior with a 10-day half-life. Same-day duplicate reports are heavily discounted.',
         validation: 'Parameters are checked with forward-chaining recurrence tests over public records. In the current mirror, explicit public-agency observations predict faster corroboration than report-only events, while not-found checks are only weak negative evidence. NYPD condition-corrected language is treated as temporary because about nine in ten eligible corrected coordinates were reported again within seven days.',
-        limitations: 'NYC publishes address-geocoded 311 coordinates, not tent GPS fixes. This score is not a calibrated probability or proof of current presence. Its numeric range is heuristic, not a statistical confidence interval. Community submissions do not alter it.',
+        limitations: 'NYC publishes address-geocoded 311 coordinates, not tent GPS fixes. Nearby coordinate variants are consolidated into bounded reported-location envelopes; an envelope is not a physical-instance identifier. This score is not a calibrated probability or proof of current presence. Its numeric range is heuristic, not a statistical confidence interval. Community submissions do not alter it.',
       },
       walk_nowcast: {
         version: WALK_NOWCAST_METHOD_VERSION,
@@ -442,7 +513,7 @@ async function main() {
       caveats: [
         'Mapped ALPR locations are public observations, not a complete or live inventory.',
         'Flock Safety is named only when manufacturer tags identify it.',
-        'Encampment locations use approximately 11-meter coordinate clusters with 35–45 meter disclosed uncertainty. A 311 coordinate is an address geocode, not a live tent location.',
+        'Encampment locations are bounded reported-location envelopes with 35–65 meter disclosed uncertainty. Very close address-geocode variants consolidate around fixed anchors to reduce duplicate-looking dots without chain-merging a block. An envelope is not a live physical-instance identifier.',
         'The homelessness layer models Encampment requests only; Homeless Person Assistance reports are not presented as proof of a tent. Police and outreach counts appear only when public resolution text explicitly says the agency responded.',
       ],
     }, layers,
@@ -456,4 +527,5 @@ async function main() {
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
 
 module.exports = { manufacturer, layerFor, supported, resolutionEvidence, conditionEvidence, parseNycWallTime, nycLocalDay,
-  recordReportedLocation, reportedLocationLabel, buildEncampmentSites, REGISTRY, LAYER_NAMES };
+  recordReportedLocation, reportedLocationLabel, reportedLocationDistanceMeters, consolidateReportedLocationSites,
+  buildEncampmentSites, REPORTED_LOCATION_ENVELOPE_M, REGISTRY, LAYER_NAMES };
