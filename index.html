@@ -123,7 +123,7 @@ const REPORT_TYPES={
   'Homeless Person Assistance':{label:'Homeless assist',color:'#4ad6c8',layer:'homelessness'},
   'Panhandling':{label:'Panhandling',color:'#ffc24b',layer:'homelessness'}
 };
-const state={data:null,enabled:new Set(),featureGroup:null,routes:[],routeLines:[],selectedRoute:0,endpoints:null,via:null,routeRequest:0,routeTimer:null,routeController:null,profile:'walking',avoidance:null,access:null,forecast:{feature:null,group:null,anchor:null,lastAnnouncement:null,conditionLoop:null,loopRequest:0,loopFeatureId:null,loopLoadedAt:0,restoringUrl:false},discover:{citibike:false,group:null,timer:null},report:{issues:null,enabled:new Set(),group:null,current:null,selectedStatus:null,photo:null,promise:null,error:null}};
+const state={data:null,enabled:new Set(['homelessness']),featureGroup:null,routes:[],routeLines:[],selectedRoute:0,endpoints:null,via:null,routeRequest:0,routeTimer:null,routeController:null,profile:'walking',avoidance:null,access:null,forecast:{feature:null,group:null,anchor:null,lastAnnouncement:null,conditionLoop:null,loopRequest:0,loopFeatureId:null,loopLoadedAt:0,restoringUrl:false},discover:{citibike:false,group:null,timer:null},report:{issues:null,enabled:new Set(),group:null,current:null,selectedStatus:null,photo:null,promise:null,error:null}};
 const PREF_KEY='unignorable-regular-route-v2';
 const canvas=L.canvas({padding:.5});
 const map=L.map('map',{zoomControl:true,renderer:canvas,minZoom:10,maxZoom:19}).setView([40.74482,-73.98511],15);
@@ -351,7 +351,7 @@ function clearRouteField(id){
   input.value='';input._place=null;closeSuggestions(input);invalidateRoutes();savePlanner();input.focus();setRouteHint(id==='origin'?'Choose a starting point':'Choose a destination');
 }
 function restorePlanner(){
-  try{const saved=JSON.parse(localStorage.getItem(PREF_KEY)||'null');state.profile='walking';state.enabled=new Set();if(!saved){document.querySelectorAll('[data-profile]').forEach(item=>item.setAttribute('aria-pressed',String(item.dataset.profile===state.profile)));return;}if(saved.via&&Number.isFinite(Number(saved.via.lat))&&Number.isFinite(Number(saved.via.lng)))state.via=saved.via;for(const id of ['origin','destination']){const input=document.getElementById(id),entry=saved[id];if(entry&&entry.value){input.value=entry.value;input._place=entry.place||null;}}document.querySelectorAll('[data-profile]').forEach(item=>item.setAttribute('aria-pressed',String(item.dataset.profile===state.profile)));renderVia();}catch{}
+  try{const saved=JSON.parse(localStorage.getItem(PREF_KEY)||'null');state.profile='walking';state.enabled=new Set(['homelessness']);if(!saved){document.querySelectorAll('[data-profile]').forEach(item=>item.setAttribute('aria-pressed',String(item.dataset.profile===state.profile)));return;}if(saved.via&&Number.isFinite(Number(saved.via.lat))&&Number.isFinite(Number(saved.via.lng)))state.via=saved.via;for(const id of ['origin','destination']){const input=document.getElementById(id),entry=saved[id];if(entry&&entry.value){input.value=entry.value;input._place=entry.place||null;}}document.querySelectorAll('[data-profile]').forEach(item=>item.setAttribute('aria-pressed',String(item.dataset.profile===state.profile)));renderVia();}catch{}
 }
 
 function buildFilters(){

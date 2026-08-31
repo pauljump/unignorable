@@ -72,6 +72,7 @@ test('health and public assets are available with security headers', async () =>
   assert.match(root.headers.get('permissions-policy'), /tools=\(self\)/);
   const rootHtml = await root.text();
   assert.match(rootHtml, /id="forecast-card"/);
+  assert.match(rootHtml, /enabled:new Set\(\['homelessness'\]\)/);
   assert.match(rootHtml, /Current condition estimate/);
   assert.match(rootHtml, /Historical reports most often arrived/);
   assert.match(rootHtml, /uncalibrated current score/);
