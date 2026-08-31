@@ -5,7 +5,8 @@ const path = require('node:path');
 const { pointInGeoJSON, routeIntersectsPoint, featureRisk, scoreRoute, chooseRecommended, plausibleRoutes, exportUrls, simplifyWalkingSteps, LAYER_RADII } = require('../map-core');
 const { manufacturer, layerFor, supported, resolutionEvidence, conditionEvidence,
   parseNycWallTime, nycLocalDay, recordReportedLocation, reportedLocationLabel,
-  consolidateReportedLocationSites, REPORTED_LOCATION_ENVELOPE_M } = require('../scripts/refresh-map-data');
+  reportedStreetSegmentKey, recordReportedStreetSegment, consolidateReportedLocationSites,
+  REPORTED_LOCATION_ENVELOPE_M, REPORTED_STREET_SEGMENT_ENVELOPE_M } = require('../scripts/refresh-map-data');
 const { classifyResolution, estimatePresence, routingLevel } = require('../condition-model');
 
 const line = [[-74, 40.7], [-73.99, 40.7]];
@@ -152,6 +153,7 @@ test('nearby address-geocode variants consolidate without chain-merging a block'
     _address: id, _addressAt: parseNycWallTime(`${day}T08:00:00.000`), _borough: 'MANHATTAN', _boroughAt: 1,
     _reportDays: new Map([[day, { at: parseNycWallTime(`${day}T08:00:00.000`), count, local_hours: new Set([8]) }]]),
     _events: new Map(), _idAliases: new Set([id]), _reportedCoordinateGroups: 1, _maxCoordinateOffsetM: 0,
+    _segmentCounts: new Map(), _memberCoordinates: [{ lat: 40.75, lng }],
     responses: { nypd_responded: 0, nypd_observed_encampment: 0, dhs_outreach: 0 },
   });
   const anchor = site('anchor', -73.99, 20, '2026-08-01');
@@ -165,6 +167,47 @@ test('nearby address-geocode variants consolidate without chain-merging a block'
   assert.equal(result[0]._reportedCoordinateGroups, 2);
   assert.ok(result[0]._maxCoordinateOffsetM > 9 && result[0]._maxCoordinateOffsetM < 11);
   assert.equal(result[1].id, 'chained-only');
+});
+
+test('same-block address estimates resolve to one bounded condition without swallowing nearby segments', () => {
+  const site = (id, lat, lng, count, address, cross1, cross2) => {
+    const item = {
+      id, lat, lng, count, first_seen: '2026-01-01T08:00:00.000', last_seen: '2026-08-01T08:00:00.000',
+      _address: address, _addressAt: 1, _borough: 'MANHATTAN', _boroughAt: 1,
+      _reportDays: new Map(), _events: new Map(), _idAliases: new Set([id]),
+      _reportedCoordinateGroups: 1, _maxCoordinateOffsetM: 0, _segmentCounts: new Map(),
+      _memberCoordinates: [{ lat, lng }],
+      responses: { nypd_responded: 0, nypd_observed_encampment: 0, dhs_outreach: 0 },
+    };
+    for (let index = 0; index < count; index++) recordReportedStreetSegment(item, {
+      incident_address: address, cross_street_1: cross1, cross_street_2: cross2,
+    });
+    return item;
+  };
+  const common = ['3 AVENUE', '2 AVENUE'];
+  const east246 = site('246', 40.736396, -73.983185, 91, '246 EAST 20 STREET', ...common);
+  const east230 = site('230', 40.736484, -73.983394, 30, '230 EAST 20 STREET', ...common);
+  const east212 = site('212', 40.736580, -73.983625, 6, '212 EAST 20 STREET', ...common);
+  const nextBlock = site('next-block', 40.736650, -73.983800, 5, '200 EAST 21 STREET', '3 AVENUE', '2 AVENUE');
+  const result = consolidateReportedLocationSites([east212, nextBlock, east230, east246]);
+  assert.equal(REPORTED_STREET_SEGMENT_ENVELOPE_M, 65);
+  assert.equal(result.length, 2);
+  assert.equal(result[0].id, '246');
+  assert.equal(result[0].count, 127);
+  assert.equal(result[0]._address, '246 EAST 20 STREET');
+  assert.deepEqual([...result[0]._idAliases].sort(), ['212', '230', '246']);
+  assert.equal(result[0]._segmentAssistedMerges, 2);
+  assert.equal(result[1].id, 'next-block');
+});
+
+test('reported street-segment identity normalizes address whitespace, ordinals, and cross-street order', () => {
+  const first = reportedStreetSegmentKey({
+    incident_address: '230 EAST   20TH ST', cross_street_1: '3 AVE', cross_street_2: '2 AVENUE',
+  });
+  const second = reportedStreetSegmentKey({
+    incident_address: '246 East 20 Street', cross_street_1: '2 Avenue', cross_street_2: '3 Avenue',
+  });
+  assert.equal(first, second);
 });
 
 test('NYC source wall times parse deterministically across standard time, DST, and repeated hours', () => {

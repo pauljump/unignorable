@@ -36,6 +36,7 @@ const RESPONSE_TYPES = new Set(['Encampment', 'Homeless Person Assistance', 'Dru
 const TYPES = [...new Set(Object.values(REGISTRY).flatMap(byType => Object.keys(byType)))];
 const MIN_REPORTS = 5, MIN_SPAN_DAYS = 30, RECENT_DAYS = 180, LOOKBACK_YEARS = 5;
 const REPORTED_LOCATION_ENVELOPE_M = 20;
+const REPORTED_STREET_SEGMENT_ENVELOPE_M = 65;
 const SIDEWALK_DB = process.env.DB || path.join(process.env.SIDEWALK_DIR || '/Users/mini-home/Desktop/Monorepo/sidewalk', 'data', 'sidewalk.db');
 const NYC_WALL_FORMATTER = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23',
   year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -214,6 +215,49 @@ function reportedLocationLabel(item) {
   return borough ? `Approximate reported location in ${borough}` : 'Approximate reported location';
 }
 
+function normalizeStreetName(value) {
+  return cleanLocationText(value).toUpperCase()
+    .replace(/[^A-Z0-9\s-]/g, ' ')
+    .replace(/\b(\d+)(?:ST|ND|RD|TH)\b/g, '$1')
+    .replace(/\bST\b/g, 'STREET').replace(/\bAVE\b/g, 'AVENUE')
+    .replace(/\bRD\b/g, 'ROAD').replace(/\bBLVD\b/g, 'BOULEVARD')
+    .replace(/\bPL\b/g, 'PLACE').replace(/\bPKWY\b/g, 'PARKWAY')
+    .replace(/\s+/g, ' ').trim();
+}
+
+// NYC associates reports with standard address locations. A reporter choosing 212, 230, or 246
+// on the same block can therefore describe one condition while producing separate coordinates.
+// The street plus its two bounding cross streets is stronger identity evidence than proximity
+// alone, while the fixed 65 m diameter prevents a shared block label from swallowing the block.
+function reportedStreetSegmentKey(row) {
+  const incident = normalizeStreetName(row.incident_address);
+  const street = incident.replace(/^\d+(?:-\d+)?[A-Z]?\s+/, '').trim();
+  const cross = [normalizeStreetName(row.cross_street_1), normalizeStreetName(row.cross_street_2)]
+    .filter(Boolean).sort();
+  if (!street || cross.length !== 2 || cross[0] === cross[1]) return null;
+  return `${street}|${cross[0]}<>${cross[1]}`;
+}
+
+function recordReportedStreetSegment(item, row) {
+  const key = reportedStreetSegmentKey(row);
+  if (!key) return;
+  item._segmentCounts.set(key, (item._segmentCounts.get(key) || 0) + 1);
+}
+
+function dominantReportedStreetSegments(item) {
+  const counts = item._segmentCounts || new Map();
+  const total = Number(item.count) || [...counts.values()].reduce((sum, value) => sum + value, 0);
+  if (!total) return new Set();
+  return new Set([...counts].filter(([, count]) => count / total > 0.5).map(([key]) => key));
+}
+
+function reportedLocationBucket(point, cellSizeM) {
+  const metersPerDegree = 111000;
+  const projectedX = Number(point.lng) * metersPerDegree * Math.cos(40.7 * Math.PI / 180);
+  const projectedY = Number(point.lat) * metersPerDegree;
+  return [Math.floor(projectedX / cellSizeM), Math.floor(projectedY / cellSizeM)];
+}
+
 function reportedLocationDistanceMeters(a, b) {
   const rad = Math.PI / 180, lat1 = Number(a.lat) * rad, lat2 = Number(b.lat) * rad;
   const dLat = (Number(b.lat) - Number(a.lat)) * rad, dLng = (Number(b.lng) - Number(a.lng)) * rad;
@@ -221,12 +265,12 @@ function reportedLocationDistanceMeters(a, b) {
   return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
-function mergeReportedLocationSite(target, source) {
+function mergeReportedLocationSite(target, source, { preserveAnchorAddress = false } = {}) {
   const offset = reportedLocationDistanceMeters(target, source);
   target.count += source.count;
   if (!target.first_seen || source.first_seen < target.first_seen) target.first_seen = source.first_seen;
   if (!target.last_seen || source.last_seen > target.last_seen) target.last_seen = source.last_seen;
-  if (source._address && source._addressAt > target._addressAt) {
+  if (!preserveAnchorAddress && source._address && source._addressAt > target._addressAt) {
     target._address = source._address; target._addressAt = source._addressAt;
   }
   if (source._borough && source._boroughAt > target._boroughAt) {
@@ -247,6 +291,10 @@ function mergeReportedLocationSite(target, source) {
   }
   for (const name of Object.keys(target.responses)) target.responses[name] += Number(source.responses[name]) || 0;
   for (const id of source._idAliases) target._idAliases.add(id);
+  for (const [key, count] of source._segmentCounts || []) {
+    target._segmentCounts.set(key, (target._segmentCounts.get(key) || 0) + count);
+  }
+  for (const point of source._memberCoordinates || [{ lat: source.lat, lng: source.lng }]) target._memberCoordinates.push(point);
   target._reportedCoordinateGroups += source._reportedCoordinateGroups;
   target._maxCoordinateOffsetM = Math.max(target._maxCoordinateOffsetM, source._maxCoordinateOffsetM, offset);
   return target;
@@ -259,17 +307,67 @@ function mergeReportedLocationSite(target, source) {
 function consolidateReportedLocationSites(input, radiusM = REPORTED_LOCATION_ENVELOPE_M) {
   const ordered = [...input].sort((a, b) => Number(b.count) - Number(a.count)
     || parseNycWallTime(b.last_seen) - parseNycWallTime(a.last_seen) || String(a.id).localeCompare(String(b.id)));
+  for (const site of ordered) {
+    site._segmentCounts ||= new Map();
+    site._anchorSegmentKeys = dominantReportedStreetSegments(site);
+    site._memberCoordinates ||= [{ lat: site.lat, lng: site.lng }];
+    site._segmentAssistedMerges ||= 0;
+    site._matchedSegmentKeys ||= new Set();
+  }
   const envelopes = [];
+  const searchCellM = Math.max(radiusM, REPORTED_STREET_SEGMENT_ENVELOPE_M);
+  const buckets = new Map();
   for (const site of ordered) {
     let best = null, bestDistance = Infinity;
-    for (const envelope of envelopes) {
-      const distance = reportedLocationDistanceMeters(envelope, site);
-      if (distance <= radiusM && distance < bestDistance) { best = envelope; bestDistance = distance; }
+    const [siteX, siteY] = reportedLocationBucket(site, searchCellM);
+    const candidates = new Set();
+    // Two cells absorb the small equirectangular approximation at NYC's north/south extremes.
+    for (let x = siteX - 2; x <= siteX + 2; x += 1) for (let y = siteY - 2; y <= siteY + 2; y += 1) {
+      for (const envelope of buckets.get(`${x}|${y}`) || []) candidates.add(envelope);
     }
-    if (best) mergeReportedLocationSite(best, site);
-    else envelopes.push(site);
+    for (const envelope of [...candidates].sort((a, b) => a._envelopeOrder - b._envelopeOrder)) {
+      const distance = reportedLocationDistanceMeters(envelope, site);
+      const sharedSegment = [...envelope._anchorSegmentKeys].find(key => site._anchorSegmentKeys.has(key));
+      const segmentDiameterOk = sharedSegment && envelope._memberCoordinates.every(point =>
+        reportedLocationDistanceMeters(point, site) <= REPORTED_STREET_SEGMENT_ENVELOPE_M);
+      const nearbyVariant = distance <= radiusM;
+      const sameBoundedSegment = distance <= REPORTED_STREET_SEGMENT_ENVELOPE_M && segmentDiameterOk;
+      if ((nearbyVariant || sameBoundedSegment) && distance < bestDistance) {
+        best = envelope; bestDistance = distance;
+        site._matchedEnvelopeSegment = sameBoundedSegment ? sharedSegment : null;
+      }
+    }
+    if (best) {
+      if (site._matchedEnvelopeSegment && bestDistance > radiusM) {
+        best._segmentAssistedMerges += 1;
+        best._matchedSegmentKeys.add(site._matchedEnvelopeSegment);
+      }
+      mergeReportedLocationSite(best, site, { preserveAnchorAddress: bestDistance > radiusM });
+    }
+    else {
+      site._envelopeOrder = envelopes.length;
+      envelopes.push(site);
+      const [x, y] = reportedLocationBucket(site, searchCellM), key = `${x}|${y}`;
+      const bucket = buckets.get(key) || [];
+      bucket.push(site); buckets.set(key, bucket);
+    }
   }
   return envelopes;
+}
+
+function locationResolutionAudit(features = []) {
+  return {
+    version: 'reported-location-envelope-v2',
+    canonical_sites: features.length,
+    reported_coordinate_groups: features.reduce((sum, feature) =>
+      sum + (Number(feature.location_identity?.reported_coordinate_groups) || 1), 0),
+    street_segment_assisted_sites: features.filter(feature =>
+      Number(feature.location_identity?.street_segment_assisted_merges) > 0).length,
+    street_segment_assisted_merges: features.reduce((sum, feature) =>
+      sum + (Number(feature.location_identity?.street_segment_assisted_merges) || 0), 0),
+    max_coordinate_offset_m: features.reduce((max, feature) =>
+      Math.max(max, Number(feature.location_identity?.max_coordinate_offset_m) || 0), 0),
+  };
 }
 
 function buildEncampmentSites(now = new Date()) {
@@ -277,7 +375,8 @@ function buildEncampmentSites(now = new Date()) {
   const db = new DatabaseSync(SIDEWALK_DB, { readOnly: true });
   const since = new Date(now.getTime() - LOOKBACK_YEARS * 365 * 86400000).toISOString().slice(0, 10);
   const query = db.prepare(`SELECT unique_key,created_date,closed_date,agency,status,resolution_description,
-    resolution_action_updated_date,incident_address,borough,cast(latitude AS real) lat,cast(longitude AS real) lng
+    resolution_action_updated_date,incident_address,cross_street_1,cross_street_2,borough,
+    cast(latitude AS real) lat,cast(longitude AS real) lng
     FROM sr311 WHERE complaint_type='Encampment' AND created_date>=? AND latitude IS NOT NULL AND longitude IS NOT NULL
     ORDER BY created_date`);
   const sites = new Map();
@@ -295,6 +394,7 @@ function buildEncampmentSites(now = new Date()) {
       first_seen: null, last_seen: null, _reportDays: new Map(), _events: new Map(),
       _address: null, _addressAt: -Infinity, _borough: null, _boroughAt: -Infinity,
       _idAliases: new Set([siteId]), _reportedCoordinateGroups: 1, _maxCoordinateOffsetM: 0,
+      _segmentCounts: new Map(), _memberCoordinates: [{ lat, lng }],
       responses: { nypd_responded: 0, nypd_observed_encampment: 0, dhs_outreach: 0 },
     };
     item.count += 1;
@@ -303,6 +403,7 @@ function buildEncampmentSites(now = new Date()) {
       item.last_seen = row.created_date; item.lat = lat; item.lng = lng;
     }
     recordReportedLocation(item, row, createdAt);
+    recordReportedStreetSegment(item, row);
     // NYC Open Data timestamps are local wall times without an offset. Preserve the source day
     // and hour explicitly for the report-timing window instead of letting the host timezone shift
     // them. One report-day event still feeds the presence model, preserving its dedupe semantics.
@@ -344,7 +445,9 @@ function buildEncampmentSites(now = new Date()) {
     // remains the sole source for map inclusion and route avoidance. No promotion path exists
     // until an independently audited held-out label set and evaluation protocol are established.
     const locationUncertaintyM = Math.min(65, (item._address ? 35 : 45) + Math.ceil(item._maxCoordinateOffsetM));
-    const locationMethod = item._reportedCoordinateGroups > 1
+    const locationMethod = item._segmentAssistedMerges > 0
+      ? 'NYC 311 address geocodes sharing a reported street segment consolidated into a bounded location envelope'
+      : item._reportedCoordinateGroups > 1
       ? 'Nearby NYC 311 address geocodes consolidated into a bounded reported-location envelope'
       : 'NYC 311 address-geocoded reported location';
     const nowcast = estimateWalkNowcast(events, now, { locationUncertaintyM, locationMethod });
@@ -368,6 +471,10 @@ function buildEncampmentSites(now = new Date()) {
         semantics: 'reported_location_envelope_not_physical_instance',
         reported_coordinate_groups: item._reportedCoordinateGroups,
         consolidation_radius_m: REPORTED_LOCATION_ENVELOPE_M,
+        near_coordinate_radius_m: REPORTED_LOCATION_ENVELOPE_M,
+        street_segment_radius_m: REPORTED_STREET_SEGMENT_ENVELOPE_M,
+        street_segment_assisted_merges: item._segmentAssistedMerges,
+        matched_street_segments: item._matchedSegmentKeys.size,
         max_coordinate_offset_m: Math.round(item._maxCoordinateOffsetM),
         chain_merging: false,
       },
@@ -499,7 +606,12 @@ async function main() {
         rule: 'Encampment presence is a versioned model score updated only by distinct 311 report days, explicit public-agency observations, imperfect not-found checks, and evidence age. Community submissions are stored as unreviewed material and never enter this model or route exclusions.',
         persistence: 'Old evidence relaxes toward an uncertain site prior with a 10-day half-life. Same-day duplicate reports are heavily discounted.',
         validation: 'Parameters are checked with forward-chaining recurrence tests over public records. In the current mirror, explicit public-agency observations predict faster corroboration than report-only events, while not-found checks are only weak negative evidence. NYPD condition-corrected language is treated as temporary because about nine in ten eligible corrected coordinates were reported again within seven days.',
-        limitations: 'NYC publishes address-geocoded 311 coordinates, not tent GPS fixes. Nearby coordinate variants are consolidated into bounded reported-location envelopes; an envelope is not a physical-instance identifier. This score is not a calibrated probability or proof of current presence. Its numeric range is heuristic, not a statistical confidence interval. Community submissions do not alter it.',
+        limitations: 'NYC publishes address-geocoded 311 coordinates, not tent GPS fixes. Nearby coordinate variants and strongly matching same-segment address estimates are consolidated into bounded reported-location envelopes; an envelope is not a physical-instance identifier. This score is not a calibrated probability or proof of current presence. Its numeric range is heuristic, not a statistical confidence interval. Community submissions do not alter it.',
+      },
+      location_resolution: {
+        ...locationResolutionAudit(layers.homelessness),
+        rule: 'Coordinate variants within 20 m consolidate around fixed evidence-weighted anchors. Variants out to a 65 m maximum cluster diameter consolidate only when a majority of their source records identify the same street and bounding cross streets.',
+        guardrails: 'Anchors never move, street-segment identity is fixed before assignment, every assisted member must remain within 65 m of every other assisted member, and all source IDs remain aliases of the canonical site.',
       },
       walk_nowcast: {
         version: WALK_NOWCAST_METHOD_VERSION,
@@ -513,7 +625,7 @@ async function main() {
       caveats: [
         'Mapped ALPR locations are public observations, not a complete or live inventory.',
         'Flock Safety is named only when manufacturer tags identify it.',
-        'Encampment locations are bounded reported-location envelopes with 35–65 meter disclosed uncertainty. Very close address-geocode variants consolidate around fixed anchors to reduce duplicate-looking dots without chain-merging a block. An envelope is not a live physical-instance identifier.',
+        'Encampment locations are bounded reported-location envelopes with 35–65 meter disclosed uncertainty. Very close coordinate variants consolidate around fixed anchors; wider variants consolidate only with matching street-segment evidence and a hard 65 meter cluster diameter. An envelope is not a live physical-instance identifier.',
         'The homelessness layer models Encampment requests only; Homeless Person Assistance reports are not presented as proof of a tent. Police and outreach counts appear only when public resolution text explicitly says the agency responded.',
       ],
     }, layers,
@@ -527,5 +639,7 @@ async function main() {
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
 
 module.exports = { manufacturer, layerFor, supported, resolutionEvidence, conditionEvidence, parseNycWallTime, nycLocalDay,
-  recordReportedLocation, reportedLocationLabel, reportedLocationDistanceMeters, consolidateReportedLocationSites,
-  buildEncampmentSites, REPORTED_LOCATION_ENVELOPE_M, REGISTRY, LAYER_NAMES };
+  recordReportedLocation, reportedLocationLabel, normalizeStreetName, reportedStreetSegmentKey,
+  recordReportedStreetSegment, reportedLocationDistanceMeters, consolidateReportedLocationSites,
+  locationResolutionAudit, buildEncampmentSites, REPORTED_LOCATION_ENVELOPE_M,
+  REPORTED_STREET_SEGMENT_ENVELOPE_M, REGISTRY, LAYER_NAMES };
