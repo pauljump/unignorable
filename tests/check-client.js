@@ -74,7 +74,7 @@ if (!html.includes("setAttribute('aria-activedescendant'")) throw new Error('aut
 if (/id="forecast-card"[^>]*aria-live/.test(html)) throw new Error('the entire forecast card must not be a live region');
 if (!html.includes('.forecast-actions button{min-height:44px') || !html.includes('.results-back{width:100%;min-height:44px')) throw new Error('new interactive targets must be at least 44px tall');
 if (!html.includes('window.UnignorableWebMCPBridge=') || !html.includes('<script src="/webmcp.js?v=location-v3"></script>')) throw new Error('the map must expose and load its versioned WebMCP bridge');
-if (!html.includes('feature.id_aliases||[]') || !html.includes("!==String(feature.id))syncForecastUrl(false)")) throw new Error('legacy reported-coordinate URLs must resolve and canonicalize to one location envelope');
+if (!html.includes('feature.id_aliases||[]') || !html.includes('if(legacyFeatureId)syncForecastUrl(false)') || !html.includes("legacyFeatureId?firstValue(feature.address")) throw new Error('legacy reported-coordinate URLs must resolve and fully canonicalize to one location envelope');
 if (html.includes("(state.report.issues||[]).forEach(issue=>{if(issue.type==='Encampment'") || html.includes("if(state.report.issues&&(name==='homelessness'||name==='drugs'))continue")) throw new Error('coarse accountability issues must not be mixed into or replace canonical forecast envelopes');
 if (!html.includes('No location permission was requested.') || !html.includes('Nothing was posted.')) throw new Error('WebMCP action preparation must state its human-control boundary');
 if (!html.includes('appReady=boot();')) throw new Error('WebMCP tools must share the application readiness promise');
