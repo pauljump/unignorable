@@ -10,6 +10,10 @@ const ugc = require('./ugc');
 const { pointInGeoJSON, routeHitFeatures, scoreRoute, featureRadius, featureRisk, plausibleRoutes, chooseRecommended, exportUrls, simplifyWalkingSteps, LAYER_RADII } = require('./map-core');
 const { routingLevel } = require('./condition-model');
 const { buildHB295Checklist } = require('./hb295-evidence');
+const { eligibleRecord, recordPath, renderRecord, renderDirectory, outcomeProof } = require('./condition-record');
+const RECORD_PILOT = require('./config/record-pilot.json');
+const RECORD_EVENTS = new Set(['record_view', 'record_engaged', 'record_return', 'record_copy', 'check_start', 'history_open', 'action_open']);
+const recordEventHits = new Map();
 
 // --- Geocode (OpenStreetMap Nominatim), proxied + cached server-side. NYC-bounded. ---
 // Nominatim usage policy requires a descriptive User-Agent and an identifiable contact; bounded
@@ -106,6 +110,8 @@ for (const feature of Object.values(MAP_LAYERS?.layers || {}).flat()) {
   MAP_FEATURE_BY_ID.set(feature.id, feature);
   for (const alias of feature.id_aliases || []) MAP_FEATURE_BY_ID.set(alias, feature);
 }
+const PILOT_FEATURES = [...new Set(RECORD_PILOT.feature_ids.map(id => MAP_FEATURE_BY_ID.get(id)).filter(Boolean))];
+const INDEXABLE_RECORD_IDS = new Set(PILOT_FEATURES.filter(eligibleRecord).map(feature => feature.id));
 
 // Live discovery is intentionally separate from the durable civic-map artifact. These are
 // public, customer-facing availability signals, cached briefly and never stored as trip history.
@@ -636,7 +642,7 @@ function conditionLoopRecord(feature) {
     try { campaign = ugc.getCampaign(issueKey); } catch {}
     try { actions = ugc.actionCounts(issueKey); } catch {}
   }
-  const checked = checks.total > 0 || thread.verdict !== 'unverified';
+  const checked = checks.reviewed > 0;
   const acted = Boolean(campaign) || actions.total > 0;
   const clearClaimCandidates = [];
   if (issue?.status === 'resolved' && Number.isFinite(Date.parse(issue.last_seen || ''))) {
@@ -657,12 +663,17 @@ function conditionLoopRecord(feature) {
   const absenceChecksAfterClaim = reviewedAfterClaim.filter(row => row.state === 'absent');
   const absenceDaysAfterClaim = new Set(absenceChecksAfterClaim.map(row => row.observation_day)).size;
   const presentAfterClaim = reviewedAfterClaim.some(row => row.state === 'present');
-  const contradictedClear = issue?.status === 'active' || thread.verdict === 'still_here' || presentAfterClaim;
+  const lastSourceReport = feature.nowcast?.features?.last_report_at || feature.condition?.last_report_at || feature.last_seen;
+  const sourceReportAfterClaim = Boolean(clearClaim && Date.parse(lastSourceReport || '') > clearClaim.at);
+  const contradictedClear = issue?.status === 'active' || thread.verdict === 'still_here' || presentAfterClaim || sourceReportAfterClaim;
   const claimedClear = !contradictedClear && clearClaim !== null;
   const silenceDays = Number.isFinite(Number(issue?.silence)) ? Number(issue.silence)
     : Number.isFinite(Date.parse(issue?.last_seen || '')) ? Math.max(0, Math.floor((Date.now() - Date.parse(issue.last_seen)) / 86400000)) : null;
   const recurrenceWindowDays = Math.max(30, Math.min(120, Math.round((Number(issue?.cadence) || 30) * 2)));
-  const durable = Boolean(claimedClear && absenceDaysAfterClaim >= 2 && silenceDays != null && silenceDays >= recurrenceWindowDays);
+  const reviewedHistory = clearClaim ? ugc.reviewedConditionObservationsSince(featureIds, 0) : [];
+  const outcome = outcomeProof({ claimAt: clearClaim ? new Date(clearClaim.at).toISOString() : null,
+    observations: reviewedHistory, quietDays: silenceDays, requiredDays: recurrenceWindowDays, contradicted: !claimedClear });
+  const durable = outcome.held;
   const stageIndex = durable ? 4 : claimedClear ? 3 : acted ? 2 : checked ? 1 : 0;
   const stages = [
     { id: 'detected', label: 'Detected', detail: 'Public evidence produces a dated, approximate condition estimate.' },
@@ -673,7 +684,7 @@ function conditionLoopRecord(feature) {
   ].map((stage, index) => ({ ...stage, state: index < stageIndex ? 'complete' : index === stageIndex ? 'current' : 'next' }));
   let nextAction;
   if (stageIndex === 0) nextAction = { id: 'check', mode: 'verify', label: 'Check this place' };
-  else if (stageIndex === 1 && issue) nextAction = { id: 'act', mode: 'record', label: 'Make the city answer' };
+  else if (stageIndex === 1 && issue && checks.reviewed_present > 0) nextAction = { id: 'act', mode: 'record', label: 'Review history and prepare an action' };
   else if (stageIndex === 2 && issue) nextAction = { id: 'escalate', mode: 'record', label: 'Join the next action' };
   else if (stageIndex === 3) nextAction = { id: 'confirm_outcome', mode: 'verify', label: 'Prove it stayed clear' };
   else if (stageIndex === 4) nextAction = { id: 'monitor_outcome', mode: 'verify', label: 'Keep it resolved' };
@@ -703,6 +714,9 @@ function conditionLoopRecord(feature) {
       reviewed_absence_checks: absenceChecksAfterClaim.length,
       reviewed_absence_days: absenceDaysAfterClaim,
       reviewed_present_after_claim: presentAfterClaim,
+      source_report_after_claim: sourceReportAfterClaim,
+      reviewed_prior_presence: outcome.priorPresence,
+      reviewed_endpoint_absence: outcome.endpointAbsence,
       quiet_days: silenceDays,
       required_quiet_days: recurrenceWindowDays,
       recurrence_reopens_loop: true,
@@ -1800,6 +1814,10 @@ const SITEMAP = (() => {
   const urls = ISSUES
     .filter(isIndexable)
     .map(i => `  <url><loc>${PUBLIC_ORIGIN}/c?t=${encodeURIComponent(i.type)}&amp;id=${encodeURIComponent(i.id)}</loc></url>`);
+  urls.push(`  <url><loc>${esc(PUBLIC_ORIGIN)}/records</loc></url>`);
+  for (const feature of PILOT_FEATURES.filter(feature => INDEXABLE_RECORD_IDS.has(feature.id))) {
+    urls.push(`  <url><loc>${esc(PUBLIC_ORIGIN + recordPath(feature))}</loc></url>`);
+  }
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
 })();
 const ROBOTS = `User-agent: *\nAllow: /\nSitemap: ${PUBLIC_ORIGIN}/sitemap.xml\n`;
@@ -1931,58 +1949,9 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
   return 12742000 * Math.asin(Math.sqrt(a));
 }
 
-function forecastShareRecord(feature) {
-  const nowcast = feature.nowcast || {}, condition = feature.condition || {};
-  const rawLabel = String(nowcast.label || condition.label || feature.descriptor || 'Current status uncertain');
-  const label = /^condition likely near this location$/i.test(rawLabel)
-    ? 'Encampment likely near this location'
-    : /^condition may be near this location$/i.test(rawLabel)
-      ? 'Encampment may be near this location'
-      : /^condition less likely near this location$/i.test(rawLabel)
-        ? 'Encampment less likely near this location' : rawLabel;
-  const place = titleCase(feature.address || feature.addr || feature.location_name || feature.block_label || 'this approximate NYC block');
-  const reports = Number(feature.count ?? feature.n) || 0;
-  const reportDays = Number(feature.distinct_report_days ?? feature.report_days_90 ?? feature.report_days) || 0;
-  const window = nowcast.local_time_window || nowcast.time_window || feature.local_time_window || null;
-  const windowLabel = window && (window.label || window.display_label || window.time_label)
-    || (window && Number.isFinite(Number(window.start_hour)) && Number.isFinite(Number(window.end_hour))
-      ? `${hourLabel(Number(window.start_hour))}–${hourLabel(Number(window.end_hour))}` : null);
-  const score = Number(nowcast.uncalibrated_score ?? nowcast.current_probability ?? condition.presence_probability);
-  const scoreText = Number.isFinite(score) ? ` Uncalibrated beta score ${Math.round(score * 100)}/100.` : '';
-  const loop = conditionLoopRecord(feature), record = loop.record;
-  const accountability = record
-    ? `NYC marked ${fmtN(record.city_closures)} reports closed here; ${fmtN(record.returns_after_closure)} were followed by another report. `
-    : '';
-  const locationClaim = label.replace(/\s+near this location$/i, '');
-  const description = `${accountability}Unignorable estimates ${locationClaim.toLowerCase()} near ${place}. ${fmtN(reports)} source reports across ${fmtN(reportDays)} report days inform this forecast.${windowLabel ? ` Reports most often arrived ${windowLabel}.` : ''} Approximate public-data estimate, not proof of current presence.${scoreText}`;
-  return { label, place, reports, reportDays, windowLabel, description, loop };
-}
-
-function hourLabel(hour) {
-  const normalized = ((Math.round(Number(hour) * 60) % 1440) + 1440) % 1440;
-  const h = Math.floor(normalized / 60), minutes = normalized % 60;
-  return `${h % 12 || 12}${minutes ? `:${String(minutes).padStart(2, '0')}` : ''} ${h < 12 ? 'AM' : 'PM'}`;
-}
-
 function renderForecastShare(feature) {
-  const data = forecastShareRecord(feature);
-  const lat = Number(feature.lat).toFixed(6), lng = Number(feature.lng).toFixed(6);
-  const shareUrl = `${PUBLIC_ORIGIN}/f?id=${encodeURIComponent(feature.id || '')}&lat=${lat}&lng=${lng}`;
-  const appUrl = `${PUBLIC_ORIGIN}/?mode=forecast&id=${encodeURIComponent(feature.id || '')}&lat=${lat}&lng=${lng}&place=${encodeURIComponent(data.place)}`;
-  const actionUrl = data.loop.record ? `${PUBLIC_ORIGIN}${data.loop.record.href}` : null;
-  const loopStages = ['Detected', 'Checked', 'Action', 'Clear', 'Held'];
-  const loopIndex = Math.max(0, Math.min(loopStages.length - 1, Number(data.loop.stage_index) || 0));
-  const loopMarkup = loopStages.map((stage, index) => {
-    const stateClass = index < loopIndex ? 'complete' : index === loopIndex ? 'current' : '';
-    return `<span class="${stateClass}">${stage}</span>`;
-  }).join('');
-  const facts = data.loop.record
-    ? `<div class="fact"><b>${fmtN(data.loop.record.reports)}</b><span>reports</span></div><div class="fact"><b>${fmtN(data.loop.record.city_closures)}</b><span>city closures</span></div><div class="fact"><b>${fmtN(data.loop.record.returns_after_closure)}</b><span>returns after closure</span></div>`
-    : `<div class="fact"><b>${fmtN(data.reports)}</b><span>source reports</span></div><div class="fact"><b>${fmtN(data.reportDays)}</b><span>report days</span></div><div class="fact"><b>${esc(data.windowLabel || '—')}</b><span>common report time</span></div>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,follow"><title>${esc(data.label)} · ${esc(data.place)} · unignorable</title>
-<meta name="description" content="${esc(data.description)}"><meta property="og:type" content="article"><meta property="og:title" content="${esc(data.label)} · ${esc(data.place)}"><meta property="og:description" content="${esc(data.description)}"><meta property="og:url" content="${esc(shareUrl)}"><meta property="og:site_name" content="unignorable"><meta property="og:image" content="${esc(PUBLIC_ORIGIN)}/assets/share-card.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="The ticket closed. The condition came back. See it, check it, make the city answer."><meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="${esc(data.label)} · ${esc(data.place)}"><meta name="twitter:description" content="${esc(data.description)}"><meta name="twitter:image" content="${esc(PUBLIC_ORIGIN)}/assets/share-card.png"><link rel="canonical" href="${esc(shareUrl)}">
-<style>:root{--bg:#0b0d10;--card:#14171c;--ink:#e8eaed;--mut:#969ba4;--line:#2b3038;--alarm:#ff5b45;--amber:#ffb020;--green:#4ad6c8}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}.wrap{max-width:680px;margin:0 auto;padding:20px 18px 72px}.mast{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:6px 0 18px}.word{color:var(--ink);font-weight:800;letter-spacing:.06em;font-size:14px;text-decoration:none}.word b{color:var(--alarm)}.tag{font-size:11px;color:var(--mut)}.eyebrow{margin-top:38px;color:var(--alarm);font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.hero h1{font-size:42px;line-height:1.02;letter-spacing:-.055em;margin:9px 0 10px}.place{color:var(--mut);font-size:15px}.card{margin-top:26px;padding:18px;border:1px solid var(--line);border-left:3px solid var(--alarm);border-radius:12px;background:var(--card)}.card p{margin:0;font-size:18px;line-height:1.45}.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);margin-top:16px}.fact{background:var(--card);padding:11px 8px;text-align:center}.fact b{display:block;font-size:22px}.fact span{display:block;color:var(--mut);font-size:10px;margin-top:3px}.loop{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:18px}.loop span{padding-top:8px;border-top:3px solid var(--line);color:var(--mut);font-size:9px;font-weight:800;text-align:center;text-transform:uppercase}.loop span.complete{border-color:var(--green);color:var(--green)}.loop span.current{border-color:var(--alarm);color:var(--ink)}.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px}.btn{display:inline-block;padding:11px 15px;border-radius:9px;background:var(--amber);color:#090a0c;text-decoration:none;font-weight:800;font-size:14px}.btn.alarm{background:var(--alarm);color:#fff}.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}.fine{margin-top:18px;color:var(--mut);font-size:12px;line-height:1.5}@media(max-width:520px){.hero h1{font-size:34px}}</style></head><body><main class="wrap"><div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">UN<b>IGNOR</b>ABLE</a><span class="tag">a public forecast</span></div><section class="hero"><div class="eyebrow">${esc(loopStages[loopIndex])}. Resolve it. Prove it held.</div><h1>${esc(data.label)}.</h1><div class="place">Near ${esc(data.place)} · NYC</div></section><section class="card"><p>${esc(data.description)}</p><div class="facts">${facts}</div><div class="loop">${loopMarkup}</div></section><div class="actions"><a class="btn" href="${esc(appUrl)}">Check this place</a>${actionUrl ? `<a class="btn alarm" href="${esc(actionUrl)}">Make the city answer</a>` : ''}<a class="btn ghost" href="${esc(PUBLIC_ORIGIN)}/map">Explore the map</a></div><p class="fine">Unignorable describes conditions, never people. Locations are approximate; the forecast is beta and uncalibrated. A city closure is not durable resolution. Reviewed clear checks on distinct days after the claim and a site-specific quiet window must show the outcome held; recurrence reopens the loop.</p></main></body></html>`;
+  return renderRecord({ feature, loop: conditionLoopRecord(feature), meta: MAP_LAYERS?.meta,
+    origin: PUBLIC_ORIGIN, indexable: INDEXABLE_RECORD_IDS.has(feature.id) });
 }
 
 function renderCampaignStart(selectedIssue) {
@@ -2081,6 +2050,34 @@ function renderActionReceipt(receipt) {
 
 async function handleRequest(req, res) {
   const u = new URL(req.url, 'http://x');
+
+  if (u.pathname === '/records' && req.method === 'GET') {
+    return send(res, 200, renderDirectory(PILOT_FEATURES, PUBLIC_ORIGIN), 'text/html; charset=utf-8');
+  }
+  if (u.pathname === '/methodology' && req.method === 'GET') {
+    return send(res, 200, fs.readFileSync(path.join(DIR, 'MODEL-METHODOLOGY.md')), 'text/plain; charset=utf-8');
+  }
+  if (u.pathname === '/record-client.js' && req.method === 'GET') {
+    return send(res, 200, fs.readFileSync(path.join(DIR, 'record-client.js')), 'text/javascript; charset=utf-8');
+  }
+  if (u.pathname === '/api/record-events' && req.method === 'POST') {
+    // Only this site's browser may submit; arbitrary dimensions and locations are rejected.
+    if (req.headers.origin !== PUBLIC_ORIGIN) return send(res, 403, '{"ok":false}', 'application/json');
+    const body = await readBody(req);
+    const feature = body && MAP_FEATURE_BY_ID.get(String(body.feature_id || ''));
+    if (!feature || feature.subject_type !== 'encampment' || !RECORD_EVENTS.has(body.event)
+      || Object.keys(body).some(name => !['event', 'feature_id'].includes(name))) {
+      return send(res, 400, '{"ok":false}', 'application/json');
+    }
+    // Separate from the observation budget; expiring, bounded in-memory abuse protection only.
+    const now = Date.now(), ip = clientIp(req);
+    for (const [address, entry] of recordEventHits) if (now >= entry.until) recordEventHits.delete(address);
+    const entry = recordEventHits.get(ip) || { n: 0, until: now + 300000 };
+    if (entry.n >= 120 || (!recordEventHits.has(ip) && recordEventHits.size >= 5000)) return send(res, 429, '{"ok":false}', 'application/json');
+    entry.n++; recordEventHits.set(ip, entry);
+    ugc.countRecordEvent(feature.id, body.event);
+    return send(res, 200, '{"ok":true}', 'application/json', { 'Cache-Control': 'no-store' });
+  }
 
   if (u.pathname === '/healthz') {
     return send(res, 200, JSON.stringify({ ok: true, issues: ISSUES.length, paywall: !ROUTE_PAYWALL_BYPASS, checkout: Boolean(STRIPE_SECRET_KEY), dataThrough: ISSUES.reduce((a, i) => i.last_seen > a ? i.last_seen : a, '') }), 'application/json', { 'Cache-Control': 'no-store' });
@@ -2661,7 +2658,7 @@ async function handleRequest(req, res) {
   if (u.pathname === '/f' || u.pathname === '/forecast') {
     let feature = MAP_FEATURE_BY_ID.get(String(u.searchParams.get('id') || ''));
     const lat = Number(u.searchParams.get('lat')), lng = Number(u.searchParams.get('lng'));
-    if (!feature && Number.isFinite(lat) && Number.isFinite(lng) && NYC_POINT({ lat, lng })) {
+    if (!u.searchParams.has('id') && Number.isFinite(lat) && Number.isFinite(lng) && NYC_POINT({ lat, lng })) {
       let nearest = Infinity;
       for (const candidate of Object.values(MAP_LAYERS?.layers || {}).flat()) {
         if (candidate?.subject_type !== 'encampment') continue;
@@ -2671,7 +2668,11 @@ async function handleRequest(req, res) {
       if (nearest > 1200) feature = null;
     }
     if (!feature || feature.subject_type !== 'encampment') return send(res, 404, 'No forecast at this location.', 'text/plain');
-    return send(res, 200, renderForecastShare(feature), 'text/html; charset=utf-8', { 'Cache-Control': 'public, max-age=300' });
+    const canonical = recordPath(feature);
+    if (u.pathname + u.search !== canonical) {
+      return send(res, 301, '', 'text/plain', { Location: canonical, 'Cache-Control': 'no-store' });
+    }
+    return send(res, 200, renderForecastShare(feature), 'text/html; charset=utf-8', { 'Cache-Control': 'no-store' });
   }
   if (u.pathname === '/report.html' || u.pathname === '/issues') {
     return send(res, 200, fs.readFileSync(path.join(DIR, 'report.html')), 'text/html; charset=utf-8');
@@ -2680,7 +2681,10 @@ async function handleRequest(req, res) {
   // The NYC awareness map is the product front door. Legacy campaign and accountability routes
   // remain directly addressable while the rebuilt first viewport stays focused on map + routing.
   if (u.pathname === '/' || u.pathname === '/index.html' || u.pathname === '/map') {
-    return send(res, 200, fs.readFileSync(path.join(DIR, 'index.html')), 'text/html; charset=utf-8');
+    const mapHtml = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8').replace(
+      '<b class="map-wordmark">unignorable</b>',
+      '<a class="map-wordmark" href="/records" style="color:inherit;text-decoration:none;display:flex;gap:8px;align-items:center" aria-label="Unignorable NYC block records">unignorable <span style="font-size:11px;text-decoration:underline">Records</span></a>');
+    return send(res, 200, mapHtml, 'text/html; charset=utf-8');
   }
 
   send(res, 404, 'not found', 'text/plain');

@@ -1,5 +1,11 @@
 # unignorable
 
+## Product decision — 2026-09-05 (local branch, not deployed)
+
+Primary wedge: readable public records for residents and block-group coordinators who repeatedly encounter the same NYC block. Search is acquisition; walking is utility and evidence recruitment. [PRODUCTION-DIRECTION.md](./PRODUCTION-DIRECTION.md) contains the pre-implementation decision, alternatives, 30-day targets, falsification criteria and bounded two-week slice.
+
+The runtime audit found zero proximity observations and zero action receipts, so the existing traffic claim does not validate the improvement loop. The local slice reuses `/f` as a condition record, adds a three-record `/records` directory, separates source and legacy groupings, enables inline checks, collects aggregate funnel diagnostics, and tightens Reviewed/ Held evidence requirements. Official responses and historical outcome-days remain manual. This branch is isolated from the canonical checkout to avoid accidental publication by the daily restart.
+
 ## Current product loop — 2026-08-30
 
 The product is one Condition lifecycle: **Detected → Checked → Action → Outcome**. Prediction is the entry, reviewed nearby checks are the learning bridge, permanent public records and receipts drive accountability, and reviewed outcome checks determine whether a resolution held. Walking routes and location prompts recruit evidence; share receipts recruit checkers and actors; jurisdiction adapters add local remedies. The primary objective is verified resolved condition-days per active block, not reports, routes, shares, or outrage. See `PRODUCT-LOOP.md` for the falsifiable canary and guardrails.

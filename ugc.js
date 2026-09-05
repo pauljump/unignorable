@@ -20,6 +20,16 @@ const crypto = require('crypto');
 
 const dataDir = path.resolve(process.env.DATA_DIR || path.join(__dirname, 'data'));
 const db = new DatabaseSync(path.join(dataDir, 'ugc.db'));
+// Aggregate diagnostics, not users or outcome facts. No location, IP or referrer fields.
+db.exec(`CREATE TABLE IF NOT EXISTS record_event_counts(
+  day TEXT NOT NULL, feature_id TEXT NOT NULL, event TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(day,feature_id,event)
+)`);
+const qRecordEvent = db.prepare(`INSERT INTO record_event_counts(day,feature_id,event,count) VALUES(?,?,?,1)
+  ON CONFLICT(day,feature_id,event) DO UPDATE SET count=count+1`);
+function countRecordEvent(featureId, event) {
+  qRecordEvent.run(new Date().toISOString().slice(0, 10), featureId, event);
+}
 db.exec(`
   CREATE TABLE IF NOT EXISTS posts(
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -507,7 +517,7 @@ function confirmActionReceipt(token) {
   return { receipt: qReceiptGet.get(token) || null, changed: Number(result.changes) === 1 };
 }
 
-module.exports = { addPost, addSeen, thread, countsAll, pending, pendingCount, decide,
+module.exports = { countRecordEvent, addPost, addSeen, thread, countsAll, pending, pendingCount, decide,
   addConditionObservation, conditionObservationSummary, reviewedConditionObservationsSince,
   addWalkOpportunity, walkOpportunitySummary,
   pendingConditionObservations, pendingConditionObservationCount, decideConditionObservation,

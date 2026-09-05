@@ -1,6 +1,18 @@
 # Unignorable
 
-Unignorable is a real-time durable-resolution system for recurring civic conditions. It detects what is likely at an approximate place from public evidence, recruits nearby checks, turns the permanent record into accountable action, verifies the condition is clear, and keeps the loop open until the result holds beyond the site’s recurrence window. The objective is to minimize verified recurring condition burden over time—not maximize reports or closures.
+Unignorable is the public record for a recurring condition on your NYC block: see what the evidence supports, check what changed, and follow the response through to a reviewed outcome. This positioning is a pilot hypothesis; independently verified improvement and audience fit remain unproven.
+
+## Block-record production slice — local, 2026-09-05
+
+The decision memo, audience comparison, target funnel, ranked backlog and exact two-week plan were documented before implementation in [PRODUCTION-DIRECTION.md](./PRODUCTION-DIRECTION.md). The primary audience is nearby residents and block-group coordinators. Search and walking feed the public record; they remain available on the existing map.
+
+- `/f?id=…` becomes a dated condition record with separate source/legacy counts, pending and reviewed checks, inline proximity submission, and a factual text share preview. Explicit unknown IDs fail closed; retained aliases redirect to the canonical ID-only URL.
+- `/records` lists three NYC pilot records. Only configured pilot records with substantive recurring source evidence gain indexing. Other forecasts remain noindex; existing campaign sitemap rules remain. A missing forecast is not a resolved condition; all-history forecast retention is still deferred.
+- `condition-record.js` owns record presentation and the stricter Held proof gate. `record-client.js` requests location only when a person selects a check. Existing review, deduplication, model and routing boundaries remain.
+- `/api/record-events` accepts same-origin allowlisted daily aggregates. No location, referrer or server-side visitor identity is stored in this table. Browser storage deduplicates record/tab/day events and remembers up to 50 records for 30 days. Counts are diagnostics, not unique people or resolution.
+- Read the last 30 days locally: `DATA_DIR=/Users/mini-home/.local/share/unignorable npm run report:funnel`. This CLI opens SQLite read-only. Before release its event totals will be empty. Official responses, review turnaround, observer independence and historical resolved condition-days require the manual pilot ledger.
+
+This slice is isolated on `product/block-records-20260905` in `/Users/mini-home/projects/.worktrees/unignorable-records-20260905`. It has **not been deployed**. The canonical production checkout is unchanged because the daily refresh can restart its server from disk. Release must deliberately integrate this branch and use the fleet/vault runner; do not invoke the older direct-PM2 restart inside `scripts/refresh.sh` as a release command.
 
 The objective function is **verified resolved condition-days per active block**, subject to calibration, privacy, and non-harm constraints. The operational proxy stack is: forecast calibration → useful nearby checks → reviewed evidence → accountable actions with receipts → independently confirmed, durable outcomes. Raw reports, clicks, shares, and route starts are diagnostics, not the goal.
 

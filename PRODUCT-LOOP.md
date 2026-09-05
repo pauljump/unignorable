@@ -11,6 +11,8 @@ Unignorable is not a walking app, a complaint map, or a campaign toolkit. Its at
 3. **Action** — a permanent record names the responsible office, exposes impact, prepares the next escalation, and issues receipts.
 4. **Outcome** — people confirm what changed and whether it held; recurrence reopens the loop.
 
+In the September 5 record slice, Checked requires an approved proximity check; pending observations and legacy one-tap corroboration cannot advance it. Held additionally requires reviewed presence before the clear claim, reviewed absence on at least two distinct later days, an absence check at or beyond the required quiet-window endpoint, and no contradiction. Independence of observers remains a manual pilot check; deduplication hashes are not identities. See [PRODUCTION-DIRECTION.md](./PRODUCTION-DIRECTION.md) for the current audience and measured canary, which supersede historical expansion proposals below.
+
 Walking routes recruit useful checks. Share receipts recruit checkers and actors. Campaigns produce action. City-specific remedies plug into the Action state. None is a separate product.
 
 ## Objective function
@@ -71,4 +73,3 @@ The profile jam was used as a set of falsifiable critique lenses, not simulated 
 - Visibility: make the current state, evidence provenance, and next transition immediately legible.
 - Durability: prove retention, economics, and outcome quality on one block before claiming a citywide network.
 - Operations: win one city with an explicit source, review, escalation, and outcome operation before expanding.
-

@@ -1,0 +1,8 @@
+{
+  "description": "NYC record comprehension pilot; inclusion is not field verification or a severity ranking.",
+  "feature_ids": [
+    "311-encampment-40.7364--73.9832",
+    "311-encampment-40.7358--73.9836",
+    "311-encampment-40.7284--73.9878"
+  ]
+}

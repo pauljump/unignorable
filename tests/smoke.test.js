@@ -60,6 +60,44 @@ test.after(() => {
   fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
+test('record URLs canonicalize aliases without moving an unknown ID to another block', async () => {
+  for (const route of ['/forecast?id=311-encampment-1', '/f?id=311-encampment-legacy-1', '/f?id=311-encampment-1&lat=40.746&lng=-73.987']) {
+    const response = await fetch(origin + route, { redirect: 'manual' });
+    assert.equal(response.status, 301);
+    assert.equal(response.headers.get('location'), '/f?id=311-encampment-1');
+  }
+  const unknown = await fetch(origin + '/f?id=does-not-exist&lat=40.746&lng=-73.987');
+  assert.equal(unknown.status, 404);
+  const coordinates = await fetch(origin + '/f?lat=40.746&lng=-73.987', { redirect: 'manual' });
+  assert.equal(coordinates.status, 301);
+  assert.equal(coordinates.headers.get('location'), '/f?id=311-encampment-1');
+  const directory = await (await fetch(origin + '/records')).text();
+  assert.match(directory, /What changed on your block/);
+  assert.match(directory, /Missing data does not mean a condition is resolved/);
+  const record = await (await fetch(origin + '/f?id=311-encampment-1')).text();
+  assert.match(record, /noindex,follow/);
+  assert.match(record, /data-check-state="absent"/);
+  const map = await (await fetch(origin + '/map')).text();
+  assert.match(map, /href="\/records"/);
+  assert.match(await (await fetch(origin + '/sitemap.xml')).text(), /\/records<\/loc>/);
+  assert.equal((await fetch(origin + '/record-client.js')).status, 200);
+  assert.equal((await fetch(origin + '/methodology')).status, 200);
+});
+
+test('record metrics are same-origin allowlisted aggregates and cannot store location dimensions', async () => {
+  const post = (body, extra = {}) => fetch(origin + '/api/record-events', { method: 'POST',
+    headers: { 'content-type': 'application/json', origin, ...extra }, body: JSON.stringify(body) });
+  assert.equal((await post({ feature_id: '311-encampment-1', event: 'record_view' }, { origin: 'https://other.example' })).status, 403);
+  assert.equal((await post({ feature_id: '311-encampment-1', event: 'record_view', lat: 40.7 })).status, 400);
+  assert.equal((await post({ feature_id: 'unknown', event: 'record_view' })).status, 400);
+  assert.equal((await post({ feature_id: '311-encampment-1', event: 'verified_outcome' })).status, 400);
+  assert.equal((await post({ feature_id: '311-encampment-legacy-1', event: 'record_view' })).status, 200);
+  const db = new DatabaseSync(path.join(dataDir, 'ugc.db'), { readOnly: true });
+  assert.deepEqual(db.prepare('PRAGMA table_info(record_event_counts)').all().map(row => row.name), ['day', 'feature_id', 'event', 'count']);
+  assert.equal(db.prepare("SELECT count FROM record_event_counts WHERE feature_id='311-encampment-1' AND event='record_view'").get().count, 1);
+  db.close();
+});
+
 test('health and public assets are available with security headers', async () => {
   const health = await fetch(`${origin}/healthz`);
   assert.equal(health.status, 200);
@@ -142,13 +180,12 @@ test('health and public assets are available with security headers', async () =>
   assert.equal(forecastShare.status, 200);
   const forecastShareHtml = await forecastShare.text();
   assert.match(forecastShareHtml, /property="og:title"/);
-  assert.match(forecastShareHtml, /summary_large_image/);
-  assert.match(forecastShareHtml, /\/assets\/share-card\.png/);
-  assert.match(forecastShareHtml, /a public forecast/);
+  assert.match(forecastShareHtml, /name="twitter:card" content="summary"/);
+  assert.match(forecastShareHtml, /Public condition record/);
   assert.match(forecastShareHtml, /Check this place/);
-  assert.match(forecastShareHtml, /Make the city answer/);
+  assert.match(forecastShareHtml, /Inspect response history and action options/);
   assert.match(forecastShareHtml, /city closures/);
-  assert.match(forecastShareHtml, /Approximate public-data estimate/);
+  assert.match(forecastShareHtml, /not a measured probability or proof of current presence/);
   assert.doesNotMatch(forecastShareHtml, /undefined|null/);
   const shareCard = await fetch(`${origin}/assets/share-card.png`);
   assert.equal(shareCard.status, 200);
@@ -169,7 +206,7 @@ test('health and public assets are available with security headers', async () =>
   const conditionLoopData = (await conditionLoop.json()).loop;
   assert.deepEqual(conditionLoopData.stages.map(item => item.id), ['detected', 'checked', 'action', 'clear', 'held']);
   assert.equal(conditionLoopData.record.id, '40.746,-73.987');
-  assert.equal(conditionLoopData.record.city_closures, 1587);
+  assert.equal(conditionLoopData.record.city_closures, fixtureIssues.find(item => item.type === 'Encampment' && item.id === '40.746,-73.987').closed_n);
   assert.equal(conditionLoopData.checks.forecast_unchanged, true);
   const legacyConditionLoop = await fetch(`${origin}/api/condition-loop?feature_id=311-encampment-legacy-1`);
   assert.equal(legacyConditionLoop.status, 200);
@@ -405,6 +442,11 @@ test('nearby community submissions are saved unreviewed, deduplicated, and dista
     provenance: 'community_unreviewed', review_status: 'unreviewed', model_score: 0.79,
     model_version: 'walk-nowcast-v3-shadow', model_contract_version: 'condition-forecast-v1', model_probability: null,
   });
+  const pendingLoop = (await (await fetch(`${origin}/api/condition-loop?feature_id=${body.feature_id}`)).json()).loop;
+  assert.equal(pendingLoop.checks.reviewed, 0);
+  assert.notEqual(pendingLoop.stage, 'checked');
+  const pendingPage = await (await fetch(`${origin}/f?id=${body.feature_id}`)).text();
+  assert.match(pendingPage, /awaiting review/);
   const duplicate = await fetch(`${origin}/api/condition-observations`, {
     method: 'POST', headers: { 'content-type': 'application/json', 'cf-connecting-ip': '198.51.100.44' }, body: JSON.stringify(body),
   });
