@@ -3,13 +3,17 @@ import MapKit
 import SwiftUI
 
 @MainActor
-final class RouteModel: ObservableObject {
+final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearchCompleterDelegate {
     @Published var originText = ""
     @Published var destinationText = ""
     @Published var origin: Place?
     @Published var destination: Place?
     @Published var via: Place?
     @Published var suggestions: [Place] = []
+    @Published var completions: [MKLocalSearchCompletion] = []
+    @Published var isSearching = false
+    @Published var searchStatus: String?
+    private var completer: MKLocalSearchCompleter?
     @Published var routes: [RouteChoice] = []
     @Published var avoidance: AvoidanceSummary?
     @Published var selectedRouteID: String?
@@ -28,7 +32,6 @@ final class RouteModel: ObservableObject {
     private var searchTask: Task<Void, Never>?
     private var resolveTask: Task<Void, Never>?
     private var routeGeneration: UUID?
-    private var searchCache: [String: [Place]] = [:]
 
     var selectedRoute: RouteChoice? { routes.first(where: { $0.id == selectedRouteID }) ?? routes.first }
 
@@ -54,35 +57,106 @@ final class RouteModel: ObservableObject {
 
     func search(_ query: String) {
         searchTask?.cancel()
-        let key = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard key.count >= 3 else { suggestions = []; return }
-        if let cached = searchCache[key] { suggestions = cached; return }
+        suggestions = []
+        completions = []
+        searchStatus = nil
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.count >= 3 else { cancelSearch(); return }
+        isSearching = true
+        // Keep one completer while typing so MapKit can debounce query fragments.
+        let searchCompleter = completer ?? MKLocalSearchCompleter()
+        searchCompleter.region = MKCoordinateRegion(center: .init(latitude: 40.7128, longitude: -74.0060), span: .init(latitudeDelta: 0.55, longitudeDelta: 0.55))
+        searchCompleter.resultTypes = [.address, .pointOfInterest]
+        if #available(iOS 18.0, *) { searchCompleter.regionPriority = .required }
+        searchCompleter.delegate = self
+        completer = searchCompleter
+        searchCompleter.queryFragment = query
+        // MapKit may stall without a delegate error on a poor connection.
+        fallbackSearch(query, delay: true)
+    }
+
+    func cancelSearch() {
+        searchTask?.cancel()
+        completer?.delegate = nil
+        completer?.cancel()
+        completer = nil
+        suggestions = []
+        completions = []
+        isSearching = false
+        searchStatus = nil
+    }
+
+    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        guard self.completer === completer else { return }
+        searchTask?.cancel()
+        suggestions = []
+        searchStatus = nil
+        completions = Array(completer.results.prefix(5))
+        isSearching = false
+        if completions.isEmpty { fallbackSearch(completer.queryFragment) }
+    }
+
+    func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        guard self.completer === completer else { return }
+        fallbackSearch(completer.queryFragment)
+    }
+
+    private func fallbackSearch(_ query: String, delay: Bool = false) {
+        searchTask?.cancel()
+        isSearching = true
         searchTask = Task {
-            try? await Task.sleep(for: .milliseconds(120))
+            do {
+                if delay { try await Task.sleep(for: .seconds(3)) }
+                try Task.checkCancellation()
+                let results = try await api.geocode(query)
+                guard !Task.isCancelled else { return }
+                suggestions = results
+                isSearching = false
+                searchStatus = results.isEmpty ? "No NYC addresses found. Try a street number and name." : nil
+            } catch {
+                guard !Task.isCancelled else { return }
+                isSearching = false
+                searchStatus = "Address search couldn't connect. Edit the address to retry."
+            }
+        }
+    }
+
+    func selectCompletion(_ completion: MKLocalSearchCompletion, asOrigin: Bool) {
+        cancelSearch()
+        status = "Checking address…"
+        searchTask = Task {
+            let request = MKLocalSearch.Request(completion: completion)
+            let result = try? await MKLocalSearch(request: request).start()
             guard !Task.isCancelled else { return }
-            let results = await places(matching: query)
-            guard !Task.isCancelled else { return }
-            searchCache[key] = results
-            if searchCache.count > 50 { searchCache.removeValue(forKey: searchCache.keys.first!) }
-            suggestions = results
+            if let item = result?.mapItems.first,
+               (40.45...40.95).contains(item.placemark.coordinate.latitude),
+               (-74.30 ... -73.65).contains(item.placemark.coordinate.longitude) {
+                select(Place(name: item.placemark.title ?? completion.title, lat: item.placemark.coordinate.latitude, lng: item.placemark.coordinate.longitude), asOrigin: asOrigin)
+            } else {
+                let places = (try? await api.geocode(completion.title + ", " + completion.subtitle)) ?? []
+                guard !Task.isCancelled else { return }
+                if let place = places.first { select(place, asOrigin: asOrigin) }
+                else { status = "Couldn't resolve that NYC address. Try again." }
+            }
         }
     }
 
     func select(_ place: Place, asOrigin: Bool) {
+        cancelSearch()
         if asOrigin { origin = place; originText = place.name } else { destination = place; destinationText = place.name }
         suggestions = []
         invalidateRoute()
     }
 
     func swap() {
+        cancelSearch()
         (origin, destination) = (destination, origin)
         (originText, destinationText) = (destinationText, originText)
         invalidateRoute()
     }
 
     func clearAddress(asOrigin: Bool) {
-        searchTask?.cancel()
-        suggestions = []
+        cancelSearch()
         if asOrigin {
             origin = nil
             originText = ""
@@ -99,6 +173,7 @@ final class RouteModel: ObservableObject {
     }
 
     func createWalkingRoute() {
+        cancelSearch()
         resolveTask?.cancel()
         routeTask?.cancel()
         let originQuery = originText.trimmingCharacters(in: .whitespacesAndNewlines)

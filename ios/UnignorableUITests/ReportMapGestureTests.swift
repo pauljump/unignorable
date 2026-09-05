@@ -2,6 +2,46 @@ import XCTest
 
 @MainActor
 final class ReportMapGestureTests: XCTestCase {
+    func testAddressAutocompleteAndWalkingRouteConnect() throws {
+        let app = XCUIApplication()
+        app.launch()
+        app.buttons["plan-walk-button"].tap()
+        let origin = app.textFields["Where from?"]
+        XCTAssertTrue(origin.waitForExistence(timeout: 5))
+        origin.tap()
+        origin.typeText("350 5th Ave")
+        let suggestion = app.buttons["address-suggestion-0"]
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 20))
+        XCTAssertTrue(suggestion.isHittable, "Suggestions must remain visible above the keyboard")
+        let search = XCTAttachment(screenshot: app.screenshot())
+        search.name = "Native address autocomplete"
+        search.lifetime = .keepAlways
+        add(search)
+        suggestion.tap()
+        let resolved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            !(app.staticTexts["Checking address…"].exists)
+        }, object: nil)
+        wait(for: [resolved], timeout: 20)
+        let destination = app.textFields["Where to?"]
+        destination.tap()
+        destination.typeText("247 3rd Ave")
+        XCTAssertTrue(suggestion.waitForExistence(timeout: 20))
+        XCTAssertTrue(suggestion.isHittable)
+        suggestion.tap()
+        let ready = app.buttons["Create walking route"]
+        XCTAssertTrue(ready.waitForExistence(timeout: 5))
+        ready.tap()
+        let routeReady = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@", "Route ready")).firstMatch.exists
+        }, object: nil)
+        wait(for: [routeReady], timeout: 45)
+        let route = XCTAttachment(screenshot: app.screenshot())
+        route.name = "Walking route connected"
+        route.lifetime = .keepAlways
+        add(route)
+        XCTAssertFalse(app.staticTexts["A server with the specified hostname could not be found."].exists)
+    }
+
     func testLaunchOffersNativeFeedbackAndRecords() throws {
         let app = XCUIApplication()
         app.launch()

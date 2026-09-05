@@ -8,7 +8,17 @@ The fix gives web and iOS independent visible civic layers at launch while route
 
 Verification: 57 web/backend tests pass, including five executable regressions for visibility after closing walking, avoidance/visibility independence, direct dot selection, actual tap coordinates, selected-map framing and dismissed-result races. Six native model tests pass, including fixture-based evidence/avoidance independence. Native app and test targets compile. No browser is connected for a web visual inspection; these checks do not substitute for a physical-device walk.
 
-Publication results follow after the web restart and build-3 TestFlight processing.
+Web fix `a1655bd` is live at `https://curbnote.polyfeeds.dev`, restarted through the fleet/vault runner; TLS delivery and health were verified. Apple processed build 3 (`2545492e-cc60-4dba-9046-4de61a87fc25`) as `VALID` and `IN_BETA_TESTING`. Artifacts: `/Users/mini-home/.local/share/curbnote-releases/testflight-20260905T192051Z`.
+
+## Address search and DNS resilience · build 4
+
+Paul then reported broken native autocomplete and supplied a screenshot of “A server with the specified hostname could not be found.” The new hostname resolves through public DNS, but the same system-resolver failure was reproduced on the Mini. The existing legacy `/api/` host still resolves and serves the same backend. The native API client now retries once through that alias only for a DNS lookup failure, preserving the path, query and request body. It does not retry timeouts, connection loss, HTTP errors, cancellation or arbitrary hosts. The canonical web and sharing origin remains Curbnote.
+
+The UI regression reproduced a separate focus-state bug: the parent map owned the presented planner’s focus state, so typing could bypass the search guard entirely. The planner is now a dedicated SwiftUI view that owns its text-field focus. It uses a persistent native `MKLocalSearchCompleter` for partial addresses and resolves the selected completion to a NYC coordinate. The existing geocoder provides a bounded-delay fallback if native suggestions fail or stall. Suggestions, loading and failure states appear directly below the address fields above route preferences. Selecting, clearing or switching addresses cancels stale work. Preference icons now use mint.
+
+Verification: all ten native unit tests and all five UI tests pass across the focused runs. The live address-entry regression selects both addresses from tappable suggestions above the keyboard, creates a walking route and verifies “Route ready” with no hostname error. The map-marker/pinch test now loads actual backend evidence and passes; the earlier DNS-related UI failure is resolved by the API fallback. Autocomplete and successful-route screenshots were exported and visually inspected. The 57 web/backend checks for the map fix remain passing; build 4 changes only native code and release documentation.
+
+Publication results follow after final region-bound autocomplete verification and Apple processing.
 
 
 ## TestFlight released · September 5, 2026, 19:07 UTC
@@ -32,7 +42,7 @@ The initial native run compiled and passed model, feedback and planner checks, b
 
 The source root, runtime databases, process identity and GitHub repository are unchanged. The shared assets and release identifiers are documented in [BRAND.md](./BRAND.md). The old public hostname will redirect browser links while keeping existing API clients working.
 
-## Final release state
+## Initial release attempt (historical; superseded above)
 
 - Deployed code: `7753f56`, fast-forwarded into the canonical `deploy/prediction-first-20260821` checkout. Published with the existing fleet/vault runner; process stays `unignorable-canonical`, port 8000, data unchanged.
 - Added the authorized `curbnote.polyfeeds.dev` CNAME and mini-dev tunnel rule. Retained the old hostname. IPv6 remains off. The control-plane origin change is commit `bc6eda2`; unrelated working changes were preserved.

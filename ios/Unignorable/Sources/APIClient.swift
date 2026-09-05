@@ -6,13 +6,13 @@ struct APIClient {
     private let session: URLSession
     private let encoder = JSONEncoder()
 
-    init(baseURL: URL = URL(string: "https://curbnote.polyfeeds.dev")!) {
+    init(baseURL: URL = URL(string: "https://curbnote.polyfeeds.dev")!, session: URLSession? = nil) {
         self.baseURL = baseURL
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 18
         configuration.timeoutIntervalForResource = 25
         configuration.requestCachePolicy = .useProtocolCachePolicy
-        self.session = URLSession(configuration: configuration)
+        self.session = session ?? URLSession(configuration: configuration)
     }
 
     func submitFeedback(_ feedback: FeedbackRequest) async throws -> FeedbackReceipt {
@@ -88,9 +88,30 @@ struct APIClient {
         let response: CitiBikeResponse = try await get(parts.url!); return response.stations
     }
 
+    static func dnsFallback(for request: URLRequest, error: Error) -> URLRequest? {
+        guard let urlError = error as? URLError,
+              [.cannotFindHost, .dnsLookupFailed].contains(urlError.code),
+              let url = request.url, url.scheme == "https",
+              url.host == "curbnote.polyfeeds.dev", url.path.hasPrefix("/api/"),
+              var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+        parts.host = "unignorable.polyfeeds.dev"
+        var fallback = request
+        fallback.url = parts.url
+        return fallback
+    }
+
     private func get<T: Decodable & Sendable>(_ url: URL) async throws -> T { try await perform(URLRequest(url: url)) }
     private func perform<T: Decodable & Sendable>(_ request: URLRequest) async throws -> T {
-        let (data, response) = try await session.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            guard let fallback = Self.dnsFallback(for: request, error: error) else { throw error }
+            // DNS failed before the request reached the service. Retry once through
+            // its existing alias; never replay a timeout, HTTP failure or uncertain write.
+            (data, response) = try await session.data(for: fallback)
+        }
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
             throw APIError(message ?? "The route service is unavailable.")

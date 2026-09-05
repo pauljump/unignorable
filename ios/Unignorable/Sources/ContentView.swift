@@ -1,7 +1,6 @@
 import MapKit
 import SwiftUI
 
-private enum SearchField: Hashable { case origin, destination }
 private enum ActiveSheet: Identifiable {
     case feedback, records, forecastLocation, planner, controls(RouteOptionFocus), mapContent, directions, feature(MapFeature), reportIssue(ReportIssue)
     var id: String {
@@ -28,7 +27,6 @@ struct ContentView: View {
     @State private var selectedReportMarkerID: String?
     @State private var showPublicRecords = false
     @State private var introductionDismissed = false
-    @FocusState private var focusedField: SearchField?
 
     var body: some View {
         ZStack {
@@ -62,7 +60,7 @@ struct ContentView: View {
             case .feedback: FeedbackView()
             case .records: RecordsView()
             case .forecastLocation: ForecastLocationView()
-            case .planner: plannerSheet
+            case .planner: WalkingPlannerView(onReportNearby: inspectReportCenter, onControls: { activeSheet = .controls($0) }, onLocate: location.requestLocation)
             case .controls(let focus): ControlsView(focus: focus)
             case .mapContent: mapContentSheet
             case .directions: DirectionsView()
@@ -375,19 +373,6 @@ struct ContentView: View {
         }
     }
 
-    private var plannerSheet: some View {
-        NavigationStack {
-            ScrollView { planner.padding(.bottom, 24) }
-                .background(AppTheme.background)
-                .navigationTitle("Plan a walking route")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) { Button("Done") { activeSheet = nil } }
-                }
-        }
-        .presentationDetents([.large])
-    }
-
     private var mapContentSheet: some View {
         NavigationStack {
             List {
@@ -433,181 +418,6 @@ struct ContentView: View {
             }
         }
         .presentationDetents([.medium, .large])
-    }
-
-    private var planner: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Label("Walking route", systemImage: "figure.walk").font(.headline)
-                Spacer()
-                Text("curbnote").font(.caption.bold()).foregroundStyle(AppTheme.muted)
-                Button { inspectReportCenter() } label: {
-                    Label("Report nearby", systemImage: "exclamationmark.bubble.fill")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .accessibilityIdentifier("report-nearby-button")
-            }
-
-            HStack(spacing: 8) {
-                VStack(spacing: 0) {
-                    addressField(label: "A", placeholder: "Where from?", text: $model.originText, field: .origin)
-                    Divider().padding(.leading, 42)
-                    addressField(label: "B", placeholder: "Where to?", text: $model.destinationText, field: .destination)
-                }
-
-                Button(action: model.swap) {
-                    Image(systemName: "arrow.up.arrow.down")
-                        .frame(width: 34, height: 34)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Swap start and destination")
-            }
-
-            HStack(spacing: 8) {
-                routePreferenceButton(
-                    title: "Avoid",
-                    detail: model.filters.isEmpty ? "Nothing" : "\(model.filters.count) selected",
-                    symbol: "shield.slash.fill"
-                ) { activeSheet = .controls(.avoid) }
-
-                routePreferenceButton(
-                    title: "Go by",
-                    detail: model.via?.name ?? "Add a stop",
-                    symbol: "mappin.and.ellipse"
-                ) { activeSheet = .controls(.onTheWay) }
-            }
-
-            HStack(spacing: 8) {
-                Button {
-                    focusedField = nil
-                    model.createWalkingRoute()
-                } label: {
-                    HStack(spacing: 8) {
-                        if model.isRouting { ProgressView().tint(.white).controlSize(.small) }
-                        Text(model.routes.isEmpty ? "Create walking route" : "Update walking route")
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 40)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(AppTheme.brand)
-                .disabled(model.isRouting || model.originText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.destinationText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-
-                Button { location.requestLocation() } label: {
-                    Image(systemName: "location.fill").frame(width: 30, height: 30)
-                }
-                .buttonStyle(.bordered)
-                .accessibilityLabel("Use current location as starting point")
-            }
-
-            if let via = model.via {
-                HStack(spacing: 8) {
-                    Text("C").font(.caption.bold()).foregroundStyle(.white)
-                        .frame(width: 22, height: 22).background(AppTheme.mint, in: Circle())
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Stop on the way").font(.caption2).foregroundStyle(.secondary)
-                        Text(via.name).font(.caption.bold()).lineLimit(1)
-                    }
-                    Spacer()
-                    Button(action: model.clearVia) { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                        .accessibilityLabel("Remove stop")
-                }
-                .padding(.horizontal, 8).padding(.vertical, 5)
-                .background(AppTheme.raised, in: RoundedRectangle(cornerRadius: 10))
-            }
-
-            if model.isRouting || model.status != nil {
-                HStack(spacing: 7) {
-                    if model.isRouting { ProgressView().controlSize(.small) }
-                    Text(model.status ?? "")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Spacer()
-                }
-            }
-
-            if focusedField != nil, !model.suggestions.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(model.suggestions.prefix(5)) { place in
-                        Button {
-                            let isOrigin = focusedField == .origin
-                            focusedField = nil
-                            model.select(place, asOrigin: isOrigin)
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "mappin.and.ellipse").foregroundStyle(.secondary)
-                                Text(place.name).font(.subheadline).lineLimit(2)
-                                Spacer()
-                            }
-                            .padding(.vertical, 10)
-                        }
-                        .buttonStyle(.plain)
-                        if place.id != model.suggestions.prefix(5).last?.id { Divider() }
-                    }
-                }
-                .padding(.horizontal, 8)
-            }
-        }
-        .padding(10)
-        .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: .black.opacity(0.14), radius: 12, y: 5)
-        .padding(.horizontal, 10)
-        .padding(.top, 4)
-    }
-
-    private func addressField(label: String, placeholder: String, text: Binding<String>, field: SearchField) -> some View {
-        HStack(spacing: 9) {
-            Text(label)
-                .font(.caption.bold())
-                .foregroundStyle(.white)
-                .frame(width: 22, height: 22)
-                .background(field == .origin ? .green : .red, in: Circle())
-            TextField(placeholder, text: text)
-                .textContentType(.fullStreetAddress)
-                .textInputAutocapitalization(.words)
-                .submitLabel(field == .origin ? .next : .route)
-                .focused($focusedField, equals: field)
-                .onChange(of: text.wrappedValue) { _, value in
-                    guard focusedField == field else { return }
-                    model.addressTextChanged(asOrigin: field == .origin)
-                    model.search(value)
-                }
-                .onSubmit { if field == .origin { focusedField = .destination } }
-            if !text.wrappedValue.isEmpty {
-                Button {
-                    model.clearAddress(asOrigin: field == .origin)
-                    focusedField = field
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 30, height: 30)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(field == .origin ? "Clear starting point" : "Clear destination")
-            }
-        }
-        .frame(minHeight: 42)
-    }
-
-    private func routePreferenceButton(title: String, detail: String, symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: symbol).foregroundStyle(AppTheme.amber)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(.caption.bold())
-                    Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, minHeight: 38)
-            .padding(.horizontal, 10)
-            .background(AppTheme.raised, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(title), \(detail)")
     }
 
     private func routeCard(_ route: RouteChoice) -> some View {
