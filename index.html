@@ -426,6 +426,9 @@ const FULL_DETAIL_ZOOM=14;
 function featureSeverity(feature){
   return feature.condition?.routingLevel==='hard'||Number(feature.count)>=20?'high':feature.condition?.routingLevel==='soft'||Number(feature.count)>=5?'elevated':'lower';
 }
+function isLikelyPresent(feature){
+  return feature?.condition?.classification==='likely_present';
+}
 let mapInstanceTapTimer=null;
 function cancelMapInstanceTap(){clearTimeout(mapInstanceTapTimer);mapInstanceTapTimer=null;}
 function bindMapInstance(marker,onSelect){
@@ -454,7 +457,9 @@ function drawFeatures(){
   if(!state.data||!state.visible.size)return;
   const zoom=map.getZoom(),entries=[];
   for(const name of state.visible){
-    for(const feature of (state.data.layers&&state.data.layers[name])||[])entries.push({feature,name});
+    for(const feature of (state.data.layers&&state.data.layers[name])||[]){
+      if(isLikelyPresent(feature))entries.push({feature,name});
+    }
   }
   if(zoom>=FULL_DETAIL_ZOOM||entries.length<=600){
     const bounds=map.getBounds().pad(.3);

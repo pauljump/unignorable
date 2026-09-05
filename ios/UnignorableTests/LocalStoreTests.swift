@@ -49,7 +49,7 @@ final class LocalStoreTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = LocalStore(directory: directory)
-        let data = Data(#"{"layers":{"sidewalk":[{"id":"pavement","lat":40.724,"lng":-73.965,"layer":"sidewalk"}]}}"#.utf8)
+        let data = Data(#"{"layers":{"sidewalk":[{"id":"pavement","lat":40.724,"lng":-73.965,"layer":"sidewalk","condition":{"classification":"likely_present","label":"Current condition likely present"}}]}}"#.utf8)
         await store.write("map", value: try JSONDecoder().decode(MapLayersResponse.self, from: data))
         let model = RouteModel(local: store)
         await model.loadLocalState()

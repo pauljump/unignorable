@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { pointInGeoJSON, routeIntersectsPoint, featureRisk, scoreRoute, chooseRecommended, plausibleRoutes, exportUrls, simplifyWalkingSteps, LAYER_RADII } = require('../map-core');
+const { pointInGeoJSON, routeIntersectsPoint, featureRisk, scoreRoute, chooseRecommended, plausibleRoutes, exportUrls, simplifyWalkingSteps, isLikelyPresent, LAYER_RADII } = require('../map-core');
 const { manufacturer, layerFor, supported, resolutionEvidence, conditionEvidence,
   parseNycWallTime, nycLocalDay, recordReportedLocation, reportedLocationLabel,
   reportedStreetSegmentKey, recordReportedStreetSegment, consolidateReportedLocationSites,
@@ -93,6 +93,13 @@ test('routing risk weights current evidence above stale or unverified reports', 
   const clean = scoreRoute({ duration: 1200, distance: 1200, geometry: { coordinates: [[-74, 40.71], [-73.99, 40.71]] } }, layers, ['homelessness']);
   assert.ok(direct.riskScore > clean.riskScore);
   assert.equal(chooseRecommended([direct, clean], 'walking'), 1);
+});
+
+test('map dots represent only locations currently predicted present', () => {
+  assert.equal(isLikelyPresent({ layer: 'homelessness', condition: { classification: 'likely_present' } }), true);
+  assert.equal(isLikelyPresent({ layer: 'drugs', condition: { classification: 'recent_reports_unverified' } }), false);
+  assert.equal(isLikelyPresent({ layer: 'dumping', condition: { classification: 'likely_absent' } }), false);
+  assert.equal(isLikelyPresent({ layer: 'street', condition: { classification: 'dormant_unknown' } }), false);
 });
 
 test('driving and walking exports are parseable, mobile-bounded, and honest about shaping', () => {
@@ -229,6 +236,11 @@ test('311 condition evidence requires explicit outcomes or recurrence instead of
   }, new Date('2026-03-10T00:00:00Z'));
   assert.equal(recurred.classification, 'likely_present');
   assert.equal(recurred.report_days_after_latest_action, 2);
+  const recent = conditionEvidence({
+    reportDays: new Set(['2026-03-01', '2026-03-04', '2026-03-08'].map(ord)),
+    lastObserved: 0, lastCleared: 0, lastNotObserved: 0,
+  }, new Date('2026-03-10T00:00:00Z'));
+  assert.equal(recent.classification, 'likely_present');
   const cleared = conditionEvidence({
     reportDays: new Set([ord('2026-01-01')]), lastObserved: 0,
     lastCleared: Date.parse('2026-01-02T12:00:00Z'), lastNotObserved: 0,

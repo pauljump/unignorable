@@ -99,7 +99,7 @@ struct ContentView: View {
                     Annotation("Stop", coordinate: via.coordinate) { endpointMarker("C", color: AppTheme.mint) }
                 }
 
-                ForEach(model.visibleFeatures.filter { $0.layer == LayerDefinition.homelessness.rawValue }) { feature in
+                ForEach(model.visibleFeatures) { feature in
                     Annotation("", coordinate: feature.coordinate) {
                         MapInstanceMarker(onSelect: {
                             highlightMarker("prediction:\(feature.id)")
@@ -294,10 +294,12 @@ struct ContentView: View {
         NavigationStack {
             List {
                 Section {
-                    Toggle(isOn: visibleLayerBinding(.homelessness)) {
-                        Label("Condition predictions", systemImage: LayerDefinition.homelessness.symbol)
+                    ForEach(LayerDefinition.allCases.filter { $0 != .alpr }) { layer in
+                        Toggle(isOn: visibleLayerBinding(layer)) {
+                            Label(layer.title, systemImage: layer.symbol)
+                        }
+                        .accessibilityIdentifier("map-layer-\(layer.rawValue)")
                     }
-                    .accessibilityIdentifier("map-layer-homelessness")
                 } header: {
                     Text("Prediction map")
                 } footer: {
@@ -412,10 +414,10 @@ struct ContentView: View {
     private func predictionMarker(_ feature: MapFeature, highlighted: Bool = false) -> some View {
         ZStack {
             Circle()
-                .fill(AppTheme.coral.opacity(0.2))
+                .fill(predictionColor(for: feature.layer).opacity(0.2))
                 .frame(width: 50, height: 50)
             Circle()
-                .fill(AppTheme.coral)
+                .fill(predictionColor(for: feature.layer))
                 .frame(width: 28, height: 28)
                 .overlay(Circle().stroke(.white, lineWidth: 2))
             Image(systemName: "location.fill")
@@ -433,6 +435,18 @@ struct ContentView: View {
         .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
         .accessibilityLabel(feature.forecastTitle)
         .accessibilityValue(feature.address ?? "Approximate mapped area")
+    }
+
+    private func predictionColor(for layer: String?) -> Color {
+        switch LayerDefinition(rawValue: layer ?? "") {
+        case .homelessness: AppTheme.coral
+        case .drugs: AppTheme.purple
+        case .dumping: .orange
+        case .sidewalk: .yellow
+        case .street: .blue
+        case .signals: AppTheme.mint
+        case .alpr, nil: AppTheme.muted
+        }
     }
 
     private func visibleLayerBinding(_ layer: LayerDefinition) -> Binding<Bool> {

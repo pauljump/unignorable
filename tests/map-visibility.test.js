@@ -26,7 +26,7 @@ function fixture() {
     document:{getElementById:node},popup:()=>'',forecastFor:()=>({probability:.6}),
     L:{layerGroup(){const group={layers:[],addTo(){return this;},remove(){},clearLayers(){this.layers=[];}};markerGroups.push(group);return group;},circleMarker(point,style){return {point,style,handlers:{},on(name,fn){this.handlers[name]=fn;return this;},bindPopup(){return this;},bindTooltip(){return this;},addTo(group){group.layers.push(this);return this;}}}},
   };
-  for(const name of ['cancelMapInstanceTap','bindMapInstance','featureSeverity','featureMarkerStyle','featureCellSize','drawFeatures','closeWalkPlanner','drawForecastAnchor'])env[name]=load(name,env);
+  for(const name of ['cancelMapInstanceTap','bindMapInstance','featureSeverity','isLikelyPresent','featureMarkerStyle','featureCellSize','drawFeatures','closeWalkPlanner','drawForecastAnchor'])env[name]=load(name,env);
   state.forecast.group=env.L.layerGroup();return {env,node,state};
 }
 test('reported areas remain drawn with no avoidance, after closing walking, and after clearing avoidance',()=>{

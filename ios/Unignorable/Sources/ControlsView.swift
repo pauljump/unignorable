@@ -73,6 +73,13 @@ struct ControlsView: View {
                     }
                     .id(RouteOptionFocus.onTheWay.rawValue)
 
+                    Section("Current predictions on map") {
+                        ForEach(LayerDefinition.allCases.filter { $0 != .alpr }) { layer in
+                            Toggle(isOn: layerToggle(layer)) {
+                                Label(layer.title, systemImage: layer.symbol)
+                            }
+                        }
+                    }
                 }
                 .onAppear {
                     proxy.scrollTo(focus.rawValue, anchor: .top)
@@ -94,6 +101,15 @@ struct ControlsView: View {
         isLoadingStops = true
         await model.loadBikes()
         isLoadingStops = false
+    }
+
+    private func layerToggle(_ layer: LayerDefinition) -> Binding<Bool> {
+        Binding(
+            get: { model.visibleLayers.contains(layer) },
+            set: { enabled in
+                if enabled { model.visibleLayers.insert(layer) } else { model.visibleLayers.remove(layer) }
+            }
+        )
     }
 
     private func filterToggle(_ layer: LayerDefinition) -> Binding<Bool> {

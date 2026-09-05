@@ -163,6 +163,12 @@ struct NowcastSpatialUncertainty: Codable, Sendable {
 }
 
 extension MapFeature {
+    /// Only current-condition predictions are rendered on the map. Historical
+    /// or unresolved evidence remains available in the detail and route flows.
+    var isLikelyPresent: Bool {
+        condition?.classification == "likely_present"
+    }
+
     /// An uncalibrated 0...1 model score. Backend field names are retained for
     /// compatibility, but the client never presents this as an empirical probability.
     var forecastScore: Double? {

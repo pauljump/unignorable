@@ -21,10 +21,9 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
         didSet { if oldValue != selectedRouteID { walkingStepIndex = 0 }; persistWalk() }
     }
     @Published var filters: Set<LayerDefinition> = []
-    // The launch map shows one coherent object language: modeled condition
-    // predictions. Other layers remain available for route avoidance but do
-    // not add competing dots to the map.
-    @Published var visibleLayers: Set<LayerDefinition> = [.homelessness] { didSet { scheduleProjection() } }
+    // The launch map shows modeled condition predictions across every civic
+    // category. Historical or unresolved evidence is filtered at projection.
+    @Published var visibleLayers: Set<LayerDefinition> = Set(LayerDefinition.allCases.filter { $0 != .alpr }) { didSet { scheduleProjection() } }
     @Published var mapFeatures: [String: [MapFeature]] = [:] { didSet { scheduleProjection() } }
     @Published var bikes: [CitiBikeStation] = []
     @Published var showCitiBike = false
@@ -41,7 +40,6 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
 
     var selectedRoute: RouteChoice? { routes.first(where: { $0.id == selectedRouteID }) ?? routes.first }
 
-    @Published private(set) var primaryForecast: MapFeature?
     @Published private(set) var visibleFeatures: [MapFeature] = []
     @Published private(set) var recentPlaces: [Place] = []
     @Published private(set) var mapSavedAt: Date?
@@ -133,21 +131,18 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
                 Self.project(features: features, layers: layers, lat: lat, lng: lng, latSpan: latSpan, lngSpan: lngSpan)
             }.value
             guard !Task.isCancelled else { return }
-            primaryForecast = result.0; visibleFeatures = result.1
+            visibleFeatures = result
         }
     }
-    nonisolated static func project(features: [String: [MapFeature]], layers: [String], lat: Double, lng: Double, latSpan: Double, lngSpan: Double) -> (MapFeature?, [MapFeature]) {
+    nonisolated static func project(features: [String: [MapFeature]], layers: [String], lat: Double, lng: Double, latSpan: Double, lngSpan: Double) -> [MapFeature] {
         func distance(_ feature: MapFeature) -> Double { pow(feature.lat - lat, 2) + pow((feature.lng - lng) * cos(lat * .pi / 180), 2) }
-        let candidates = (features[LayerDefinition.homelessness.rawValue] ?? []).filter { $0.subjectType == "encampment" && $0.forecastScore != nil }
-        let likely = candidates.filter { ($0.forecastScore ?? 0) >= 0.45 }
-        let primary = (likely.isEmpty ? candidates : likely).min { distance($0) < distance($1) }
         let limit = latSpan > 0.08 ? 40 : latSpan > 0.03 ? 120 : 250
-        let all: [MapFeature] = layers.flatMap { features[$0] ?? [] }
+        let all: [MapFeature] = layers.flatMap { features[$0] ?? [] }.filter { $0.isLikelyPresent }
         let nearby: [MapFeature] = all.filter {
             abs($0.lat - lat) <= max(latSpan * 0.65, 0.008) && abs($0.lng - lng) <= max(lngSpan * 0.65, 0.008)
         }
         let visible = nearby.sorted { distance($0) < distance($1) }
-        return (primary, Array(visible.prefix(limit)))
+        return Array(visible.prefix(limit))
     }
 
     func search(_ query: String) {

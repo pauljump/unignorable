@@ -76,19 +76,19 @@ final class ModelDecodingTests: XCTestCase {
     @MainActor
     func testPredictionLayersStartVisibleAndStayIndependentOfRouteAvoidance() async throws {
         let model = RouteModel()
-        let data = #"{"layers":{"homelessness":[{"id":"enc","layer":"homelessness","lat":40.724,"lng":-73.965}],"sidewalk":[{"id":"pavement","layer":"sidewalk","lat":40.725,"lng":-73.964}],"alpr":[{"id":"camera","layer":"alpr","lat":40.724,"lng":-73.965}]}}"#.data(using: .utf8)!
+        let data = #"{"layers":{"homelessness":[{"id":"enc","layer":"homelessness","lat":40.724,"lng":-73.965,"condition":{"classification":"likely_present","label":"Current condition likely present"}}],"sidewalk":[{"id":"pavement","layer":"sidewalk","lat":40.725,"lng":-73.964,"condition":{"classification":"recent_reports_unverified","label":"Recent reports not yet verified"}}],"alpr":[{"id":"camera","layer":"alpr","lat":40.724,"lng":-73.965}]}}"#.data(using: .utf8)!
         model.mapFeatures = try JSONDecoder().decode(MapLayersResponse.self, from: data).layers
         XCTAssertTrue(model.filters.isEmpty)
-        XCTAssertEqual(model.visibleLayers, [.homelessness])
+        XCTAssertEqual(model.visibleLayers, Set(LayerDefinition.allCases.filter { $0 != .alpr }))
         await model.waitForMapUpdate()
         XCTAssertEqual(model.visibleFeatures.map(\.id), ["enc"])
         model.visibleLayers = [.homelessness, .sidewalk]
         await model.waitForMapUpdate()
-        XCTAssertEqual(Set(model.visibleFeatures.map(\.id)), ["enc", "pavement"])
+        XCTAssertEqual(Set(model.visibleFeatures.map(\.id)), ["enc"])
         model.filters.insert(.homelessness)
         model.filters.removeAll()
         await model.waitForMapUpdate()
-        XCTAssertEqual(Set(model.visibleFeatures.map(\.id)), ["enc", "pavement"])
+        XCTAssertEqual(Set(model.visibleFeatures.map(\.id)), ["enc"])
         model.visibleLayers.remove(.sidewalk)
         await model.waitForMapUpdate()
         XCTAssertEqual(model.visibleFeatures.map(\.id), ["enc"])

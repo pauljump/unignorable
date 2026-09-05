@@ -293,4 +293,10 @@ function simplifyWalkingSteps(steps) {
   return output;
 }
 
-module.exports = { pointInGeoJSON, distanceMeters, pointSegmentDistanceMeters, routeIntersectsPoint, routeHitFeatures, featureRadius, featureRisk, scoreRoute, plausibleRoutes, chooseRecommended, shapingWaypoints, exportUrls, simplifyWalkingSteps, LAYER_RADII, LAYER_WEIGHTS, CONDITION_CONFIDENCE };
+// The map is a current-condition prediction surface. Historical or unresolved
+// evidence stays available in details and routing, but it is not drawn as a dot.
+function isLikelyPresent(feature) {
+  return feature?.condition?.classification === 'likely_present';
+}
+
+module.exports = { pointInGeoJSON, distanceMeters, pointSegmentDistanceMeters, routeIntersectsPoint, routeHitFeatures, featureRadius, featureRisk, scoreRoute, plausibleRoutes, chooseRecommended, shapingWaypoints, exportUrls, simplifyWalkingSteps, isLikelyPresent, LAYER_RADII, LAYER_WEIGHTS, CONDITION_CONFIDENCE };

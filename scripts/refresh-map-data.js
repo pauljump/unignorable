@@ -97,13 +97,17 @@ function conditionEvidence(timeline, now = new Date()) {
   const quietWindow = Math.round(Math.min(90, Math.max(30, gaps.length ? median(gaps) * 4 : 90)));
   let episodes = 1;for(const gap of gaps)if(gap>quietWindow)episodes++;
   const nowDay = dayNumber(nycLocalDay(now.getTime())),lastReportDay=days[days.length-1],silence=Math.max(0,nowDay-lastReportDay);
+  const recentReportDays14 = days.filter(day => day >= nowDay - 13).length;
+  const recentReportDays30 = days.filter(day => day >= nowDay - 29).length;
   const terminal = Math.max(timeline.lastCleared || 0, timeline.lastNotObserved || 0);
   const terminalDay = terminal ? dayNumber(nycLocalDay(terminal)) : 0;
   const reportsAfterAction = terminalDay ? days.filter(day => day > terminalDay).length : 0;
   const observedNewer = timeline.lastObserved && timeline.lastObserved > terminal;
   let classification='recent_reports_unverified',label='Recently reported; not agency-confirmed',basis='Recent 311 reports exist, but the latest agency disposition does not establish that the condition remains.';
-  if(observedNewer && nowDay-dayNumber(nycLocalDay(timeline.lastObserved))<=quietWindow){classification='likely_present';label='Agency observed it recently';basis='An agency response explicitly observed the condition, and the location has not exceeded its adaptive quiet window.';}
+  const activeRecentReports = (!terminal || reportsAfterAction > 0) && (silence <= 7 || recentReportDays14 >= 2 || (silence <= 14 && recentReportDays30 >= 3));
+  if(observedNewer && nowDay-dayNumber(nycLocalDay(timeline.lastObserved))<=quietWindow){classification='likely_present';label='Current condition likely present';basis='An agency response recently observed the condition, and the location has not exceeded its adaptive quiet window.';}
   else if(terminal && reportsAfterAction>=2 && silence<=quietWindow){classification='likely_present';label='Reported again after agency action';basis=`Reports returned on ${reportsAfterAction} distinct days after the latest clearance or no-condition response.`;}
+  else if(activeRecentReports){classification='likely_present';label='Current condition likely present';basis='Recent recurring reports indicate the condition is likely still present; this is an inference, not live proof.';}
   else if(timeline.lastCleared && timeline.lastCleared>=Date.parse(isoDay(lastReportDay)) && nowDay-dayNumber(nycLocalDay(timeline.lastCleared))>quietWindow){classification='likely_cleared';label='Likely cleared; no later reports';basis='The agency explicitly recorded corrective action, followed by a full location-specific quiet window with no later report day.';}
   else if(timeline.lastNotObserved && timeline.lastNotObserved>=Date.parse(isoDay(lastReportDay)) && nowDay-dayNumber(nycLocalDay(timeline.lastNotObserved))>quietWindow){classification='likely_absent';label='Not found; no later reports';basis='The agency explicitly did not observe the condition, followed by a full location-specific quiet window with no later report day.';}
   else if(silence>quietWindow){classification='dormant_unknown';label='Quiet now; outcome unknown';basis='Reports stopped for longer than this location’s normal recurrence window, but no explicit corrective outcome proves why.';}
