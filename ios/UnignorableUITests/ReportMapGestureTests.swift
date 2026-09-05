@@ -88,6 +88,48 @@ final class ReportMapGestureTests: XCTestCase {
         XCTAssertTrue(app.textFields["Where to?"].exists)
     }
 
+    func testDoubleTapZoomsInsteadOfOpeningDetails() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let map = app.otherElements["unified-map"]
+        XCTAssertTrue(map.waitForExistence(timeout: 8))
+        let dismiss = app.buttons["Dismiss introduction"]
+        if dismiss.exists { dismiss.tap() }
+        let marker = app.buttons["forecast-map-marker"]
+        XCTAssertTrue(marker.waitForExistence(timeout: 12))
+        let before = try XCTUnwrap(Double(map.value as? String ?? ""))
+        marker.doubleTap()
+        let zoomed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            (Double(map.value as? String ?? "") ?? before) < before * 0.9
+        }, object: nil)
+        wait(for: [zoomed], timeout: 6)
+        XCTAssertFalse(app.buttons["Done"].exists, "Double tapping a marker must not open its details")
+
+        // Use exposed map below the toolbar, above the forecast card.
+        let background = map.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.23))
+        let backgroundFrame = XCTAttachment(screenshot: app.screenshot())
+        backgroundFrame.name = "Map before background double tap"
+        backgroundFrame.lifetime = .keepAlways
+        add(backgroundFrame)
+        background.tap()
+        XCTAssertFalse(app.buttons["Done"].exists, "A background tap must not select the nearest record")
+        let afterMarkerZoom = try XCTUnwrap(Double(map.value as? String ?? ""))
+        background.doubleTap()
+        let backgroundZoomed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            (Double(map.value as? String ?? "") ?? afterMarkerZoom) < afterMarkerZoom * 0.9
+        }, object: nil)
+        wait(for: [backgroundZoomed], timeout: 6)
+        XCTAssertFalse(app.buttons["Done"].exists)
+
+        XCTAssertTrue(marker.waitForExistence(timeout: 6))
+        marker.tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5), "A single marker tap must still open its details")
+        let detail = XCTAttachment(screenshot: app.screenshot())
+        detail.name = "Single marker tap opens details after double-tap zoom"
+        detail.lifetime = .keepAlways
+        add(detail)
+    }
+
     func testUnifiedMapRespondsToPinchZoom() throws {
         let app = XCUIApplication()
         app.launch()

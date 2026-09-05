@@ -30,6 +30,7 @@
 		C4CE6810315AE1F6E6029BBE /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2B097D8E124BE5CF452BD937 /* PrivacyInfo.xcprivacy */; };
 		CB760A819E64D9982B8C1741 /* ModelDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BEE0C9315E1080ADC9CAE77 /* ModelDecodingTests.swift */; };
 		CE25524E9A87611A437D8B15 /* ReportIssueDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A47EE0B0EB35FC643A2AEB7 /* ReportIssueDetailView.swift */; };
+		D17D6CAB374E3B7B3A25A7E0 /* MapInstanceMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEBE571D17F8D19FD7D4A4AF /* MapInstanceMarker.swift */; };
 		FCBE3E00E2360B16F15BD219 /* DirectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51DEEA9289CFD4A4DFF7BB6E /* DirectionsView.swift */; };
 /* End PBXBuildFile section */
 
@@ -74,6 +75,7 @@
 		C21BCA4A4F1EDF4FF1820E35 /* ControlsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlsView.swift; sourceTree = "<group>"; };
 		C4F367EF998545092A64CDF4 /* FeedbackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackView.swift; sourceTree = "<group>"; };
 		D6B173F83BB98418B424FCCB /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		DEBE571D17F8D19FD7D4A4AF /* MapInstanceMarker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapInstanceMarker.swift; sourceTree = "<group>"; };
 		F156D39CCED282E4E353C1FF /* UnignorableTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = UnignorableTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F7F8AD254C9DDDC4D94671FC /* FeatureDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureDetailView.swift; sourceTree = "<group>"; };
 		F8009DD2B1ADA033717F7A27 /* RouteModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteModel.swift; sourceTree = "<group>"; };
@@ -125,6 +127,7 @@
 				783DA24498492CF0A9315FFA /* Info.plist */,
 				8C3271F55A4E4DC82DFAC9C8 /* IssueDot.swift */,
 				9602AC947FCC1F5D5BC67344 /* LocationManager.swift */,
+				DEBE571D17F8D19FD7D4A4AF /* MapInstanceMarker.swift */,
 				AF85C8E8DB4B774843D36360 /* Models.swift */,
 				2B097D8E124BE5CF452BD937 /* PrivacyInfo.xcprivacy */,
 				F8F53D917352EA9CE0CF0551 /* RecordsView.swift */,
@@ -287,6 +290,7 @@
 				31DCD75EC3BE3E42F5AA3D01 /* ForecastLocationView.swift in Sources */,
 				36FC8CB8AA48FCBAB70E89D4 /* IssueDot.swift in Sources */,
 				5EF6B282BAD97EEE52D13875 /* LocationManager.swift in Sources */,
+				D17D6CAB374E3B7B3A25A7E0 /* MapInstanceMarker.swift in Sources */,
 				27E8DC1F713CA4B541C79348 /* Models.swift in Sources */,
 				1454375E3E72FDE50554A0B2 /* RecordsView.swift in Sources */,
 				CE25524E9A87611A437D8B15 /* ReportIssueDetailView.swift in Sources */,
@@ -409,7 +413,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 99US464DK4;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -486,7 +490,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 99US464DK4;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

@@ -1,5 +1,16 @@
 # Curbnote rebrand release · September 5, 2026
 
+## Map gesture correction · build 5
+
+Paul specified that double-tapping the map must zoom, and map detail sheets should open only from actual instance markers. Web background click and long-press/context-menu handlers no longer select the nearest condition. Route lines are noninteractive; route choices remain in the route UI. Marker single taps defer until a possible double tap is ruled out; a double tap cancels details and zooms at the touched location. Panning cancels pending selections. This applies to modeled civic evidence, supporting evidence, public records, clusters and bike stations. Leaflet background double-tap zoom remains enabled. Map help text now describes this behavior.
+
+Native instance markers now distinguish single from double taps while retaining an accessibility activation action. The native map explicitly converts a double tap into zoom at that coordinate through MapReader; a single background tap has no selection action. The same rule applies to primary forecasts, evidence dots, report markers and bike stations. Record markers no longer rely on automatic MapKit selection to present a sheet.
+
+Verification: all 60 web/backend tests pass. Native UI regression verifies marker double-tap zoom with no sheet, empty-map single tap with no sheet, empty-map double-tap zoom, and a single marker tap opening details. Pinch zoom also passes. Test screenshots are retained. The web fix is live from `f50ce26` through the existing fleet/vault runner; TLS delivery was checked for the removed background handlers and enabled zoom. No connected browser is available for a browser gesture pass.
+
+Native build-5 publication results follow after Apple processing.
+
+
 ## Map visibility correction · build 3
 
 Paul reported no occurrence dots after leaving walking directions and no visible map reference when a detail opened. Web rendering incorrectly used the route-avoidance set (empty at launch) as the map-visibility set. The phone forecast panel also occupied nearly the full map. Dot events could bubble to the generic nearest-record handler, and late route responses could reopen dismissed results.

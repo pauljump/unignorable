@@ -24,7 +24,6 @@ struct ContentView: View {
     @StateObject private var reportModel = ReportModel()
     @StateObject private var location = LocationManager()
     @State private var activeSheet: ActiveSheet?
-    @State private var selectedReportMarkerID: String?
     @State private var showPublicRecords = false
     @State private var introductionDismissed = false
 
@@ -71,94 +70,102 @@ struct ContentView: View {
     }
 
     private var routeMap: some View {
-        Map(position: $model.position, interactionModes: .all, selection: $selectedReportMarkerID) {
-            UserAnnotation()
+        MapReader { proxy in
+            Map(position: $model.position, interactionModes: .all) {
+                UserAnnotation()
 
-            ForEach(model.routes.filter { $0.id != model.selectedRoute?.id }) { route in
-                MapPolyline(coordinates: route.geometry.mapCoordinates)
-                    .stroke(.secondary.opacity(0.55), style: .init(lineWidth: 4, lineCap: .round, lineJoin: .round))
-            }
-            if let route = model.selectedRoute {
-                MapPolyline(coordinates: route.geometry.mapCoordinates)
-                    .stroke(AppTheme.coral, style: .init(lineWidth: 7, lineCap: .round, lineJoin: .round))
-            }
-
-            if let origin = model.origin {
-                Annotation("Start", coordinate: origin.coordinate) { endpointMarker("A", color: .green) }
-            }
-            if let destination = model.destination {
-                Annotation("Destination", coordinate: destination.coordinate) { endpointMarker("B", color: .red) }
-            }
-            if let via = model.via {
-                Annotation("Stop", coordinate: via.coordinate) { endpointMarker("C", color: AppTheme.mint) }
-            }
-
-            if let forecast = model.primaryForecast {
-                Annotation("Presence forecast", coordinate: forecast.coordinate) {
-                    Button { inspectFeature(forecast) } label: {
-                        forecastMarker(forecast)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("forecast-map-marker")
+                ForEach(model.routes.filter { $0.id != model.selectedRoute?.id }) { route in
+                    MapPolyline(coordinates: route.geometry.mapCoordinates)
+                        .stroke(.secondary.opacity(0.55), style: .init(lineWidth: 4, lineCap: .round, lineJoin: .round))
                 }
-            }
-
-            ForEach(model.visibleFeatures.filter { $0.id != model.primaryForecast?.id }) { feature in
-                Annotation("", coordinate: feature.coordinate) {
-                    Button { inspectFeature(feature) } label: {
-                        marker(for: feature).frame(width: 32, height: 32).contentShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(feature.address ?? feature.layer ?? "Reported condition")
-                    .accessibilityIdentifier("evidence-marker-" + feature.id)
+                if let route = model.selectedRoute {
+                    MapPolyline(coordinates: route.geometry.mapCoordinates)
+                        .stroke(AppTheme.coral, style: .init(lineWidth: 7, lineCap: .round, lineJoin: .round))
                 }
-            }
 
-            if model.showCitiBike {
-                ForEach(model.bikes) { station in
-                    Annotation(station.name, coordinate: station.coordinate) {
-                        Button { model.chooseBike(station) } label: {
-                            Image(systemName: "bicycle").font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.white)
-                            .frame(width: 22, height: 22)
-                            .background(.cyan, in: Circle())
-                            .overlay(Circle().stroke(.white, lineWidth: 1))
+                if let origin = model.origin {
+                    Annotation("Start", coordinate: origin.coordinate) { endpointMarker("A", color: .green) }
+                }
+                if let destination = model.destination {
+                    Annotation("Destination", coordinate: destination.coordinate) { endpointMarker("B", color: .red) }
+                }
+                if let via = model.via {
+                    Annotation("Stop", coordinate: via.coordinate) { endpointMarker("C", color: AppTheme.mint) }
+                }
+
+                if let forecast = model.primaryForecast {
+                    Annotation("Presence forecast", coordinate: forecast.coordinate) {
+                        MapInstanceMarker(onSelect: { inspectFeature(forecast) }, onZoom: { zoomMap(at: forecast.coordinate) }) {
+                            forecastMarker(forecast)
                         }
-                        .accessibilityLabel("Add \(station.name) as a stop, \(station.bikes) bikes available")
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("forecast-map-marker")
+                    }
+                }
+
+                ForEach(model.visibleFeatures.filter { $0.id != model.primaryForecast?.id }) { feature in
+                    Annotation("", coordinate: feature.coordinate) {
+                        MapInstanceMarker(onSelect: { inspectFeature(feature) }, onZoom: { zoomMap(at: feature.coordinate) }) {
+                            marker(for: feature).frame(width: 24, height: 24).contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(feature.address ?? feature.layer ?? "Reported condition")
+                        .accessibilityIdentifier("evidence-marker-" + feature.id)
+                    }
+                }
+
+                if model.showCitiBike {
+                    ForEach(model.bikes) { station in
+                        Annotation(station.name, coordinate: station.coordinate) {
+                            MapInstanceMarker(onSelect: { model.chooseBike(station) }, onZoom: { zoomMap(at: station.coordinate) }) {
+                                Image(systemName: "bicycle").font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 22, height: 22)
+                                .background(.cyan, in: Circle())
+                                .overlay(Circle().stroke(.white, lineWidth: 1))
+                            }
+                            .accessibilityLabel("Add \(station.name) as a stop, \(station.bikes) bikes available")
+                        }
+                    }
+                }
+
+                ForEach(showPublicRecords ? reportModel.markers : []) { marker in
+                    Annotation("", coordinate: marker.coordinate) {
+                        MapInstanceMarker(onSelect: {
+                            if let issue = marker.issue { activeSheet = .reportIssue(issue) }
+                            else { zoomReportMarker(marker) }
+                        }, onZoom: { zoomMap(at: marker.coordinate) }) {
+                            IssueDot(color: reportColor(for: marker.type), severity: marker.severity)
+                        }
+                        .accessibilityLabel(marker.issue == nil ? "Issue cluster; zoom in" : marker.type)
                     }
                 }
             }
-
-            ForEach(showPublicRecords ? reportModel.markers : []) { marker in
-                Annotation("", coordinate: marker.coordinate) {
-                    IssueDot(color: reportColor(for: marker.type), severity: marker.severity)
-                        .accessibilityLabel(marker.issue == nil ? "Issue cluster; zoom in" : marker.type)
+            .highPriorityGesture(SpatialTapGesture(count: 2).onEnded { tap in
+                if let coordinate = proxy.convert(tap.location, from: .local) {
+                    zoomMap(at: coordinate)
                 }
-                .tag(marker.id)
+            })
+            .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
+            .mapControls {
+                MapCompass()
+                MapScaleView()
+                MapUserLocationButton()
+            }
+            .accessibilityIdentifier("unified-map")
+            .accessibilityValue(String(model.visibleRegion.span.latitudeDelta))
+            .onMapCameraChange(frequency: .onEnd) { context in
+                model.visibleRegion = context.region
+                reportModel.visibleRegion = context.region
             }
         }
-        .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
-        .mapControls {
-            MapCompass()
-            MapScaleView()
-            MapUserLocationButton()
-        }
-        .accessibilityIdentifier("unified-map")
-        .accessibilityValue(String(model.visibleRegion.span.latitudeDelta))
-        .onMapCameraChange(frequency: .onEnd) { context in
-            model.visibleRegion = context.region
-            reportModel.visibleRegion = context.region
-        }
-        .onChange(of: selectedReportMarkerID) { _, markerID in
-            guard let markerID,
-                  let marker = reportModel.markers.first(where: { $0.id == markerID }) else { return }
-            selectedReportMarkerID = nil
-            if let issue = marker.issue {
-                activeSheet = .reportIssue(issue)
-            } else {
-                zoomReportMarker(marker)
-            }
-        }
+    }
+
+    private func zoomMap(at coordinate: CLLocationCoordinate2D) {
+        model.position = .region(.init(center: coordinate, span: .init(
+            latitudeDelta: max(0.0002, model.visibleRegion.span.latitudeDelta / 2),
+            longitudeDelta: max(0.0002, model.visibleRegion.span.longitudeDelta / 2)
+        )))
     }
 
     private func applyReportFocus() {
@@ -346,7 +353,7 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(AppTheme.brand)
 
-                    Button { inspectFeature(feature) } label: {
+                    MapInstanceMarker(onSelect: { inspectFeature(feature) }, onZoom: { zoomMap(at: feature.coordinate) }) {
                         Label("Why / verify", systemImage: "checkmark.shield")
                             .frame(maxWidth: .infinity, minHeight: 38)
                     }

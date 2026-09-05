@@ -4,7 +4,7 @@
 
 Display name: Curbnote. Bundle ID: `com.curbnote.app`. App Store Connect ID: `6809025615`; SKU: `curbnote`. API and shared links: `https://curbnote.polyfeeds.dev`. The native API client retries a DNS-resolution failure once through the retained `https://unignorable.polyfeeds.dev/api/` alias to the same backend. Ambiguous transport failures and HTTP errors are not retried.
 
-Civic evidence layers start visible independently of walking avoidance; cameras remain opt-in.
+Civic evidence layers start visible independently of walking avoidance; cameras remain opt-in. Double-tap the map or a marker to zoom. Only a single tap on an actual marker opens map details; tapping empty map space does not select a nearby record.
 
 Walking address entry uses Apple's [native search completer](https://developer.apple.com/documentation/mapkit/mklocalsearchcompleter) with the existing geocoder as a three-second fallback if native completion stalls. Suggestions appear immediately below the fields, and selecting one resolves its coordinates before routing. The Xcode project/scheme/module remain `Unignorable` for source continuity. Branding: [../BRAND.md](../BRAND.md). Use `python3 ../scripts/build-brand.py` from this directory to rebuild all shared assets.
 
