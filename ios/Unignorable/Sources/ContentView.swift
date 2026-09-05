@@ -2,13 +2,12 @@ import MapKit
 import SwiftUI
 
 private enum ActiveSheet: Identifiable {
-    case account(Bool), feedback, records, forecastLocation, planner, controls(RouteOptionFocus), mapContent, directions, feature(MapFeature), reportIssue(ReportIssue)
+    case account(Bool), feedback, records, planner, controls(RouteOptionFocus), mapContent, directions, feature(MapFeature), reportIssue(ReportIssue)
     var id: String {
         switch self {
         case .account(let saving): "account-\(saving)"
         case .feedback: "feedback"
         case .records: "records"
-        case .forecastLocation: "forecast-location"
         case .planner: "planner"
         case .controls(let focus): "controls-\(focus.rawValue)"
         case .mapContent: "map-content"
@@ -27,7 +26,6 @@ struct ContentView: View {
     @StateObject private var location = LocationManager()
     @State private var activeSheet: ActiveSheet?
     @State private var highlightedMapMarkerID: String?
-    @State private var showPublicRecords = false
     @State private var introductionDismissed = false
 
     var body: some View {
@@ -47,13 +45,12 @@ struct ContentView: View {
                 } else if !introductionDismissed {
                     launchCard
                 } else {
-                    forecastCard
+                    predictionHintCard
                 }
             }
         }
         .onChange(of: scenePhase) { _, phase in if phase != .active { Task { await model.flushWalk() } } }
         .task { await model.load() }
-        .task(id: showPublicRecords) { if showPublicRecords { await reportModel.load(); applyReportFocus() } }
         .onChange(of: navigation.reportFocus) { _, _ in
             Task { await reportModel.load(); applyReportFocus() }
         }
@@ -67,7 +64,6 @@ struct ContentView: View {
             case .account(let saving): AccountView(saving: saving, onOpenWalk: { activeSheet = .planner })
             case .feedback: FeedbackView()
             case .records: RecordsView()
-            case .forecastLocation: ForecastLocationView()
             case .planner: WalkingPlannerView(onReportNearby: inspectReportCenter, onControls: { activeSheet = .controls($0) }, onLocate: location.requestLocation)
             case .controls(let focus): ControlsView(focus: focus)
             case .mapContent: mapContentSheet
@@ -103,32 +99,16 @@ struct ContentView: View {
                     Annotation("Stop", coordinate: via.coordinate) { endpointMarker("C", color: AppTheme.mint) }
                 }
 
-                if model.visibleLayers.contains(.homelessness), let forecast = model.primaryForecast {
-                    Annotation("Presence forecast", coordinate: forecast.coordinate) {
-                        MapInstanceMarker(onSelect: {
-                            highlightMarker("forecast:\(forecast.id)")
-                            inspectFeature(forecast)
-                        }, onZoom: { zoomMap(at: forecast.coordinate) }) {
-                            forecastMarker(forecast, highlighted: highlightedMapMarkerID == "forecast:\(forecast.id)")
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("forecast-map-marker")
-                    }
-                }
-
-                ForEach(model.visibleFeatures.filter { $0.id != model.primaryForecast?.id }) { feature in
+                ForEach(model.visibleFeatures.filter { $0.layer == LayerDefinition.homelessness.rawValue }) { feature in
                     Annotation("", coordinate: feature.coordinate) {
                         MapInstanceMarker(onSelect: {
-                            highlightMarker("evidence:\(feature.id)")
+                            highlightMarker("prediction:\(feature.id)")
                             inspectFeature(feature)
                         }, onZoom: { zoomMap(at: feature.coordinate) }) {
-                            marker(for: feature, highlighted: highlightedMapMarkerID == "evidence:\(feature.id)")
-                                .frame(width: 24, height: 24)
-                                .contentShape(Circle())
+                            predictionMarker(feature, highlighted: highlightedMapMarkerID == "prediction:\(feature.id)")
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(feature.address ?? feature.layer ?? "Reported condition")
-                        .accessibilityIdentifier("evidence-marker-" + feature.id)
+                        .accessibilityIdentifier("prediction-marker-" + feature.id)
                     }
                 }
 
@@ -147,23 +127,6 @@ struct ContentView: View {
                     }
                 }
 
-                ForEach(showPublicRecords ? reportModel.markers : []) { marker in
-                    let markerID = "report:\(marker.id)"
-                    Annotation("", coordinate: marker.coordinate) {
-                        MapInstanceMarker(onSelect: {
-                            highlightMarker(markerID)
-                            if let issue = marker.issue { activeSheet = .reportIssue(issue) }
-                            else { zoomReportMarker(marker) }
-                        }, onZoom: { zoomMap(at: marker.coordinate) }) {
-                            IssueDot(
-                                color: reportColor(for: marker.type),
-                                severity: marker.severity,
-                                highlighted: highlightedMapMarkerID == markerID
-                            )
-                        }
-                        .accessibilityLabel(marker.issue == nil ? "Issue cluster; zoom in" : marker.type)
-                    }
-                }
             }
             .highPriorityGesture(SpatialTapGesture(count: 2).onEnded { tap in
                 if let coordinate = proxy.convert(tap.location, from: .local) {
@@ -263,18 +226,10 @@ struct ContentView: View {
                 Button("Saved walks", systemImage: "bookmark") { activeSheet = .account(false) }
                 Button("Feedback", systemImage: "bubble.left") { activeSheet = .feedback }
                 Button("Block records", systemImage: "building.2") { activeSheet = .records }
-                Button("Map evidence", systemImage: "square.stack.3d.up") { activeSheet = .mapContent }
+                Button("Prediction map", systemImage: "square.stack.3d.up") { activeSheet = .mapContent }
             } label: { Image(systemName: "ellipsis.circle").frame(width: 30, height: 30) }
             .accessibilityLabel("Feedback and block records")
             .accessibilityIdentifier("launch-menu")
-            Button { activeSheet = .forecastLocation } label: {
-                Image(systemName: "location.magnifyingglass")
-                    .frame(width: 30, height: 30)
-            }
-            .buttonStyle(.bordered)
-            .accessibilityLabel("Choose forecast location")
-            .accessibilityIdentifier("forecast-location-button")
-
             Button { introductionDismissed = true; activeSheet = .planner } label: {
                 Label("Walk", systemImage: "figure.walk")
                     .font(.subheadline.bold())
@@ -318,123 +273,35 @@ struct ContentView: View {
         .padding(10)
     }
 
-    @ViewBuilder
-    private var forecastCard: some View {
-        if let feature = model.primaryForecast {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Label("CURRENT CONDITION FORECAST", systemImage: "location.fill.viewfinder")
-                        .font(.caption2.bold())
-                        .foregroundStyle(AppTheme.coral)
-                    Spacer()
-                    if feature.isExperimentalForecast {
-                        Text("EXPERIMENTAL")
-                            .font(.caption2.bold())
-                            .foregroundStyle(AppTheme.amber)
-                    }
-                }
-
-                Text(feature.forecastTitle)
-                    .font(.title2.bold())
-                    .accessibilityIdentifier("forecast-title")
-
-                Button { activeSheet = .forecastLocation } label: {
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "mappin.and.ellipse")
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(forecastLocation(feature)).font(.subheadline.bold())
-                            Text(forecastLocationArea(feature))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                    }
-                    .foregroundStyle(.primary)
-                    .multilineTextAlignment(.leading)
-                }
-                .buttonStyle(.plain)
-
-                Label(forecastFreshness(feature), systemImage: "clock")
-                    .font(.subheadline)
-
-                if feature.reportTimingIsStrongEnoughForPrimary, let timing = feature.reportTimingLabel {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("HISTORICAL REPORT PATTERN")
-                            .font(.caption2.bold())
-                            .foregroundStyle(AppTheme.muted)
-                        Label(timing, systemImage: "clock.arrow.circlepath")
-                            .font(.caption.bold())
-                        Text("This is when reports arrived—not when people will be present.")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(9)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(AppTheme.raised.opacity(0.8), in: RoundedRectangle(cornerRadius: 10))
-                }
-
-                HStack(spacing: 8) {
-                    Button {
-                        model.filters.insert(.homelessness)
-                        model.visibleLayers.insert(.homelessness)
-                        activeSheet = .planner
-                    } label: {
-                        Label("Route around", systemImage: "figure.walk")
-                            .frame(maxWidth: .infinity, minHeight: 38)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AppTheme.brand)
-
-                    MapInstanceMarker(onSelect: { inspectFeature(feature) }, onZoom: { zoomMap(at: feature.coordinate) }) {
-                        Label("Why / verify", systemImage: "checkmark.shield")
-                            .frame(maxWidth: .infinity, minHeight: 38)
-                    }
-                    .buttonStyle(.bordered)
-                }
+    private var predictionHintCard: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "circle.dotted")
+                .foregroundStyle(AppTheme.coral)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Prediction map").font(.subheadline.bold())
+                Text("Every dot is an approximate condition prediction. Tap one to see the evidence.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            .padding(14)
-            .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .shadow(color: .black.opacity(0.18), radius: 12, y: -3)
-            .padding(10)
-        } else {
-            HStack(spacing: 10) {
-                ProgressView()
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Finding a forecast near map center…").font(.subheadline.bold())
-                    Text("Public evidence remains hidden until you ask for it.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-            .padding(14)
-            .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .padding(10)
+            Spacer()
         }
+        .padding(14)
+        .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(10)
     }
 
     private var mapContentSheet: some View {
         NavigationStack {
             List {
-                Section("Modeled map evidence") {
-                    ForEach(LayerDefinition.allCases) { layer in
-                        Toggle(isOn: visibleLayerBinding(layer)) {
-                            Label(layer.title, systemImage: layer.symbol)
-                        }
-                        .accessibilityIdentifier("map-layer-\(layer.rawValue)")
-                    }
-                }
-
                 Section {
-                    Toggle("Show public-record dots", isOn: $showPublicRecords)
-                    if showPublicRecords {
-                        ForEach(ReportModel.types, id: \.self) { type in
-                            Toggle(type, isOn: reportTypeBinding(type))
-                        }
+                    Toggle(isOn: visibleLayerBinding(.homelessness)) {
+                        Label("Condition predictions", systemImage: LayerDefinition.homelessness.symbol)
                     }
+                    .accessibilityIdentifier("map-layer-homelessness")
                 } header: {
-                    Text("Raw public records")
+                    Text("Prediction map")
                 } footer: {
-                    Text("A report is evidence, not proof that a condition is present now. These records never identify an individual.")
+                    Text("Every map dot is an approximate condition prediction. Other evidence remains available in Block records and route details.")
                 }
 
                 Section("Inspect") {
@@ -451,7 +318,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .navigationTitle("Map evidence")
+            .navigationTitle("Prediction map")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { activeSheet = nil } }
@@ -542,24 +409,7 @@ struct ContentView: View {
         navigation.openReport(lat: coordinate.latitude, lng: coordinate.longitude)
     }
 
-    private func color(for layer: String?) -> Color {
-        switch LayerDefinition(rawValue: layer ?? "") {
-        case .alpr: AppTheme.amber; case .homelessness: AppTheme.coral; case .drugs: AppTheme.purple; case .dumping: .orange
-        case .sidewalk: .yellow; case .street: .blue; case .signals: AppTheme.mint; case nil: AppTheme.muted
-        }
-    }
-
-    private func reportColor(for type: String) -> Color {
-        switch type {
-        case "Encampment": AppTheme.coral
-        case "Drug Activity": AppTheme.purple
-        case "Homeless Person Assistance": AppTheme.mint
-        case "Panhandling": AppTheme.amber
-        default: AppTheme.muted
-        }
-    }
-
-    private func forecastMarker(_ feature: MapFeature, highlighted: Bool = false) -> some View {
+    private func predictionMarker(_ feature: MapFeature, highlighted: Bool = false) -> some View {
         ZStack {
             Circle()
                 .fill(AppTheme.coral.opacity(0.2))
@@ -582,47 +432,7 @@ struct ContentView: View {
         .scaleEffect(highlighted ? 1.16 : 1)
         .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
         .accessibilityLabel(feature.forecastTitle)
-        .accessibilityValue(forecastLocation(feature))
-    }
-
-    private func forecastLocation(_ feature: MapFeature) -> String {
-        if let address = feature.address?.trimmingCharacters(in: .whitespacesAndNewlines), !address.isEmpty {
-            return "Near \(address)"
-        }
-        let target = CLLocation(latitude: feature.lat, longitude: feature.lng)
-        let nearby = reportModel.issues
-            .filter { $0.type == "Encampment" && $0.status == "active" }
-            .compactMap { issue -> (ReportIssue, CLLocationDistance)? in
-                guard let address = issue.addr?.trimmingCharacters(in: .whitespacesAndNewlines), !address.isEmpty else { return nil }
-                let distance = target.distance(from: CLLocation(latitude: issue.lat, longitude: issue.lng))
-                return distance <= 160 ? (issue, distance) : nil
-            }
-            .min { $0.1 < $1.1 }?
-            .0
-        if let address = nearby?.addr {
-            return "Near \(address.capitalized)"
-        }
-        return String(format: "Near map center · %.4f, %.4f", feature.lat, feature.lng)
-    }
-
-    private func forecastLocationArea(_ feature: MapFeature) -> String {
-        if let meters = feature.forecastLocationRadiusM {
-            return "Approximate area · about \(Int(meters.rounded())) m radius"
-        }
-        return "Approximate reported area · not an exact point"
-    }
-
-    private func forecastFreshness(_ feature: MapFeature) -> String {
-        guard let value = feature.nowcast?.asOf, let date = forecastDate(value) else {
-            return "Current-presence estimate"
-        }
-        return "Current-presence estimate · updated \(date.formatted(.relative(presentation: .named)))"
-    }
-
-    private func forecastDate(_ value: String) -> Date? {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+        .accessibilityValue(feature.address ?? "Approximate mapped area")
     }
 
     private func visibleLayerBinding(_ layer: LayerDefinition) -> Binding<Bool> {
@@ -632,22 +442,6 @@ struct ContentView: View {
                 if enabled { model.visibleLayers.insert(layer) } else { model.visibleLayers.remove(layer) }
             }
         )
-    }
-
-    private func reportTypeBinding(_ type: String) -> Binding<Bool> {
-        Binding(
-            get: { reportModel.enabledTypes.contains(type) },
-            set: { enabled in
-                if enabled { reportModel.enabledTypes.insert(type) } else { reportModel.enabledTypes.remove(type) }
-            }
-        )
-    }
-
-    private func marker(for feature: MapFeature, highlighted: Bool = false) -> some View {
-        let count = feature.count ?? 0
-        let severity: MarkerSeverity = feature.condition?.routingLevel == "hard" || count >= 20
-            ? .high : feature.condition?.routingLevel == "soft" || count >= 5 ? .elevated : .lower
-        return IssueDot(color: color(for: feature.layer), severity: severity, highlighted: highlighted)
     }
 
     private func duration(_ seconds: Double) -> String {

@@ -73,13 +73,6 @@ struct ControlsView: View {
                     }
                     .id(RouteOptionFocus.onTheWay.rawValue)
 
-                    Section("Show on map") {
-                        ForEach(LayerDefinition.allCases) { layer in
-                            Toggle(isOn: layerToggle(layer)) {
-                                Label(layer.title, systemImage: layer.symbol)
-                            }
-                        }
-                    }
                 }
                 .onAppear {
                     proxy.scrollTo(focus.rawValue, anchor: .top)
@@ -118,12 +111,4 @@ struct ControlsView: View {
         )
     }
 
-    private func layerToggle(_ layer: LayerDefinition) -> Binding<Bool> {
-        Binding(
-            get: { model.visibleLayers.contains(layer) },
-            set: { enabled in
-                if enabled { model.visibleLayers.insert(layer) } else { model.visibleLayers.remove(layer) }
-            }
-        )
-    }
 }

@@ -99,18 +99,18 @@ final class ReportMapGestureTests: XCTestCase {
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 3))
     }
 
-    func testForecastLocationLeadsWithoutSettingRouteOrigin() throws {
+    func testLaunchUsesPredictionMapWithoutMovingForecastPin() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-curbnote-ui-reset"]
         app.launch()
 
-        let locationButton = app.buttons["forecast-location-button"]
-        XCTAssertTrue(locationButton.waitForExistence(timeout: 5))
-        locationButton.tap()
-
-        XCTAssertTrue(app.textFields["forecast-location-search"].waitForExistence(timeout: 3))
-        XCTAssertTrue(app.buttons["Use my location"].exists)
-        XCTAssertFalse(app.textFields["Where from?"].exists)
+        let map = app.otherElements["unified-map"]
+        XCTAssertTrue(map.waitForExistence(timeout: 8))
+        let dismiss = app.buttons["Dismiss introduction"]
+        if dismiss.exists { dismiss.tap() }
+        XCTAssertTrue(app.staticTexts["Prediction map"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Presence forecast"].exists)
+        XCTAssertFalse(app.buttons["forecast-location-button"].exists)
     }
 
     func testWalkingPlannerIsProgressivelyDisclosed() throws {
@@ -159,15 +159,24 @@ final class ReportMapGestureTests: XCTestCase {
         wait(for: [backgroundZoomed], timeout: 6)
         XCTAssertFalse(app.buttons["Done"].exists)
 
-        let why = app.buttons["Why / verify"]
-        XCTAssertTrue(why.waitForExistence(timeout: 5))
-        why.tap()
-        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5), "A map-point detail must open its popup")
-        XCTAssertTrue(app.buttons["share-dot-button"].waitForExistence(timeout: 3), "Every dot detail must offer sharing")
-        let detail = XCTAttachment(screenshot: app.screenshot())
-        detail.name = "Single marker tap opens details after double-tap zoom"
-        detail.lifetime = .keepAlways
-        add(detail)
+    }
+
+    func testPredictionDotOpensShareableDetail() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-curbnote-ui-reset"]
+        app.launch()
+
+        let map = app.otherElements["unified-map"]
+        XCTAssertTrue(map.waitForExistence(timeout: 8))
+        let dismiss = app.buttons["Dismiss introduction"]
+        if dismiss.exists { dismiss.tap() }
+        let prediction = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "prediction-marker-"))
+            .firstMatch
+        XCTAssertTrue(prediction.waitForExistence(timeout: 20), "The map should show prediction dots")
+        prediction.tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5), "A prediction dot must open its detail")
+        XCTAssertTrue(app.buttons["share-dot-button"].waitForExistence(timeout: 3), "Every prediction dot must offer sharing")
     }
 
     func testUnifiedMapRespondsToPinchZoom() throws {
