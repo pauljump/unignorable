@@ -1,6 +1,6 @@
 # Curbnote native release identity
 
-**TestFlight:** 1.0.0 (5) is processed and available to Paul in Curbnote Internal. The Aqua Terminal ship method resolved headless signing; see [the release record](../RELEASE-CURBNOTE-20260905.md).
+**TestFlight:** 1.0.0 (6) is processed and available to Paul in Curbnote Internal. The Aqua Terminal ship method resolved headless signing; see [the release record](../RELEASE-CURBNOTE-20260905.md).
 
 The primary walking action is **Walk with Curbnote**: complete maneuver steps, a map of the active instruction, Back/Next, optional read-aloud and the full list. External maps are secondary route planners; see [the guide decision and verification](../WALKING-GUIDE-20260905.md).
 

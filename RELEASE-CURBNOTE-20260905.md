@@ -1,5 +1,16 @@
 # Curbnote rebrand release · September 5, 2026
 
+## Curbnote walking guide · build 6
+
+Curbnote now owns the primary walking experience on web and native iOS. The guide keeps turns, crossings, stops and arrival, shows each instruction on the generated route, offers Next/Back and optional read-aloud, and resumes when reopened. Progress is manual. The old exporter tried to shape external routes with sampled stops, and instruction compression could hide actual maneuvers. Walking map links now use compatible endpoint parameters and separately labeled stop legs, behind an explanation that Apple and Google calculate a new route. See [the walking-guide decision and evidence](./WALKING-GUIDE-20260905.md).
+
+All 67 web/backend tests and eleven native unit tests pass. The live native address-to-route-to-guide regression passes, including Next and Back; the final rendered iPhone guide was inspected. Web is live from `35b825f`, deployed through the fleet/vault runner and checked over TLS. No connected browser or physical-device walking pass is claimed.
+
+**Released: Curbnote 1.0.0 (6)** from `35b825f`. Apple build ID `add05857-2a72-44db-9d64-a8b6d210d081` is `VALID` and `IN_BETA_TESTING`, with Curbnote Internal access confirmed and English What to Test notes verified. The signed archive passed strict signature validation and the Aqua Terminal upload succeeded. Source is pushed to the canonical branch and the portfolio scan completed.
+
+Artifacts: `/Users/mini-home/.local/share/curbnote-releases/testflight-20260905T200845Z` retains the signed archive, receipt, ship log, successful test logs, inspected guide screenshot, processing/group confirmations and testing notes.
+
+
 ## Map gesture correction · build 5
 
 Paul specified that double-tapping the map must zoom, and map detail sheets should open only from actual instance markers. Web background click and long-press/context-menu handlers no longer select the nearest condition. Route lines are noninteractive; route choices remain in the route UI. Marker single taps defer until a possible double tap is ruled out; a double tap cancels details and zooms at the touched location. Panning cancels pending selections. This applies to modeled civic evidence, supporting evidence, public records, clusters and bike stations. Leaflet background double-tap zoom remains enabled. Map help text now describes this behavior.
