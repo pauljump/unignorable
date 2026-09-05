@@ -1,6 +1,6 @@
 # Curbnote native release identity
 
-**TestFlight:** 1.0.0 (4) is processed and available to Paul in Curbnote Internal. The Aqua Terminal ship method resolved headless signing; see [the release record](../RELEASE-CURBNOTE-20260905.md).
+**TestFlight:** 1.0.0 (5) is processed and available to Paul in Curbnote Internal. The Aqua Terminal ship method resolved headless signing; see [the release record](../RELEASE-CURBNOTE-20260905.md).
 
 Display name: Curbnote. Bundle ID: `com.curbnote.app`. App Store Connect ID: `6809025615`; SKU: `curbnote`. API and shared links: `https://curbnote.polyfeeds.dev`. The native API client retries a DNS-resolution failure once through the retained `https://unignorable.polyfeeds.dev/api/` alias to the same backend. Ambiguous transport failures and HTTP errors are not retried.
 

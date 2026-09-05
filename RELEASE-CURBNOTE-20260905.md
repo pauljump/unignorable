@@ -8,7 +8,9 @@ Native instance markers now distinguish single from double taps while retaining 
 
 Verification: all 60 web/backend tests pass. Native UI regression verifies marker double-tap zoom with no sheet, empty-map single tap with no sheet, empty-map double-tap zoom, and a single marker tap opening details. Pinch zoom also passes. Test screenshots are retained. The web fix is live from `f50ce26` through the existing fleet/vault runner; TLS delivery was checked for the removed background handlers and enabled zoom. No connected browser is available for a browser gesture pass.
 
-Native build-5 publication results follow after Apple processing.
+**Released: Curbnote 1.0.0 (5)** from `67ec9a6`. Apple build ID `99a9a697-0b8f-42c5-991d-7e0208c4100b` is `VALID` and `IN_BETA_TESTING`, with Curbnote Internal access confirmed. English What to Test notes are saved and verified. The signed archive passed strict signature validation and the Aqua Terminal upload completed successfully. Source is pushed to the canonical GitHub branch. The portfolio inventory scan completed.
+
+Artifacts: `/Users/mini-home/.local/share/curbnote-releases/testflight-20260905T194801Z` contains the signed archive, upload receipt, complete ship log, successful web/native gesture test logs, screenshots, Apple processing confirmation, internal-group confirmation and testing notes.
 
 
 ## Map visibility correction · build 3
