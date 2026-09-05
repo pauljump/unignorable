@@ -1,5 +1,15 @@
 # Curbnote rebrand release · September 5, 2026
 
+## Prediction-only map · build 9
+
+The native map now has one visual language: every condition dot is an approximate homelessness-condition prediction. The separate map-center-driven “Presence forecast” marker and forecast panel are gone, so panning and zooming no longer move a selected forecast. The user’s blue location dot remains the only location marker; tapping any prediction dot opens its own detail and share action.
+
+Verification: 14 native unit tests pass; the native test build succeeds; all 4 focused map UI checks pass, including prediction-dot detail/share and absence of the moving forecast UI. The signed archive passes strict validation and embeds `com.curbnote.app`, Curbnote, version 1.0.0 and build 9.
+
+**Released: Curbnote 1.0.0 (9)** from `3615324` / `70f0b6d`. Apple build ID `133627ff-f666-4178-80c3-ff6ffd94cf6b` is `VALID` in App Store Connect. The internal-only TestFlight upload succeeded through the Aqua Terminal playbook. Source is pushed to `origin/deploy/prediction-first-20260821`.
+
+Artifacts: `/Users/mini-home/.local/share/curbnote-releases/testflight-20260905T224916Z`.
+
 ## Map clarity and shareable dots · build 8
 
 The launch map now shows only the user’s blue location dot. Evidence layers remain opt-in, and route endpoints appear only after a route is selected. Tapping an instance dot immediately highlights it and opens its detail sheet. Every map point now has a prominent Share this dot action for X, Messages and other share targets, with uncertainty-preserving copy and a stable public link.
