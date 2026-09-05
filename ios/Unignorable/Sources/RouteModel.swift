@@ -136,7 +136,11 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
     }
     nonisolated static func project(features: [String: [MapFeature]], layers: [String], lat: Double, lng: Double, latSpan: Double, lngSpan: Double) -> [MapFeature] {
         func distance(_ feature: MapFeature) -> Double { pow(feature.lat - lat, 2) + pow((feature.lng - lng) * cos(lat * .pi / 180), 2) }
-        let limit = latSpan > 0.08 ? 40 : latSpan > 0.03 ? 120 : 250
+        // Do not let dense supporting layers crowd known encampment dots out
+        // of a broad map view. Nearby filtering keeps this bounded at close
+        // zoom; the higher ceiling preserves every current prediction in the
+        // normal NYC launch viewport.
+        let limit = latSpan > 0.08 ? 1000 : latSpan > 0.03 ? 600 : 1000
         let all: [MapFeature] = layers.flatMap { features[$0] ?? [] }.filter { $0.isLikelyPresent }
         let nearby: [MapFeature] = all.filter {
             abs($0.lat - lat) <= max(latSpan * 0.65, 0.008) && abs($0.lng - lng) <= max(lngSpan * 0.65, 0.008)

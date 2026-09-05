@@ -412,30 +412,7 @@ struct ContentView: View {
     }
 
     private func predictionMarker(_ feature: MapFeature, highlighted: Bool = false) -> some View {
-        ZStack {
-            Circle()
-                .fill(predictionColor(for: feature.layer).opacity(0.2))
-                .frame(width: 50, height: 50)
-            Circle()
-                .fill(predictionColor(for: feature.layer))
-                .frame(width: 28, height: 28)
-                .overlay(Circle().stroke(.white, lineWidth: 2))
-            // Keep the condition marker a dot first: the white paper-plane
-            // glyph is the shared visual language from the original map,
-            // never a category-specific icon.
-            Image(systemName: "paperplane.fill")
-                .font(.system(size: 11, weight: .black))
-                .foregroundStyle(.white)
-        }
-        .overlay {
-            if highlighted {
-                Circle()
-                    .stroke(AppTheme.brand, lineWidth: 3)
-                    .frame(width: 58, height: 58)
-            }
-        }
-        .scaleEffect(highlighted ? 1.16 : 1)
-        .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+        IssueDot(color: predictionColor(for: feature.layer), severity: .lower, highlighted: highlighted)
         .accessibilityLabel(feature.forecastTitle)
         .accessibilityValue(feature.address ?? "Approximate mapped area")
     }
