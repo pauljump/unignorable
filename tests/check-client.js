@@ -22,7 +22,7 @@ if (!/id="forecast-card"[^>]*\shidden/.test(html) || !/id="map-tools"[^>]*\shidd
 for (const id of ['forecast-open', 'forecast-close', 'walk-open', 'layers-open', 'layers-close']) {
   if (!html.includes(`id="${id}"`)) throw new Error(`map-first control is missing: ${id}`);
 }
-if (!html.includes("function openWalkPlanner(){setTravelMode('walking')")) throw new Error('walking avoidance must remain available from the clear map');
+if (!html.includes("function openWalkPlanner(){closeWalkGuide();setTravelMode('walking')")) throw new Error('walking avoidance must remain available from the clear map');
 if (!html.includes("state.profile='walking';state.enabled=new Set();")) throw new Error('walking launch must start with explicit avoidance choices');
 if (!html.includes("visible:new Set(Object.keys(DEFS).filter(name=>name!=='alpr'))")) throw new Error('reported condition layers must be visible independently of route avoidance');
 if (!html.includes('width:calc(100vw - 16px);max-width:calc(100vw - 16px)')) throw new Error('the mobile forecast shell must fit inside the viewport');

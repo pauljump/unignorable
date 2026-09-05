@@ -43,7 +43,7 @@ test('walking avoidance never recommends an absurd detour just to reduce crossin
   assert.equal(chooseRecommended([direct, reasonable, aroundManhattan], 'walking'), 1);
 });
 
-test('walking directions collapse graph-edge walkway zigzags into human decisions', () => {
+test('walking directions preserve turns even when the router calls the surface a walkway', () => {
   const generic = [
     ['Walk southwest on the walkway.', 82, 'depart', null],
     ['Turn right onto the walkway.', 15, 'turn', 'right'],
@@ -57,11 +57,10 @@ test('walking directions collapse graph-edge walkway zigzags into human decision
     ['Turn left onto the walkway.', 966, 'turn', 'left'],
   ].map(([instruction, distance, type, modifier], index) => ({ instruction, distance, duration: distance, type, modifier, location: { lat: 40.73 + index / 1000, lng: -73.99 } }));
   const simplified = simplifyWalkingSteps([...generic, { instruction: 'You have arrived at your destination.', distance: 0, duration: 0, type: 'arrive' }]);
-  assert.equal(simplified.length, 2);
-  assert.equal(simplified[0].instruction, 'Follow the highlighted walking route.');
-  assert.equal(simplified[0].distance, 1227);
-  assert.doesNotMatch(simplified.map(step => step.instruction).join(' '), /walkway|crosswalk/i);
-  assert.equal(simplified[1].type, 'arrive');
+  assert.equal(simplified.length, 11);
+  assert.deepEqual(simplified.slice(0,10), generic);
+  assert.equal(simplified.reduce((sum,step)=>sum+step.distance,0), 1227);
+  assert.equal(simplified.at(-1).type, 'arrive');
 });
 
 test('walking direction cleanup preserves named turns and safety-critical transitions', () => {
@@ -73,12 +72,13 @@ test('walking direction cleanup preserves named turns and safety-critical transi
     { instruction: 'You have arrived at your destination.', distance: 0, duration: 0, type: 'arrive' },
   ]);
   assert.deepEqual(simplified.map(step => step.instruction), [
-    'Follow the highlighted walking route.',
+    'Walk west on the walkway.',
+    'Turn right onto the walkway.',
     'Turn left onto West 23rd Street.',
-    'Take the stairs to the pedestrian path.',
+    'Take the stairs to the walkway.',
     'You have arrived at your destination.',
   ]);
-  assert.equal(simplified[0].distance, 450);
+  assert.equal(simplified[0].distance, 420);
 });
 
 test('routing risk weights current evidence above stale or unverified reports', () => {
@@ -117,7 +117,7 @@ test('driving and walking exports are parseable, mobile-bounded, and honest abou
   assert.equal(urls.includesVia, true);
   const walking = exportUrls({ lat: 40.7, lng: -74 }, { lat: 40.72, lng: -73.95 }, line, 'walking');
   assert.equal(new URL(walking.google).searchParams.get('travelmode'), 'walking');
-  assert.equal(new URL(walking.apple).searchParams.get('mode'), 'walking');
+  assert.equal(new URL(walking.apple).searchParams.get('dirflg'), 'w');
 });
 
 test('ALPR vendors and 311 categories use explicit provenance rules', () => {
@@ -263,4 +263,28 @@ test('likely absent features never become route hits or hard exclusions', () => 
   assert.equal(route.metrics.homelessness, 0);
   assert.equal(route.selectedIntersections, 0);
   assert.equal(route.riskScore, 0);
+});
+
+test('walking handoffs use compatible endpoint links and separate stop legs, never sampled stops',()=>{
+  const start={lat:40.75,lng:-73.99},stop={name:'Coffee',lat:40.74,lng:-73.98},end={lat:40.73,lng:-73.97};
+  const handoff=exportUrls(start,end,[[-73.99,40.75],[-73.95,40.76],[-73.97,40.73]],'walking',stop);
+  assert.equal(handoff.shapingWaypoints,0);assert.equal(handoff.includesVia,false);assert.equal(handoff.legs.length,2);
+  for(const leg of handoff.legs){
+    const apple=new URL(leg.apple),google=new URL(leg.google);
+    assert.equal(apple.pathname,'/');assert.equal(apple.searchParams.get('dirflg'),'w');
+    assert.equal(google.searchParams.get('api'),'1');assert.equal(google.searchParams.get('travelmode'),'walking');
+    assert.equal(apple.searchParams.get('saddr'),google.searchParams.get('origin'));
+    assert.equal(apple.searchParams.get('daddr'),google.searchParams.get('destination'));
+    assert.equal(google.searchParams.has('waypoints'),false);assert.equal(apple.searchParams.has('waypoint'),false);
+  }
+  assert.equal(new URL(handoff.legs[0].google).searchParams.get('destination'),'40.740000,-73.980000');
+  assert.equal(new URL(handoff.legs[1].google).searchParams.get('origin'),'40.740000,-73.980000');
+  assert.equal(new URL(handoff.legs[1].google).searchParams.get('destination'),'40.730000,-73.970000');
+});
+test('long walking instructions retain the first movement, repeated turns and final arrival',()=>{
+  const steps=[{instruction:'Walk north on the walkway.',distance:12,duration:10,type:'depart'},
+    ...Array.from({length:90},(_,i)=>({instruction:'Turn left onto the walkway.',distance:20,duration:15,type:'turn',modifier:'left',location:{lat:40.7+i*.0001,lng:-73.9}})),
+    {instruction:'You have arrived at your destination.',distance:0,duration:0,type:'arrive'}];
+  const result=simplifyWalkingSteps(steps);
+  assert.deepEqual(result,steps);assert.equal(result.length,92);assert.equal(result.at(-1).type,'arrive');
 });

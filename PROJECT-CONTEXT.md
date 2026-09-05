@@ -1,5 +1,10 @@
 # Curbnote
 
+## Walking instruction ownership · September 5, 2026
+
+The Curbnote guide is now primary. Read [WALKING-GUIDE-20260905.md](./WALKING-GUIDE-20260905.md) for the handoff limitations, complete maneuver preservation, native/web step guide and actual release verification. External maps are secondary, explicitly separate route planning; walking links no longer pretend sampled waypoints transfer the generated avoidance walk. This supersedes earlier “Apple/Google are primary” descriptions below.
+
+
 ## Curbnote identity · September 5, 2026
 
 The product is now **Curbnote**. See [BRAND.md](./BRAND.md) for the mint/deep-green identity, icon and share assets, and [deploy/web.json](./deploy/web.json) for the current `curbnote.polyfeeds.dev` target. The native bundle identifier is `com.curbnote.app`, matching Apple ID `6809025615`. `curbnote.xyz` is planned after purchase. Historical Unignorable references below describe earlier releases; the canonical repository and runtime data paths remain unchanged.

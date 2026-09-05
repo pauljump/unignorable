@@ -292,7 +292,10 @@ const ROUTE_STRATEGIES = Object.freeze({
 // old portfolio + beam fan-out could produce ten concurrent requests for a single map update.
 const PRIMARY_ROUTE_STRATEGY = Object.freeze({ driving: ROUTE_STRATEGIES.driving[0], walking: ROUTE_STRATEGIES.walking[0] });
 function directionSteps(route, profile) {
-  const steps = route && route.legs && route.legs.flatMap(leg => leg.steps || []) || [];
+  const legs = route?.legs || [];
+  const steps = legs.flatMap((leg, index) => (leg.steps || []).map(step =>
+    index < legs.length - 1 && step.maneuver?.type === 'arrive'
+      ? { ...step, maneuver: { ...step.maneuver, instruction: 'Arrive at your planned stop.' } } : step));
   const normalized = steps.map(step => ({
     instruction: step.maneuver && step.maneuver.instruction,
     distance: Number(step.distance) || 0,
@@ -301,7 +304,7 @@ function directionSteps(route, profile) {
     modifier: step.maneuver && step.maneuver.modifier || null,
     location: Array.isArray(step.maneuver && step.maneuver.location) && step.maneuver.location.length >= 2
       ? { lng: Number(step.maneuver.location[0]), lat: Number(step.maneuver.location[1]) } : null,
-  })).filter(step => step.instruction).slice(0, 80);
+  })).filter(step => step.instruction);
   return profile === 'walking' ? simplifyWalkingSteps(normalized) : normalized;
 }
 
@@ -2331,7 +2334,7 @@ async function handleRequest(req, res) {
     const responsePayload = {
       ok: true, profile, selected, via, source: designed.upstream.source, cached: designed.upstream.cached, cache_hit: false, fixture: designed.upstream.fixture,
       routing_method: 'valhalla-bounded-avoidance-v4',
-      directions_method: profile === 'walking' ? 'human-decision-summary-v1' : 'router-maneuvers',
+      directions_method: profile === 'walking' ? 'complete-walking-maneuvers-v2' : 'router-maneuvers',
       strategy_portfolio: [(PRIMARY_ROUTE_STRATEGY[profile] || PRIMARY_ROUTE_STRATEGY.driving).name],
       avoidance: {
         requested: selected.length > 0,
@@ -2347,7 +2350,7 @@ async function handleRequest(req, res) {
       },
       radii_meters: LAYER_RADII,
       recommendation_policy: selected.length ? 'Selected locations are sent in one compact hard-exclusion batch where possible; the original route is retained if that avoidance search cannot return a plausible corridor. Returned lines are ranked by selected crossings, evidence-weighted risk, then time and distance.' : 'fastest route',
-      caveat: 'Selected locations are sent as hard exclusion polygons where possible and every returned line is rechecked against the wider evidence buffer. Map observations do not show whether a camera captured you or whether a reported condition is present now. The in-app line and GPX preserve the generated route. Google and Apple Maps receive the intentional stop plus a bounded set of shaping waypoints, but may recalculate.',
+      caveat: 'Selected locations are sent as hard exclusion polygons where possible and every returned line is rechecked against the wider evidence buffer. Map observations do not show whether a camera captured you or whether a reported condition is present now. The in-app line and GPX preserve the generated route. External maps plan their own route and do not preserve Curbnote avoidance. Use the Curbnote guide or GPX for the generated walk; optional walking stops have separate external links for each leg.',
       routes,
     };
     storeRoute(cacheKey, responsePayload);

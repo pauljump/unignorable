@@ -222,6 +222,29 @@ function shapingWaypoints(coordinates, max = 9) {
 
 function exportUrls(origin, destination, coordinates, profile = 'driving', via = null) {
   const coord = p => `${Number(p.lat).toFixed(6)},${Number(p.lng).toFixed(6)}`;
+  if (profile === 'walking') {
+    // A map URL requests a new route; it cannot import our polyline or exclusions.
+    // Use the older Apple endpoint for iOS 17+ compatibility. Explicit stops get
+    // separate legs so unsupported multi-stop walking cannot silently skip them.
+    const links = (from, to) => {
+      const google = new URL('https://www.google.com/maps/dir/');
+      google.searchParams.set('api', '1');
+      google.searchParams.set('origin', coord(from));
+      google.searchParams.set('destination', coord(to));
+      google.searchParams.set('travelmode', 'walking');
+      const apple = new URL('https://maps.apple.com/');
+      apple.searchParams.set('saddr', coord(from));
+      apple.searchParams.set('daddr', coord(to));
+      apple.searchParams.set('dirflg', 'w');
+      return { apple: apple.toString(), google: google.toString() };
+    };
+    const legs = via
+      ? [{ id: 'to-stop', name: `To stop: ${via.name || 'planned stop'}`, ...links(origin, via) },
+         { id: 'to-destination', name: 'From stop to destination', ...links(via, destination) }]
+      : [{ id: 'to-destination', name: 'To destination', ...links(origin, destination) }];
+    return { ...links(origin, destination), shapingWaypoints: 0, externalWaypoints: 0,
+      includesVia: false, handoff: 'separate_walking_legs', legs };
+  }
   // Google Maps URLs reliably accept at most three waypoints in mobile browsers. Keep the
   // intentional stop first, then use the remaining slots to suggest the generated corridor.
   // External map apps remain free to recalculate; the in-app polyline/GPX is the exact route.
@@ -251,85 +274,23 @@ function exportUrls(origin, destination, coordinates, profile = 'driving', via =
   };
 }
 
-const GENERIC_WALK_SURFACE = /\b(?:walkway|crosswalk|footway|footpath|sidewalk|pedestrian (?:path|way)|unnamed (?:road|path)|path)\b/i;
-const CRITICAL_WALK_TRANSITION = /\b(?:stairs?|steps?|elevator|escalator|ferry|platform|subway|tunnel|bridge|ramp)\b/i;
-const LONG_GENERIC_WALK_METERS = 300;
-
-// OSRM-style pedestrian steps expose every edge transition in the underlying OSM graph. Around
-// plazas, offset crosswalks, and mapped sidewalks that can mean ten alternating "turn onto the
-// walkway" rows for a walk with one meaningful street decision. Preserve named-road decisions and
-// safety-critical transitions, but summarize low-information pedestrian geometry as one highlighted
-// corridor. The route line is unchanged; this only makes the instruction list human-readable.
+// Keep every actual turn, crossing, stop and arrival. Only identical straight
+// continuations may merge. Geometry alone is not a substitute for walking instructions.
 function simplifyWalkingSteps(steps) {
   if (!Array.isArray(steps)) return [];
-  const input = steps.filter(step => step && typeof step.instruction === 'string' && step.instruction.trim()).map(step => ({
-    ...step,
-    instruction: step.instruction.trim(),
-    distance: Math.max(0, Number(step.distance) || 0),
-    duration: Math.max(0, Number(step.duration) || 0),
-  }));
   const output = [];
-  let pending = [];
-  const totals = group => ({
-    distance: group.reduce((sum, step) => sum + step.distance, 0),
-    duration: group.reduce((sum, step) => sum + step.duration, 0),
-  });
-  const isSummary = step => /highlighted walking route/i.test(step && step.instruction || '');
-  const pushSummary = group => {
-    if (!group.length) return;
-    const total = totals(group);
-    if (!output.length && total.distance < 35) return;
-    if (output.length && total.distance < 160 && group.length < 3) {
-      const previous = output[output.length - 1];
-      previous.distance += total.distance;
-      previous.duration += total.duration;
-      return;
-    }
-    if (isSummary(output[output.length - 1])) {
-      output[output.length - 1].distance += total.distance;
-      output[output.length - 1].duration += total.duration;
-      return;
-    }
-    const first = group[0], last = group[group.length - 1];
-    const preserveTurn = group.length === 1 && output.length && /^(?:left|right|slight left|slight right)$/i.test(last.modifier || '');
-    const instruction = !output.length
-      ? 'Follow the highlighted walking route.'
-      : preserveTurn
-        ? `Turn ${String(last.modifier).toLowerCase()} and follow the highlighted walking route.`
-        : 'Continue on the highlighted walking route.';
-    output.push({
-      instruction,
-      distance: total.distance,
-      duration: total.duration,
-      type: output.length ? 'continue' : (first.type || 'depart'),
-      modifier: preserveTurn ? last.modifier : null,
-      location: first.location || null,
-    });
-  };
-  const flushPending = () => { const group = pending; pending = []; pushSummary(group); };
-
-  for (const step of input) {
-    const critical = CRITICAL_WALK_TRANSITION.test(step.instruction);
-    const generic = GENERIC_WALK_SURFACE.test(step.instruction) && !critical;
-    if (generic) {
-      pending.push(step);
-      if (step.distance >= LONG_GENERIC_WALK_METERS) flushPending();
-      continue;
-    }
-    flushPending();
-    const normalized = critical
-      ? { ...step, instruction: step.instruction.replace(/\bthe walkway\b/gi, 'the pedestrian path') }
-      : step;
+  for (const step of steps) {
+    if (!step || typeof step.instruction !== 'string' || !step.instruction.trim()) continue;
+    const normalized = { ...step, instruction: step.instruction.trim(),
+      distance: Math.max(0, Number(step.distance) || 0), duration: Math.max(0, Number(step.duration) || 0) };
     const previous = output[output.length - 1];
-    if (previous && previous.instruction.toLowerCase() === normalized.instruction.toLowerCase()) {
-      previous.distance += normalized.distance;
-      previous.duration += normalized.duration;
-    } else {
-      output.push({ ...normalized });
-    }
+    const straight = item => item && item.type === 'continue' && (!item.modifier || item.modifier === 'straight')
+      && !/\b(turn|cross|stairs?|steps?|elevator|bridge|tunnel|arriv|stop)\b/i.test(item.instruction);
+    if (straight(previous) && straight(normalized) && previous.instruction === normalized.instruction) {
+      previous.distance += normalized.distance; previous.duration += normalized.duration;
+    } else output.push(normalized);
   }
-  flushPending();
-  return output.slice(0, 32);
+  return output;
 }
 
 module.exports = { pointInGeoJSON, distanceMeters, pointSegmentDistanceMeters, routeIntersectsPoint, routeHitFeatures, featureRadius, featureRisk, scoreRoute, plausibleRoutes, chooseRecommended, shapingWaypoints, exportUrls, simplifyWalkingSteps, LAYER_RADII, LAYER_WEIGHTS, CONDITION_CONFIDENCE };

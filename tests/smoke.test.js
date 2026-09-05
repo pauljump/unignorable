@@ -158,7 +158,7 @@ test('health and public assets are available with security headers', async () =>
   assert.match(rootHtml, /Live Citi Bike/);
   assert.match(rootHtml, /api\/discover\/citibike/);
   assert.match(rootHtml, /L\.circleMarker\(\[state\.endpoints\.origin/);
-  assert.match(rootHtml, /Turn-by-turn · \$\{steps\.length\} steps/);
+  assert.match(rootHtml, /Walk with Curbnote · \$\{steps\.length\} steps/);
   assert.match(rootHtml, /Finding your \$\{state\.profile\} route/);
   assert.match(rootHtml, /tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png/);
   assert.match(rootHtml, /leaflet-tile-pane\{filter:invert\(1\) hue-rotate\(180deg\)/);
@@ -345,11 +345,12 @@ test('free map layers and deterministic route comparison are available', async (
   assert.equal(walkingResponse.status, 200);
   const walking = await walkingResponse.json();
   assert.equal(walking.profile, 'walking');
-  assert.equal(walking.directions_method, 'human-decision-summary-v1');
+  assert.equal(walking.directions_method, 'complete-walking-maneuvers-v2');
   assert.ok(walking.routes.every(route => route.steps.length > 0));
   assert.equal(new URL(walking.routes[0].export.google).searchParams.get('travelmode'), 'walking');
-  assert.equal(new URL(walking.routes[0].export.apple).searchParams.get('mode'), 'walking');
-  assert.ok(new URL(walking.routes[0].export.apple).searchParams.getAll('waypoint').length > 0);
+  assert.equal(new URL(walking.routes[0].export.apple).searchParams.get('dirflg'), 'w');
+  assert.equal(new URL(walking.routes[0].export.apple).searchParams.getAll('waypoint').length, 0);
+  assert.equal(walking.routes[0].export.legs.length,1);
 
   const fastestOnly = await fetch(`${origin}/api/routes`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
