@@ -66,7 +66,7 @@ struct ContentView: View {
             case .controls(let focus): ControlsView(focus: focus)
             case .mapContent: mapContentSheet
             case .directions: DirectionsView()
-            case .feature(let feature): FeatureDetailView(feature: feature)
+            case .feature(let feature): FeatureDetailView(feature: feature).presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
             case .reportIssue(let issue): ReportIssueDetailView(issue: issue)
             }
         }
@@ -97,7 +97,7 @@ struct ContentView: View {
 
             if let forecast = model.primaryForecast {
                 Annotation("Presence forecast", coordinate: forecast.coordinate) {
-                    Button { activeSheet = .feature(forecast) } label: {
+                    Button { inspectFeature(forecast) } label: {
                         forecastMarker(forecast)
                     }
                     .buttonStyle(.plain)
@@ -107,15 +107,12 @@ struct ContentView: View {
 
             ForEach(model.visibleFeatures.filter { $0.id != model.primaryForecast?.id }) { feature in
                 Annotation("", coordinate: feature.coordinate) {
-                    if feature.condition?.routingLevel == "hard"
-                        || (feature.subjectType == "encampment" && model.visibleRegion.span.latitudeDelta < 0.015) {
-                        Button { activeSheet = .feature(feature) } label: {
-                            marker(for: feature)
-                        }
-                        .buttonStyle(.plain)
-                    } else {
-                        marker(for: feature).allowsHitTesting(false)
+                    Button { inspectFeature(feature) } label: {
+                        marker(for: feature).frame(width: 32, height: 32).contentShape(Circle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(feature.address ?? feature.layer ?? "Reported condition")
+                    .accessibilityIdentifier("evidence-marker-" + feature.id)
                 }
             }
 
@@ -201,6 +198,15 @@ struct ContentView: View {
         } else {
             model.status = "No active public record within 450 m of the map center."
         }
+    }
+
+    private func inspectFeature(_ feature: MapFeature) {
+        // Put the selected dot in the upper map area, above the medium detail sheet.
+        let span = model.visibleRegion.span
+        model.position = .region(.init(
+            center: .init(latitude: feature.lat - span.latitudeDelta * 0.25, longitude: feature.lng),
+            span: span))
+        activeSheet = .feature(feature)
     }
 
     private func zoomReportMarker(_ marker: ReportMarker) {
@@ -342,7 +348,7 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(AppTheme.brand)
 
-                    Button { activeSheet = .feature(feature) } label: {
+                    Button { inspectFeature(feature) } label: {
                         Label("Why / verify", systemImage: "checkmark.shield")
                             .frame(maxWidth: .infinity, minHeight: 38)
                     }

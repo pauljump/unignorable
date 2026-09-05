@@ -78,6 +78,10 @@
     .forecast-share-card{margin-top:11px;padding:13px;border:1px solid #76521b;border-radius:12px;background:linear-gradient(145deg,#1c1608,#0b111c)}.forecast-share-card[hidden]{display:none}.share-kicker{color:var(--amber);font-size:9px;font-weight:850;letter-spacing:.11em;text-transform:uppercase}.forecast-share-card h2{font-size:19px;line-height:1.12;letter-spacing:-.04em;margin:6px 0 4px}.share-place,.share-facts,.share-fine{color:var(--muted);font-size:10px;line-height:1.4}.share-facts{margin-top:8px;color:var(--ink)}.share-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:11px}.share-actions button{min-height:44px;border:1px solid var(--line);border-radius:9px;background:#16202f;color:var(--ink);font-size:10px;font-weight:800;padding:7px}.share-actions .share-x{background:var(--red);border-color:var(--red);color:white}.share-actions .share-native{grid-column:1/-1}.share-status{min-height:14px;margin:7px 1px 0;color:var(--amber);font-size:10px;line-height:1.35}.share-fine{margin:8px 1px 0;font-size:9px}
   </style>
 <link rel="stylesheet" href="/launch.css">
+<style>
+.map-visibility-title{margin:14px 12px 6px;font-size:16px}.map-visibility-copy{margin:0 12px 12px;font-size:12px;line-height:1.4;color:var(--muted)}.map-visibility-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:0 12px 14px;border-bottom:1px solid var(--line)}.map-visibility-grid .chip{min-width:0}.map-visibility-grid .chip span:last-child{white-space:normal}
+@media(max-width:720px){body:has(.shell>#forecast-card:not([hidden])) .shell{inset:auto 8px calc(8px + env(safe-area-inset-bottom));height:min(54dvh,540px);max-height:54dvh;overflow:visible}body:has(.shell>#forecast-card:not([hidden])) .launch-feedback-link{display:none}#forecast-card{height:100%;overscroll-behavior:contain}.map-visibility-grid .chip{min-height:44px}}
+</style>
 </head>
 <body>
 <main id="app">
@@ -111,8 +115,8 @@
       <div class="via-stop" id="via-stop" hidden><b>C</b><span id="via-name"></span><button id="remove-via" type="button" aria-label="Remove stop">×</button></div>
       <div class="planner-actions"><span class="route-hint" id="route-hint">Map is free · routes are $1/day or $25/year</span><button class="locate" id="locate" type="button" title="Use current location">◎</button></div>
     </form>
-    <details class="card tool-drawer" id="map-tools" hidden><summary class="tool-summary">More map layers, data and stops</summary><section class="filters" id="filter-card" aria-label="Map and route awareness filters">
-        <div class="section-head"><div><b>Show and route around</b><span class="layer-status" id="layer-status">1 selected</span></div><div><button class="discover-toggle" id="discover-toggle" type="button" aria-expanded="false">Citi Bike</button><button id="toggle-all" type="button">Clear</button><button class="layers-toggle" id="layers-toggle" type="button" aria-expanded="false" aria-controls="filters">Edit</button></div></div>
+    <details class="card tool-drawer" id="map-tools" hidden><summary class="tool-summary">More map layers, data and stops</summary><section class="filters" id="filter-card" aria-label="Map visibility and optional route avoidance"><h3 class="map-visibility-title">Show on map</h3><p class="map-visibility-copy">Dots are approximate reported areas. Showing them does not turn on route avoidance.</p><div class="map-visibility-grid" id="map-visibility"></div>
+        <div class="section-head"><div><b>Route avoidance (optional)</b><span class="layer-status" id="layer-status">1 selected</span></div><div><button class="discover-toggle" id="discover-toggle" type="button" aria-expanded="false">Citi Bike</button><button id="toggle-all" type="button">Clear</button><button class="layers-toggle" id="layers-toggle" type="button" aria-expanded="false" aria-controls="filters">Edit</button></div></div>
         <div class="filter-grid" id="filters"></div>
         <p class="layer-hint" id="layer-hint">Selected layers show on the map and shape routes.</p>
         <div class="discover" id="discover"><p>Show live Citi Bike stations near your route, then tap a station to add it as a stop.</p><button class="discover-choice" id="citibike-toggle" type="button" aria-pressed="false"><span>Live Citi Bike <small>available bikes + docks</small></span><span>+</span></button></div>
@@ -140,12 +144,14 @@ const REPORT_TYPES={
   'Homeless Person Assistance':{label:'Homeless assist',color:'#4ad6c8',layer:'homelessness'},
   'Panhandling':{label:'Panhandling',color:'#ffc24b',layer:'homelessness'}
 };
-const state={data:null,enabled:new Set(),featureGroup:null,routes:[],routeLines:[],selectedRoute:0,endpoints:null,via:null,routeRequest:0,routeTimer:null,routeController:null,profile:'walking',avoidance:null,access:null,forecast:{feature:null,group:null,anchor:null,lastAnnouncement:null,conditionLoop:null,loopRequest:0,loopFeatureId:null,loopLoadedAt:0,restoringUrl:false},discover:{citibike:false,group:null,timer:null},report:{issues:null,enabled:new Set(),group:null,current:null,selectedStatus:null,photo:null,promise:null,error:null}};
+const state={data:null,enabled:new Set(),visible:new Set(Object.keys(DEFS).filter(name=>name!=='alpr')),featureGroup:null,routes:[],routeLines:[],selectedRoute:0,endpoints:null,via:null,routeRequest:0,routeTimer:null,routeController:null,profile:'walking',avoidance:null,access:null,forecast:{feature:null,group:null,anchor:null,lastAnnouncement:null,conditionLoop:null,loopRequest:0,loopFeatureId:null,loopLoadedAt:0,restoringUrl:false},discover:{citibike:false,group:null,timer:null},report:{issues:null,enabled:new Set(),group:null,current:null,selectedStatus:null,photo:null,promise:null,error:null}};
 const PREF_KEY='unignorable-regular-route-v2';
-const canvas=L.canvas({padding:.5});
+const canvas=L.canvas({padding:.5,tolerance:8});
 const map=L.map('map',{zoomControl:true,renderer:canvas,minZoom:10,maxZoom:19}).setView([40.74482,-73.98511],15);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'}).addTo(map);
 const routeGroup=L.featureGroup().addTo(map),endpointGroup=L.layerGroup().addTo(map);
+map.createPane('selection');map.getPane('selection').style.zIndex=650;
+const selectionRenderer=L.svg({pane:'selection'});
 state.forecast.group=L.layerGroup().addTo(map);
 state.discover.group=L.layerGroup().addTo(map);
 state.report.group=L.layerGroup().addTo(map);
@@ -280,17 +286,18 @@ function syncForecastUrl(push=false){
   if(state.forecast.restoringUrl)return;const next=forecastSelectionUrl();if(next.href===location.href)return;
   history[push?'pushState':'replaceState']({mode:state.forecast.feature||state.forecast.anchor?'forecast':'map'},'',next);
 }
-function selectForecastAnchor(anchor,{move=true,push=true,open=true}={}){
+function selectForecastAnchor(anchor,{move=true,push=true,open=true,featureId=null}={}){
   if(!anchor||!Number.isFinite(Number(anchor.lat))||!Number.isFinite(Number(anchor.lng)))return;
-  state.forecast.anchor={name:String(anchor.name||'Selected map point'),lat:Number(anchor.lat),lng:Number(anchor.lng)};
-  if(move)map.setView([state.forecast.anchor.lat,state.forecast.anchor.lng],Math.max(16,map.getZoom()),{animate:false});if(open)openForecastPanel();renderForecast();syncForecastUrl(push);
+  state.forecast.anchor={name:String(anchor.name||'Selected map point'),lat:Number(anchor.lat),lng:Number(anchor.lng)};state.forecast.selectedId=featureId;
+  if(move)map.setView([state.forecast.anchor.lat,state.forecast.anchor.lng],Math.max(16,map.getZoom()),{animate:false});if(open)openForecastPanel();renderForecast();syncForecastUrl(push);if(open)requestAnimationFrame(revealForecastSelection);
 }
 function clearForecastSelection({push=true,focusButton=false}={}){
-  state.forecast.anchor=null;state.forecast.feature=null;state.forecast.group.clearLayers();document.getElementById('forecast-check').hidden=true;document.getElementById('forecast-card').hidden=true;document.getElementById('forecast-open').setAttribute('aria-expanded','false');
+  state.forecast.anchor=null;state.forecast.feature=null;state.forecast.selectedId=null;state.forecast.group.clearLayers();document.getElementById('forecast-check').hidden=true;document.getElementById('forecast-card').hidden=true;document.getElementById('forecast-open').setAttribute('aria-expanded','false');
   const input=document.getElementById('forecast-location');input._place=null;input.value='';syncForecastUrl(push);if(focusButton)document.getElementById('forecast-open').focus();
 }
 function nearestForecast(){
   const center=state.forecast.anchor,limit=1200;if(!center)return null;
+  const selected=forecastById(state.forecast.selectedId);if(selected)return {feature:selected,distance:reportDistanceMeters(center,selected)};
   let best=null,bestDistance=Infinity,bestQuality=-1;
   for(const feature of forecastCandidates()){
     const distance=reportDistanceMeters(center,feature),forecast=forecastFor(feature),quality=(forecast.probability!=null?3:0)+(forecast.window?2:0)+(feature.condition?1:0);
@@ -315,11 +322,26 @@ function forecastPlaceText(feature,nearest,spatial,uncertainty){
   else location+=' · Selected place is within the forecast uncertainty';
   return `${location} · approximate ±${radius} m`;
 }
+function drawForecastAnchor(){
+  const anchor=state.forecast.anchor;if(!anchor)return;
+  L.circleMarker([anchor.lat,anchor.lng],{renderer:selectionRenderer,radius:6,color:'#72e2bd',weight:3,fillColor:'#142722',fillOpacity:1,interactive:false}).bindTooltip('Selected point').addTo(state.forecast.group);
+}
+function revealForecastSelection(){
+  const focus=state.forecast.feature||state.forecast.anchor;if(!focus)return;
+  const panel=document.getElementById('forecast-card');if(panel.hidden)return;
+  const mapRect=document.getElementById('map').getBoundingClientRect(),rect=panel.getBoundingClientRect();
+  const point=map.latLngToContainerPoint([focus.lat,focus.lng]);
+  const left=compactMap()?32:Math.max(32,rect.right-mapRect.left+28);
+  const right=mapRect.width-32,top=70,bottom=compactMap()?rect.top-mapRect.top-36:mapRect.height-40;
+  if(right<=left||bottom<=top)return;
+  const anchors=[focus,state.forecast.anchor].filter(Boolean),covered=anchors.some(anchor=>{const p=map.latLngToContainerPoint([anchor.lat,anchor.lng]);return p.x<left||p.x>right||p.y<top||p.y>bottom;});
+  if(covered)map.fitBounds(L.latLngBounds(anchors.map(anchor=>[anchor.lat,anchor.lng])),{paddingTopLeft:[left,top],paddingBottomRight:[mapRect.width-right,mapRect.height-bottom],maxZoom:map.getZoom(),animate:false});
+}
 function renderForecast(){
-  const body=document.getElementById('forecast-body'),nearest=nearestForecast(),check=document.getElementById('forecast-check');state.forecast.group.clearLayers();check.hidden=true;document.getElementById('condition-status').textContent='';
+  const body=document.getElementById('forecast-body'),nearest=nearestForecast(),check=document.getElementById('forecast-check');state.forecast.group.clearLayers();drawForecastAnchor();check.hidden=true;document.getElementById('condition-status').textContent='';
   if(!nearest){
     state.forecast.feature=null;body.classList.add('forecast-empty');document.getElementById('forecast-kicker').textContent='Location forecast';
-    const title=state.data?'Choose an NYC place':'Reading this area…';document.getElementById('forecast-title').textContent=title;document.getElementById('forecast-place').textContent=state.data?'Search an address or tap the map. Panning does not change your selection.':'Loading public condition evidence…';
+    const title=state.data?(state.forecast.anchor?'No modeled condition near this point':'Choose an NYC place'):'Reading this area…';document.getElementById('forecast-title').textContent=title;document.getElementById('forecast-place').textContent=state.data?'Search an address or tap the map. Panning does not change your selection.':'Loading public condition evidence…';
     document.getElementById('forecast-window-box').hidden=true;document.getElementById('forecast-confidence').innerHTML='<span class="confidence-pill">No current estimate</span><span>Beta · uncalibrated</span>';document.getElementById('forecast-basis').textContent='A directional forecast needs recurring, recent condition evidence near the selected place. Scores are uncalibrated heuristics, not measured probabilities.';
     document.getElementById('forecast-site-pattern').textContent='No site selected';document.getElementById('forecast-score').textContent='Not available';document.getElementById('forecast-range').textContent='Not available';document.getElementById('forecast-tier').textContent='Not enough current evidence';document.getElementById('forecast-recency').textContent='—';document.getElementById('forecast-location-detail').textContent='No modeled area nearby';document.getElementById('forecast-time-detail').textContent='No reliable pattern published';
     state.forecast.conditionLoop=null;renderConditionLoop(null);renderForecastShareCard(null);announceForecast(title,'empty');return;
@@ -336,7 +358,7 @@ function renderForecast(){
   const timeDays=Number(forecast.window?.days_in_window),sample=Number(firstValue(forecast.window?.sample_size,forecast.window?.report_days));document.getElementById('forecast-time-detail').textContent=timeWindow?[windowStrength?`${windowStrength[0].toUpperCase()+windowStrength.slice(1)} pattern`:null,Number.isFinite(timeDays)&&Number.isFinite(sample)?`${fmt(timeDays)} of ${fmt(sample)} report days`:null,'Not a presence schedule'].filter(Boolean).join(' · '):forecast.window?'Weak pattern omitted from primary card':'No reliable pattern published';
   renderForecastShareCard(feature);loadConditionLoop(feature);
   announceForecast(label,feature.id||`${feature.lat},${feature.lng}`);
-  L.circleMarker([feature.lat,feature.lng],{renderer:canvas,radius:13,color:'#fff',weight:3,fillColor:'#ff5a47',fillOpacity:1,bubblingMouseEvents:false}).on('click',()=>{openForecastPanel();syncForecastUrl(false);document.getElementById('forecast-card').scrollTo({top:0,behavior:'auto'});}).addTo(state.forecast.group);
+  L.circleMarker([feature.lat,feature.lng],{renderer:selectionRenderer,radius:10,color:'#fff',weight:3,fillColor:'#ff5a47',fillOpacity:1,bubblingMouseEvents:false}).on('click',()=>{openForecastPanel();syncForecastUrl(false);document.getElementById('forecast-card').scrollTo({top:0,behavior:'auto'});}).addTo(state.forecast.group);
 }
 
 function isConditionObservationFeature(feature){return feature?.layer==='homelessness'&&feature?.subject_type==='encampment'&&Boolean(feature.id);}
@@ -372,6 +394,9 @@ function restorePlanner(){
 }
 
 function buildFilters(){
+  const visibility=document.getElementById('map-visibility');
+  visibility.innerHTML=Object.entries(DEFS).map(([id,d])=>`<button class="chip" type="button" style="--chip:${d.color}" data-visible-layer="${id}" aria-pressed="${state.visible.has(id)}"><span class="dot"></span><span>${d.label}</span></button>`).join('');
+  visibility.addEventListener('click',event=>{const button=event.target.closest('[data-visible-layer]');if(!button)return;const name=button.dataset.visibleLayer;if(state.visible.has(name))state.visible.delete(name);else state.visible.add(name);button.setAttribute('aria-pressed',String(state.visible.has(name)));drawFeatures();});
   const root=document.getElementById('filters');
   root.innerHTML=Object.entries(DEFS).map(([id,d])=>`<button class="chip${id==='alpr'?' wide':''}" style="--chip:${d.color}" type="button" data-layer="${id}" aria-pressed="${state.enabled.has(id)}"><span class="dot"></span><span>${d.label}<small>${d.detail}</small></span></button>`).join('');
   root.addEventListener('click',event=>{const button=event.target.closest('[data-layer]');if(!button)return;const name=button.dataset.layer;if(state.enabled.has(name))state.enabled.delete(name);else state.enabled.add(name);button.setAttribute('aria-pressed',String(state.enabled.has(name)));syncLayers();scheduleRoute(120);});
@@ -397,7 +422,7 @@ function featureSeverity(feature){
   return feature.condition?.routingLevel==='hard'||Number(feature.count)>=20?'high':feature.condition?.routingLevel==='soft'||Number(feature.count)>=5?'elevated':'lower';
 }
 function featureMarkerStyle(level,fill,cluster=false){
-  return {renderer:canvas,radius:cluster?3:2.5,color:level==='high'?'#eaf0fb':level==='elevated'?'#ffc24b':'#28344a',weight:level==='lower'?1:1.5,fillColor:fill,fillOpacity:.92};
+  return {renderer:canvas,radius:cluster?7:5,color:level==='high'?'#eaf0fb':level==='elevated'?'#ffc24b':'#28344a',weight:level==='lower'?1:1.5,fillColor:fill,fillOpacity:.92,bubblingMouseEvents:false};
 }
 function featureCellSize(zoom){
   if(zoom>=13)return .004;if(zoom>=12)return .008;if(zoom>=11)return .016;if(zoom>=10)return .03;return .06;
@@ -405,15 +430,18 @@ function featureCellSize(zoom){
 function drawFeatures(){
   if(state.featureGroup)state.featureGroup.remove();
   state.featureGroup=L.layerGroup().addTo(map);
-  if(!state.data||!state.enabled.size)return;
+  if(!state.data||!state.visible.size)return;
   const zoom=map.getZoom(),entries=[];
-  for(const name of state.enabled){
+  for(const name of state.visible){
     for(const feature of (state.data.layers&&state.data.layers[name])||[])entries.push({feature,name});
   }
   if(zoom>=FULL_DETAIL_ZOOM||entries.length<=600){
     const bounds=map.getBounds().pad(.3);
     entries.filter(({feature})=>bounds.contains([feature.lat,feature.lng])).slice(0,1500).forEach(({feature,name})=>{
-      L.circleMarker([feature.lat,feature.lng],featureMarkerStyle(featureSeverity(feature),DEFS[name].color)).bindPopup(popup(feature),{maxWidth:290}).addTo(state.featureGroup);
+      const marker=L.circleMarker([feature.lat,feature.lng],featureMarkerStyle(featureSeverity(feature),DEFS[name].color));
+      if(feature.subject_type==='encampment'&&forecastFor(feature).probability!=null)marker.on('click',()=>selectForecastAnchor({name:feature.address||feature.addr||'Reported area',lat:feature.lat,lng:feature.lng},{featureId:feature.id,move:false}));
+      else marker.bindPopup(popup(feature),{maxWidth:290});
+      marker.addTo(state.featureGroup);
     });
     return;
   }
@@ -434,9 +462,9 @@ function drawFeatures(){
 
 function syncLayers(){
   const buttons=[...document.querySelectorAll('[data-layer]')];buttons.forEach(button=>button.setAttribute('aria-pressed',String(state.enabled.has(button.dataset.layer))));
-  document.getElementById('toggle-all').textContent=state.enabled.size?'Clear':'Select all';
+  document.getElementById('toggle-all').textContent=state.enabled.size?'Clear avoidance':'Avoid all';
   document.getElementById('layer-status').textContent=state.enabled.size?`${state.enabled.size} selected`:'Fastest route';
-  document.getElementById('layer-hint').textContent=state.enabled.size?'Selected layers show here and shape every route.':'No avoidance selected; routes use the fastest plausible corridor.';
+  document.getElementById('layer-hint').textContent=state.enabled.size?'Avoidance choices shape your route. Map visibility is independent.':'No avoidance selected. Visible reports do not change your route.';
   drawFeatures();
 }
 
@@ -613,7 +641,7 @@ function invalidateRoutes(){
 }
 
 function renderPaywall(message=''){
-  const root=document.getElementById('results');root.hidden=false;document.getElementById('shell').classList.add('has-results');
+  const root=document.getElementById('results');root.hidden=document.getElementById('route-form').hidden;document.getElementById('shell').classList.toggle('has-results',!root.hidden);
   root.innerHTML=`<button class="results-back" type="button" data-results-back>← Back to map</button><div class="paywall"><h2>Your regular route, without the parts you avoid.</h2><p>${esc(message||'The map is free. Unlock unlimited driving and walking routes on this browser.')}</p><div class="plans"><button class="plan" type="button" data-plan="day"><b>$1</b><span>24 hours · one-time</span></button><button class="plan best" type="button" data-plan="year"><b>$25</b><span>one year · one-time</span></button></div><small>Secure checkout by Stripe. Your addresses and avoidance choices stay in this browser and return after checkout.</small></div>`;
   root.querySelectorAll('[data-plan]').forEach(button=>button.addEventListener('click',()=>startCheckout(button.dataset.plan,button)));
 }
@@ -674,14 +702,14 @@ function downloadExactRoute(route){
 }
 
 function renderResults(message){
-  const root=document.getElementById('results');root.hidden=false;document.getElementById('shell').classList.add('has-results');
+  const root=document.getElementById('results');root.hidden=document.getElementById('route-form').hidden;document.getElementById('shell').classList.toggle('has-results',!root.hidden);
   if(message){root.innerHTML=`<button class="results-back" type="button" data-results-back>← Back to map</button><div class="status">${esc(message)}</div>`;return;}
   const selected=state.routes[state.selectedRoute];
   const remaining=state.avoidance&&state.avoidance.remaining_intersections||0;
   const policy=state.enabled.size?(state.avoidance.improved?`The direct choice crossed ${fmt(state.avoidance.baseline_intersections)} high-confidence locations. This route reduces that to ${fmt(remaining)}.`:remaining?`The router tried ${fmt(state.avoidance.excluded_areas)} hard exclusions. The cleanest reasonable route still passes ${fmt(remaining)} high-confidence location${remaining===1?'':'s'}.`:`No high-confidence selected locations are crossed.`):'No avoidance selected; the fastest plausible route is recommended.';
   const steps=(selected.steps&&selected.steps.length?selected.steps:[{instruction:'Follow the highlighted avoidance route to your destination.',distance:selected.distance,duration:selected.duration}]);
   const detailsOpen=compactMap()?'':' open',first=steps[0];
-  root.innerHTML=`<button class="results-back" type="button" data-results-back>← Back to forecast</button><a href="/feedback?topic=route" style="display:block;color:#9ee3d4;margin:12px 0">Was this walk useful? Give feedback</a><div class="route-summary"><b>${mins(selected.duration)} min</b><span>${miles(selected.distance)} mi${state.via?` · via ${esc(state.via.name)}`:''}</span></div><div class="next-step"><span class="maneuver">${maneuverGlyph(first,0,steps.length)}</span><span>${esc(first.instruction)}</span><small>${first.distance?stepDistance(first.distance):''}</small></div><div class="route-outcome"><strong>${esc(metricText(selected))}</strong><br>${esc(policy)}</div><div class="route-actions"><button class="directions-open" id="show-directions" type="button">Turn-by-turn · ${steps.length} steps</button><button id="overview-route" type="button">Overview</button></div><details class="directions"${detailsOpen}><summary>All directions</summary>${steps.map((step,index)=>`<div class="direction-step"><span class="maneuver">${maneuverGlyph(step,index,steps.length)}</span><span>${esc(step.instruction)}</span><small>${step.distance?stepDistance(step.distance):''}</small></div>`).join('')}</details>${state.routes.map((route,index)=>`<button class="route ${index===state.selectedRoute?'selected':''}" type="button" data-route="${index}"><div class="route-head"><b>${mins(route.duration)} min · ${miles(route.distance)} mi</b>${route.recommended?`<span class="badge">${state.enabled.size?(route.selected_intersections?'Cleanest available':'Avoids selected'):'Fastest'}</span>`:''}</div><div class="route-stats"><span>${esc(metricText(route))}</span></div></button>`).join('')}<div class="exports"><a href="${esc(selected.export.apple)}" target="_blank" rel="noopener">Start in Apple Maps</a><a href="${esc(selected.export.google)}" target="_blank" rel="noopener">Start in Google Maps</a><a class="exact" href="#" id="download-gpx">Download exact route (GPX)</a></div><p class="warning">The highlighted in-app line and GPX are exact. Apple and Google receive the stop and shaping points, but can recalculate.</p>`;
+  root.innerHTML=`<button class="results-back" type="button" data-results-back>← Back to map</button><a href="/feedback?topic=route" style="display:block;color:#9ee3d4;margin:12px 0">Was this walk useful? Give feedback</a><div class="route-summary"><b>${mins(selected.duration)} min</b><span>${miles(selected.distance)} mi${state.via?` · via ${esc(state.via.name)}`:''}</span></div><div class="next-step"><span class="maneuver">${maneuverGlyph(first,0,steps.length)}</span><span>${esc(first.instruction)}</span><small>${first.distance?stepDistance(first.distance):''}</small></div><div class="route-outcome"><strong>${esc(metricText(selected))}</strong><br>${esc(policy)}</div><div class="route-actions"><button class="directions-open" id="show-directions" type="button">Turn-by-turn · ${steps.length} steps</button><button id="overview-route" type="button">Overview</button></div><details class="directions"${detailsOpen}><summary>All directions</summary>${steps.map((step,index)=>`<div class="direction-step"><span class="maneuver">${maneuverGlyph(step,index,steps.length)}</span><span>${esc(step.instruction)}</span><small>${step.distance?stepDistance(step.distance):''}</small></div>`).join('')}</details>${state.routes.map((route,index)=>`<button class="route ${index===state.selectedRoute?'selected':''}" type="button" data-route="${index}"><div class="route-head"><b>${mins(route.duration)} min · ${miles(route.distance)} mi</b>${route.recommended?`<span class="badge">${state.enabled.size?(route.selected_intersections?'Cleanest available':'Avoids selected'):'Fastest'}</span>`:''}</div><div class="route-stats"><span>${esc(metricText(route))}</span></div></button>`).join('')}<div class="exports"><a href="${esc(selected.export.apple)}" target="_blank" rel="noopener">Start in Apple Maps</a><a href="${esc(selected.export.google)}" target="_blank" rel="noopener">Start in Google Maps</a><a class="exact" href="#" id="download-gpx">Download exact route (GPX)</a></div><p class="warning">The highlighted in-app line and GPX are exact. Apple and Google receive the stop and shaping points, but can recalculate.</p>`;
   root.querySelectorAll('[data-route]').forEach(button=>button.addEventListener('click',()=>selectRoute(Number(button.dataset.route))));
   document.getElementById('download-gpx').addEventListener('click',event=>{event.preventDefault();downloadExactRoute(selected);});
   document.getElementById('overview-route').addEventListener('click',fitRoute);
@@ -709,10 +737,10 @@ document.querySelectorAll('[data-profile]').forEach(button=>button.addEventListe
 bindAutocomplete(document.getElementById('forecast-location'));bindAutocomplete(document.getElementById('origin'));bindAutocomplete(document.getElementById('destination'));
 document.querySelectorAll('[data-clear-field]').forEach(button=>button.addEventListener('click',()=>clearRouteField(button.dataset.clearField)));
 
-function openForecastPanel(focusSearch=false){const card=document.getElementById('forecast-card');document.getElementById('route-form').hidden=true;document.getElementById('walk-open').setAttribute('aria-expanded','false');document.getElementById('map-tools').hidden=true;document.getElementById('layers-open').setAttribute('aria-expanded','false');card.hidden=false;document.getElementById('forecast-open').setAttribute('aria-expanded','true');if(focusSearch)document.getElementById('forecast-location').focus();}
+function openForecastPanel(focusSearch=false){document.getElementById('results').hidden=true;const card=document.getElementById('forecast-card');document.getElementById('route-form').hidden=true;document.getElementById('walk-open').setAttribute('aria-expanded','false');document.getElementById('map-tools').hidden=true;document.getElementById('layers-open').setAttribute('aria-expanded','false');card.hidden=false;document.getElementById('forecast-open').setAttribute('aria-expanded','true');if(focusSearch)document.getElementById('forecast-location').focus();}
 function closeForecastPanel(){clearForecastSelection({push:true,focusButton:true});renderForecast();}
 function openWalkPlanner(){setTravelMode('walking');syncLayers();savePlanner();document.getElementById('forecast-card').hidden=true;document.getElementById('forecast-open').setAttribute('aria-expanded','false');document.getElementById('map-tools').hidden=true;document.getElementById('layers-open').setAttribute('aria-expanded','false');const form=document.getElementById('route-form');form.hidden=false;document.getElementById('walk-open').setAttribute('aria-expanded','true');document.getElementById('forecast-route').setAttribute('aria-expanded','true');form.querySelector('input').focus();scheduleRoute(0);}
-function closeWalkPlanner(){document.getElementById('route-form').hidden=true;document.getElementById('walk-open').setAttribute('aria-expanded','false');document.getElementById('forecast-route').setAttribute('aria-expanded','false');document.getElementById('walk-open').focus();}
+function closeWalkPlanner(){document.getElementById('route-form').hidden=true;document.getElementById('results').hidden=true;drawFeatures();document.getElementById('walk-open').setAttribute('aria-expanded','false');document.getElementById('forecast-route').setAttribute('aria-expanded','false');document.getElementById('walk-open').focus();}
 function openMapTools(){document.getElementById('forecast-card').hidden=true;document.getElementById('forecast-open').setAttribute('aria-expanded','false');document.getElementById('route-form').hidden=true;document.getElementById('walk-open').setAttribute('aria-expanded','false');const tools=document.getElementById('map-tools');tools.hidden=false;tools.open=true;document.getElementById('layers-open').setAttribute('aria-expanded','true');}
 function closeMapTools(){const tools=document.getElementById('map-tools');tools.open=false;tools.hidden=true;document.getElementById('layers-open').setAttribute('aria-expanded','false');document.getElementById('layers-open').focus();}
 document.getElementById('forecast-open').addEventListener('click',()=>openForecastPanel(true));
@@ -755,7 +783,7 @@ document.getElementById('layers-toggle').addEventListener('click',()=>{const car
 document.getElementById('discover-toggle').addEventListener('click',()=>{const panel=document.getElementById('discover'),open=!panel.classList.contains('open');panel.classList.toggle('open',open);document.getElementById('discover-toggle').setAttribute('aria-expanded',String(open));});
 document.getElementById('citibike-toggle').addEventListener('click',()=>{state.discover.citibike=!state.discover.citibike;const button=document.getElementById('citibike-toggle');button.setAttribute('aria-pressed',String(state.discover.citibike));button.lastElementChild.textContent=state.discover.citibike?'−':'+';if(state.discover.citibike)loadCitiBike();else state.discover.group.clearLayers();});
 map.on('zoomend',()=>{syncLayers();drawReportIssues();});window.addEventListener('resize',()=>{syncLayers();drawReportIssues();if(state.routes.length)fitRoute();});
-map.on('moveend',()=>{syncReportLink();drawReportIssues();if(map.getZoom()>=FULL_DETAIL_ZOOM)drawFeatures();if(state.discover.citibike){clearTimeout(state.discover.timer);state.discover.timer=setTimeout(loadCitiBike,450);}});
+map.on('moveend',()=>{syncReportLink();drawReportIssues();drawFeatures();if(state.discover.citibike){clearTimeout(state.discover.timer);state.discover.timer=setTimeout(loadCitiBike,450);}});
 map.on('contextmenu',event=>focusReport(event.latlng.lat,event.latlng.lng,true));
 map.on('click',event=>{if(event.originalEvent.target.closest('[data-report-lat]'))return;selectForecastAnchor({name:'Selected map point',lat:event.latlng.lat,lng:event.latlng.lng},{move:false,push:true,open:true});});
 document.getElementById('about-open').addEventListener('click',()=>{document.getElementById('about').classList.add('open');document.getElementById('about-close').focus();});
@@ -869,7 +897,7 @@ async function applyLocationUrl({fromHistory=false}={}){
   if(mode==='report'&&focus){state.forecast.restoringUrl=true;clearForecastSelection({push:false});state.forecast.restoringUrl=false;await focusReport(focus.lat,focus.lng,true);return;}
   if((params.get('forecast')==='1'||mode==='forecast')&&(focus||params.get('id'))){
     const requestedId=params.get('id'),feature=forecastById(requestedId);if(!feature&&!focus)return;const legacyFeatureId=feature&&requestedId&&String(requestedId)!==String(feature.id),anchor=feature?{name:legacyFeatureId?firstValue(feature.address,feature.addr,'Shared condition'):params.get('place')||firstValue(feature.address,feature.addr,'Shared condition'),lat:Number(feature.lat),lng:Number(feature.lng)}:{name:params.get('place')||'Shared place',lat:focus.lat,lng:focus.lng};
-    state.forecast.restoringUrl=true;state.forecast.anchor=anchor;const input=document.getElementById('forecast-location');input.value=anchor.name;input._place=anchor;map.setView([anchor.lat,anchor.lng],16,{animate:false});openForecastPanel();renderForecast();state.forecast.restoringUrl=false;if(legacyFeatureId)syncForecastUrl(false);
+    state.forecast.restoringUrl=true;state.forecast.anchor=anchor;state.forecast.selectedId=feature?.id||null;const input=document.getElementById('forecast-location');input.value=anchor.name;input._place=anchor;map.setView([anchor.lat,anchor.lng],16,{animate:false});openForecastPanel();renderForecast();requestAnimationFrame(revealForecastSelection);state.forecast.restoringUrl=false;if(legacyFeatureId)syncForecastUrl(false);
     if(params.get('share')==='1'){const shareButton=document.getElementById('forecast-share');if(!shareButton.disabled&&shareButton.getAttribute('aria-expanded')!=='true')shareButton.click();}return;
   }
   if(fromHistory){state.forecast.restoringUrl=true;clearForecastSelection({push:false});renderForecast();state.forecast.restoringUrl=false;}

@@ -14,7 +14,7 @@ final class RouteModel: ObservableObject {
     @Published var avoidance: AvoidanceSummary?
     @Published var selectedRouteID: String?
     @Published var filters: Set<LayerDefinition> = []
-    @Published var visibleLayers: Set<LayerDefinition> = []
+    @Published var visibleLayers: Set<LayerDefinition> = Set(LayerDefinition.allCases.filter { $0 != .alpr })
     @Published var mapFeatures: [String: [MapFeature]] = [:]
     @Published var bikes: [CitiBikeStation] = []
     @Published var showCitiBike = false

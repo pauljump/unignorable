@@ -11,7 +11,7 @@ struct IssueDot: View {
     var body: some View {
         Circle()
             .fill(color)
-            .frame(width: 5, height: 5)
+            .frame(width: 10, height: 10)
             .overlay {
                 Circle().stroke(outline, lineWidth: severity == .lower ? 0.75 : 1.5)
             }

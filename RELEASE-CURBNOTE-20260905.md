@@ -1,5 +1,16 @@
 # Curbnote rebrand release · September 5, 2026
 
+## Map visibility correction · build 3
+
+Paul reported no occurrence dots after leaving walking directions and no visible map reference when a detail opened. Web rendering incorrectly used the route-avoidance set (empty at launch) as the map-visibility set. The phone forecast panel also occupied nearly the full map. Dot events could bubble to the generic nearest-record handler, and late route responses could reopen dismissed results.
+
+The fix gives web and iOS independent visible civic layers at launch while route avoidance remains empty. Cameras remain opt-in. Web adds separate Show on map controls, larger dots, exact dot selection with propagation disabled, a selected-point marker on a separate renderer, and a medium-height mobile sheet with both the tapped point and selected record fitted into the exposed map. Closing directions hides the results, including late arrivals. Native shows the same civic categories by default, makes all evidence dots tappable and larger, and opens details at a medium detent with the selected location above the sheet.
+
+Verification: 57 web/backend tests pass, including five executable regressions for visibility after closing walking, avoidance/visibility independence, direct dot selection, actual tap coordinates, selected-map framing and dismissed-result races. Six native model tests pass, including fixture-based evidence/avoidance independence. Native app and test targets compile. No browser is connected for a web visual inspection; these checks do not substitute for a physical-device walk.
+
+Publication results follow after the web restart and build-3 TestFlight processing.
+
+
 ## TestFlight released · September 5, 2026, 19:07 UTC
 
 **Curbnote 1.0.0 (2) has been uploaded and processed successfully.** App Store Connect build ID `bdb6f51b-0290-41de-9fbd-eddfa7d8f723` reports `VALID`, `usesNonExemptEncryption: false`, and internal state `IN_BETA_TESTING`. The Curbnote Internal group includes Paul Jump and build 2. No public link or external testing was enabled. English What to Test notes are saved.

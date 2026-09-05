@@ -24,7 +24,7 @@ for (const id of ['forecast-open', 'forecast-close', 'walk-open', 'layers-open',
 }
 if (!html.includes("function openWalkPlanner(){setTravelMode('walking')")) throw new Error('walking avoidance must remain available from the clear map');
 if (!html.includes("state.profile='walking';state.enabled=new Set();")) throw new Error('walking launch must start with explicit avoidance choices');
-if (!html.includes('enabled:new Set()')) throw new Error('the default map should keep supporting layers out of the foreground');
+if (!html.includes("visible:new Set(Object.keys(DEFS).filter(name=>name!=='alpr'))")) throw new Error('reported condition layers must be visible independently of route avoidance');
 if (!html.includes('width:calc(100vw - 16px);max-width:calc(100vw - 16px)')) throw new Error('the mobile forecast shell must fit inside the viewport');
 if (!html.includes('data-clear-field="origin"') || !html.includes('data-clear-field="destination"')) throw new Error('directions need explicit clear controls');
 if (!html.includes('function clearRouteField(id)')) throw new Error('clearing a direction must reset its saved route state');

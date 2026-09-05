@@ -135,7 +135,7 @@ test('health and public assets are available with security headers', async () =>
   assert.match(rootHtml, /data-report-confirm/);
   assert.match(rootHtml, /map\.on\('contextmenu'/);
   assert.match(rootHtml, /--paper:#080b11/);
-  assert.match(rootHtml, /radius:cluster\?3:2\.5/);
+  assert.match(rootHtml, /radius:cluster\?7:5/);
   assert.match(rootHtml, /FULL_DETAIL_ZOOM=14/);
   assert.match(rootHtml, /Evidence outline legend/);
   assert.match(rootHtml, /Choose each address from the list/);
