@@ -30,6 +30,20 @@ const qRecordEvent = db.prepare(`INSERT INTO record_event_counts(day,feature_id,
 function countRecordEvent(featureId, event) {
   qRecordEvent.run(new Date().toISOString().slice(0, 10), featureId, event);
 }
+// Retain public source envelopes across refreshes. Omission from the live map is not resolution.
+db.exec(`CREATE TABLE IF NOT EXISTS condition_records(
+  feature_id TEXT PRIMARY KEY, feature_json TEXT NOT NULL
+)`);
+function retainConditionRecords(features) {
+  const put = db.prepare(`INSERT INTO condition_records(feature_id,feature_json) VALUES(?,?)
+    ON CONFLICT(feature_id) DO UPDATE SET feature_json=excluded.feature_json`);
+  db.exec('BEGIN');
+  try {
+    for (const feature of features) put.run(feature.id, JSON.stringify(feature));
+    db.exec('COMMIT');
+  } catch (error) { db.exec('ROLLBACK'); throw error; }
+  return db.prepare('SELECT feature_json FROM condition_records').all().map(row => JSON.parse(row.feature_json));
+}
 db.exec(`
   CREATE TABLE IF NOT EXISTS posts(
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -517,7 +531,7 @@ function confirmActionReceipt(token) {
   return { receipt: qReceiptGet.get(token) || null, changed: Number(result.changes) === 1 };
 }
 
-module.exports = { countRecordEvent, addPost, addSeen, thread, countsAll, pending, pendingCount, decide,
+module.exports = { retainConditionRecords, countRecordEvent, addPost, addSeen, thread, countsAll, pending, pendingCount, decide,
   addConditionObservation, conditionObservationSummary, reviewedConditionObservationsSince,
   addWalkOpportunity, walkOpportunitySummary,
   pendingConditionObservations, pendingConditionObservationCount, decideConditionObservation,

@@ -10,7 +10,7 @@ const ugc = require('./ugc');
 const { pointInGeoJSON, routeHitFeatures, scoreRoute, featureRadius, featureRisk, plausibleRoutes, chooseRecommended, exportUrls, simplifyWalkingSteps, LAYER_RADII } = require('./map-core');
 const { routingLevel } = require('./condition-model');
 const { buildHB295Checklist } = require('./hb295-evidence');
-const { eligibleRecord, recordPath, renderRecord, renderDirectory, outcomeProof } = require('./condition-record');
+const { eligibleRecord, recordPath, renderRecord, renderDirectory, outcomeProof, buildRecordIndex } = require('./condition-record');
 const RECORD_PILOT = require('./config/record-pilot.json');
 const RECORD_EVENTS = new Set(['record_view', 'record_engaged', 'record_return', 'record_copy', 'check_start', 'history_open', 'action_open']);
 const recordEventHits = new Map();
@@ -110,7 +110,11 @@ for (const feature of Object.values(MAP_LAYERS?.layers || {}).flat()) {
   MAP_FEATURE_BY_ID.set(feature.id, feature);
   for (const alias of feature.id_aliases || []) MAP_FEATURE_BY_ID.set(alias, feature);
 }
-const PILOT_FEATURES = [...new Set(RECORD_PILOT.feature_ids.map(id => MAP_FEATURE_BY_ID.get(id)).filter(Boolean))];
+const CURRENT_RECORD_FEATURES = Object.values(MAP_LAYERS?.layers || {}).flat()
+  .filter(feature => feature.subject_type === 'encampment').map(feature => ({ ...feature,
+    record_source_refreshed_at: MAP_LAYERS?.meta?.layer_freshness?.homelessness?.refreshed_at || null }));
+const RECORD_FEATURE_BY_ID = buildRecordIndex(ugc.retainConditionRecords(CURRENT_RECORD_FEATURES), CURRENT_RECORD_FEATURES);
+const PILOT_FEATURES = [...new Set(RECORD_PILOT.feature_ids.map(id => RECORD_FEATURE_BY_ID.get(id)).filter(Boolean))];
 const INDEXABLE_RECORD_IDS = new Set(PILOT_FEATURES.filter(eligibleRecord).map(feature => feature.id));
 
 // Live discovery is intentionally separate from the durable civic-map artifact. These are
@@ -882,7 +886,7 @@ function askForType(issueOrType) {
   if (type === 'Encampment') {
     const proximity = issue && issue.sensitive_site_summary;
     const schoolAsk = proximity && proximity.school_count > 0
-      ? `Treat the school approach as urgent. The NYC Facilities Database places ${fmtN(proximity.school_count)} K-12 school${proximity.school_count === 1 ? '' : 's'} within ${fmtN(proximity.radius_ft)} feet, the nearest about ${fmtN(proximity.nearest_school_ft)} feet away. Children, families, and staff should not have to navigate a repeatedly confirmed sidewalk encampment while agencies cycle through closures.`
+      ? `Treat the school approach as urgent. The NYC Facilities Database places ${fmtN(proximity.school_count)} K-12 school${proximity.school_count === 1 ? '' : 's'} within ${fmtN(proximity.radius_ft)} feet, the nearest about ${fmtN(proximity.nearest_school_ft)} feet away. Please check pedestrian access on these school approaches, offer appropriate outreach, and document the result.`
       : null;
     return [
       'Clear the sidewalk obstruction. NYC Admin Code §16-122 and §19-136 give the city clear authority to act on persistent sidewalk obstructions.',
@@ -1214,7 +1218,7 @@ async function prepareOfficialAction(button,actionType){
   // Build the action rail HTML.
   let actionRailHtml = '';
   for (const at of ACTION_TYPES) {
-    if (!at.enabled && at.kind !== 'coming') continue;
+    if (!at.enabled || at.kind === 'coming') continue;
     const isComingKind = at.kind === 'coming' || !at.enabled;
     const iconHtml = at.icon ? `<span class="act-icon">${at.icon}</span>` : '';
 
@@ -1348,7 +1352,7 @@ async function prepareOfficialAction(button,actionType){
     </section>` : '';
   const impactHtml = sensitiveSummary && schoolSites.length
     ? `<section class="impact"><h2>${fmtN(sensitiveSummary.school_count)} schools within ${fmtN(sensitiveSummary.radius_ft)} feet</h2>
-      <div class="impact-callout">It is unacceptable for the city to leave a repeatedly confirmed sidewalk encampment on a daily route used by children, families, and school staff, then treat ticket closure as resolution. This is a failure of both pedestrian access and human services.</div>
+      <div class="impact-callout">Nearby schools make clear pedestrian access and coordinated services important. Proximity does not establish current presence or harm; ask the responsible agencies to check the condition and document follow-up.</div>
       <div class="scoreline"><div><b>${fmtN(sensitiveSummary.school_count)}</b><span>K-12 schools within ${fmtN(sensitiveSummary.radius_ft)} ft</span></div><div><b>${fmtN(sensitiveSummary.nearest_school_ft)} ft</b><span>nearest recorded school</span></div><div><b>${reportPressure}</b><span>report-volume percentile</span></div></div>
       <p class="fine">These are literal straight-line distances from the approximate issue location, not a claim that any person caused harm. Counts come from the citywide NYC Planning Facilities Database and are computed the same way for every issue.</p>
       <div class="places">${schoolSites.map(place => `<div><b>${esc(place.name)}</b> &middot; ${esc(place.address || 'address unavailable')} &middot; ${fmtN(place.distance_ft)} ft</div>`).join('')}${childcareSites.length ? `<div><b>Also nearby:</b> ${fmtN(sensitiveSummary.childcare_count)} childcare/pre-K facilit${sensitiveSummary.childcare_count === 1 ? 'y' : 'ies'} within ${fmtN(sensitiveSummary.radius_ft)} feet.</div>` : ''}</div>
@@ -2052,7 +2056,12 @@ async function handleRequest(req, res) {
   const u = new URL(req.url, 'http://x');
 
   if (u.pathname === '/records' && req.method === 'GET') {
-    return send(res, 200, renderDirectory(PILOT_FEATURES, PUBLIC_ORIGIN), 'text/html; charset=utf-8');
+    const query = String(u.searchParams.get('q') || '').trim().slice(0, 100);
+    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = query ? [...new Set(RECORD_FEATURE_BY_ID.values())]
+      .filter(feature => terms.every(term => String(feature.address || feature.addr || '').toLowerCase().includes(term)))
+      .sort((a, b) => String(a.address || '').localeCompare(String(b.address || ''))) : PILOT_FEATURES;
+    return send(res, 200, renderDirectory(matches.slice(0, 30), PUBLIC_ORIGIN, query, matches.length), 'text/html; charset=utf-8');
   }
   if (u.pathname === '/methodology' && req.method === 'GET') {
     return send(res, 200, fs.readFileSync(path.join(DIR, 'MODEL-METHODOLOGY.md')), 'text/plain; charset=utf-8');
@@ -2064,7 +2073,7 @@ async function handleRequest(req, res) {
     // Only this site's browser may submit; arbitrary dimensions and locations are rejected.
     if (req.headers.origin !== PUBLIC_ORIGIN) return send(res, 403, '{"ok":false}', 'application/json');
     const body = await readBody(req);
-    const feature = body && MAP_FEATURE_BY_ID.get(String(body.feature_id || ''));
+    const feature = body && RECORD_FEATURE_BY_ID.get(String(body.feature_id || ''));
     if (!feature || feature.subject_type !== 'encampment' || !RECORD_EVENTS.has(body.event)
       || Object.keys(body).some(name => !['event', 'feature_id'].includes(name))) {
       return send(res, 400, '{"ok":false}', 'application/json');
@@ -2166,7 +2175,7 @@ async function handleRequest(req, res) {
   }
 
   if (u.pathname === '/api/condition-loop' && req.method === 'GET') {
-    const feature = MAP_FEATURE_BY_ID.get(String(u.searchParams.get('feature_id') || ''));
+    const feature = RECORD_FEATURE_BY_ID.get(String(u.searchParams.get('feature_id') || ''));
     if (!feature || feature.layer !== 'homelessness' || feature.subject_type !== 'encampment') {
       return send(res, 404, '{"ok":false,"error":"unknown condition"}', 'application/json');
     }
@@ -2176,7 +2185,7 @@ async function handleRequest(req, res) {
   if (u.pathname === '/api/condition-observations' && req.method === 'POST') {
     if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
     const body = await readBody(req);
-    const feature = MAP_FEATURE_BY_ID.get(String(body.feature_id || ''));
+    const feature = RECORD_FEATURE_BY_ID.get(String(body.feature_id || ''));
     const state = ['present', 'absent', 'uncertain'].includes(body.state) ? body.state : null;
     const lat = Number(body.lat), lng = Number(body.lng);
     if (!feature || feature.layer !== 'homelessness' || feature.subject_type !== 'encampment') {
@@ -2205,7 +2214,7 @@ async function handleRequest(req, res) {
   if (u.pathname === '/api/walk-opportunities' && req.method === 'POST') {
     if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
     const body = await readBody(req);
-    const feature = MAP_FEATURE_BY_ID.get(String(body.feature_id || ''));
+    const feature = RECORD_FEATURE_BY_ID.get(String(body.feature_id || ''));
     const lat = Number(body.lat), lng = Number(body.lng);
     if (!feature || feature.layer !== 'homelessness' || feature.subject_type !== 'encampment') return send(res, 400, '{"ok":false,"error":"unknown encampment site"}', 'application/json');
     if (!NYC_POINT({ lat, lng })) return send(res, 400, '{"ok":false,"error":"a valid nearby walk location is required"}', 'application/json');
@@ -2224,7 +2233,7 @@ async function handleRequest(req, res) {
   if (u.pathname === '/api/walk-friction' && req.method === 'POST') {
     if (rateLimited(req)) return send(res, 429, '{"ok":false,"error":"slow down"}', 'application/json');
     const body = await readBody(req);
-    const feature = MAP_FEATURE_BY_ID.get(String(body.feature_id || ''));
+    const feature = RECORD_FEATURE_BY_ID.get(String(body.feature_id || ''));
     const lat = Number(body.lat), lng = Number(body.lng);
     const allowed = { proximity: ['0-25m', '26-60m', '61-120m'], speed: ['slower', 'steady', 'faster', 'unknown'], clearance: ['closer_than_plan', 'as_planned', 'farther_than_plan', 'unknown'], dwell: ['under_20s', '20-60s', 'over_60s'] };
     if (!feature || feature.layer !== 'homelessness' || feature.subject_type !== 'encampment') return send(res, 400, '{"ok":false,"error":"unknown encampment site"}', 'application/json');
@@ -2577,7 +2586,7 @@ async function handleRequest(req, res) {
     if (!authed(req, u)) return send(res, 401, '{"ok":false}', 'application/json');
     const items = ugc.pending().map(p => ({ ...p, issue: issueMeta(p.issue_key) }));
     const conditionItems = ugc.pendingConditionObservations().map(item => {
-      const feature = MAP_FEATURE_BY_ID.get(item.feature_id);
+      const feature = RECORD_FEATURE_BY_ID.get(item.feature_id);
       const related = relatedIssueForFeature(feature);
       return { ...item, feature: feature ? {
         id: feature.id, lat: feature.lat, lng: feature.lng, descriptor: feature.descriptor || null,
@@ -2656,7 +2665,7 @@ async function handleRequest(req, res) {
   // Short, crawlable forecast receipt used by the share card and X previews. The map remains
   // the interactive product; this page makes the claim legible before someone clicks through.
   if (u.pathname === '/f' || u.pathname === '/forecast') {
-    let feature = MAP_FEATURE_BY_ID.get(String(u.searchParams.get('id') || ''));
+    let feature = RECORD_FEATURE_BY_ID.get(String(u.searchParams.get('id') || ''));
     const lat = Number(u.searchParams.get('lat')), lng = Number(u.searchParams.get('lng'));
     if (!u.searchParams.has('id') && Number.isFinite(lat) && Number.isFinite(lng) && NYC_POINT({ lat, lng })) {
       let nearest = Infinity;
@@ -2681,10 +2690,7 @@ async function handleRequest(req, res) {
   // The NYC awareness map is the product front door. Legacy campaign and accountability routes
   // remain directly addressable while the rebuilt first viewport stays focused on map + routing.
   if (u.pathname === '/' || u.pathname === '/index.html' || u.pathname === '/map') {
-    const mapHtml = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8').replace(
-      '<b class="map-wordmark">unignorable</b>',
-      '<a class="map-wordmark" href="/records" style="color:inherit;text-decoration:none;display:flex;gap:8px;align-items:center" aria-label="Unignorable NYC block records">unignorable <span style="font-size:11px;text-decoration:underline">Records</span></a>');
-    return send(res, 200, mapHtml, 'text/html; charset=utf-8');
+    return send(res, 200, fs.readFileSync(path.join(DIR, 'index.html')), 'text/html; charset=utf-8');
   }
 
   send(res, 404, 'not found', 'text/plain');
