@@ -4,6 +4,7 @@ import XCTest
 final class ReportMapGestureTests: XCTestCase {
     func testAddressAutocompleteAndWalkingRouteConnect() throws {
         let app = XCUIApplication()
+        app.launchArguments = ["-curbnote-ui-reset"]
         app.launch()
         app.buttons["plan-walk-button"].tap()
         let origin = app.textFields["Where from?"]
@@ -59,10 +60,27 @@ final class ReportMapGestureTests: XCTestCase {
         guide.lifetime = .keepAlways
         add(guide)
 
+        // Signup is offered only after choosing Save; the walking guide remains anonymous.
+        app.buttons["Done"].tap()
+        let save = app.buttons["save-walk-account-gate"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5)); save.tap()
+        XCTAssertTrue(app.buttons["create-passkey-account"].waitForExistence(timeout: 5))
+        let signup = XCTAttachment(screenshot: app.screenshot()); signup.name = "Optional passkey signup"; signup.lifetime = .keepAlways; add(signup)
+        app.buttons["Keep walking without an account"].tap()
+        startWalk.tap(); app.buttons["walking-step-next"].tap()
+        app.buttons["Done"].tap()
+        app.terminate()
+        app.launchArguments = []; app.launch()
+        XCTAssertTrue(app.buttons["start-curbnote-walk"].waitForExistence(timeout: 8))
+        app.buttons["start-curbnote-walk"].tap()
+        XCTAssertTrue(app.staticTexts["walking-step-progress"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["walking-step-progress"].label.hasPrefix("Step 2 of"))
+
     }
 
     func testLaunchOffersNativeFeedbackAndRecords() throws {
         let app = XCUIApplication()
+        app.launchArguments = ["-curbnote-ui-reset"]
         app.launch()
         XCTAssertTrue(app.buttons["Plan my walk"].waitForExistence(timeout: 5))
         let launch = XCTAttachment(screenshot: app.screenshot())
@@ -83,6 +101,7 @@ final class ReportMapGestureTests: XCTestCase {
 
     func testForecastLocationLeadsWithoutSettingRouteOrigin() throws {
         let app = XCUIApplication()
+        app.launchArguments = ["-curbnote-ui-reset"]
         app.launch()
 
         let locationButton = app.buttons["forecast-location-button"]
@@ -96,6 +115,7 @@ final class ReportMapGestureTests: XCTestCase {
 
     func testWalkingPlannerIsProgressivelyDisclosed() throws {
         let app = XCUIApplication()
+        app.launchArguments = ["-curbnote-ui-reset"]
         app.launch()
 
         let planButton = app.buttons["plan-walk-button"]
@@ -109,6 +129,7 @@ final class ReportMapGestureTests: XCTestCase {
 
     func testDoubleTapZoomsInsteadOfOpeningDetails() throws {
         let app = XCUIApplication()
+        app.launchArguments = ["-curbnote-ui-reset"]
         app.launch()
         let map = app.otherElements["unified-map"]
         XCTAssertTrue(map.waitForExistence(timeout: 8))
@@ -151,6 +172,7 @@ final class ReportMapGestureTests: XCTestCase {
 
     func testUnifiedMapRespondsToPinchZoom() throws {
         let app = XCUIApplication()
+        app.launchArguments = ["-curbnote-ui-reset"]
         app.launch()
 
         let map = app.otherElements["unified-map"]

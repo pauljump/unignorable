@@ -15,6 +15,14 @@ struct APIClient {
         self.session = session ?? URLSession(configuration: configuration)
     }
 
+    func account<T: Decodable & Sendable>(_ path: String, body: Data? = nil, token: String? = nil) async throws -> T {
+        var request = URLRequest(url: baseURL.appending(path: "/api/account/" + path))
+        request.setValue("ios", forHTTPHeaderField: "X-Curbnote-Client")
+        if let token { request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization") }
+        if let body { request.httpMethod = "POST"; request.httpBody = body; request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
+        return try await perform(request)
+    }
+
     func submitFeedback(_ feedback: FeedbackRequest) async throws -> FeedbackReceipt {
         var request = URLRequest(url: baseURL.appending(path: "/api/feedback"))
         request.httpMethod = "POST"

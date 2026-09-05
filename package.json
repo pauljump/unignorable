@@ -9,13 +9,21 @@
   },
   "scripts": {
     "start": "node server.js",
-    "check": "node --check scripts/feedback-report.js && node --check launch-feedback.js && node --check launch-client.js && node --check feedback-client.js && node --check condition-record.js && node --check record-client.js && node --check scripts/record-funnel.js && node --check server.js && node --check webmcp.js && node --check ugc.js && node --check condition-model.js && node --check walk-nowcast.js && node --check map-core.js && node --check hb295-evidence.js && node --check scripts/build.js && node --check scripts/refresh-sensitive-sites.js && node --check scripts/refresh-map-data.js && node --check scripts/evaluate-condition-model.js && node tests/check-client.js",
+    "check": "node --check accounts.js && node --check account-client.js && node --check scripts/feedback-report.js && node --check launch-feedback.js && node --check launch-client.js && node --check feedback-client.js && node --check condition-record.js && node --check record-client.js && node --check scripts/record-funnel.js && node --check server.js && node --check webmcp.js && node --check ugc.js && node --check condition-model.js && node --check walk-nowcast.js && node --check map-core.js && node --check hb295-evidence.js && node --check scripts/build.js && node --check scripts/refresh-sensitive-sites.js && node --check scripts/refresh-map-data.js && node --check scripts/evaluate-condition-model.js && node tests/check-client.js",
     "refresh:map": "node scripts/refresh-map-data.js",
     "evaluate:condition": "node scripts/evaluate-condition-model.js",
     "refresh:sites": "node scripts/refresh-sensitive-sites.js",
     "test": "node --test tests/*.test.js",
     "verify": "npm run check && npm test",
     "report:funnel": "node scripts/record-funnel.js",
-    "report:feedback": "node scripts/feedback-report.js"
+    "report:feedback": "node scripts/feedback-report.js",
+    "test:browser": "node --test browser-tests/*.test.js"
+  },
+  "dependencies": {
+    "@simplewebauthn/browser": "13.3.0",
+    "@simplewebauthn/server": "14.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2"
   }
 }

@@ -74,16 +74,19 @@ final class ModelDecodingTests: XCTestCase {
         XCTAssertEqual(issue.closedN, 169)
     }
     @MainActor
-    func testEvidenceVisibilityIsIndependentOfRouteAvoidance() throws {
+    func testEvidenceVisibilityIsIndependentOfRouteAvoidance() async throws {
         let model = RouteModel()
         let data = #"{"layers":{"homelessness":[{"id":"enc","layer":"homelessness","lat":40.724,"lng":-73.965}],"sidewalk":[{"id":"pavement","layer":"sidewalk","lat":40.725,"lng":-73.964}],"alpr":[{"id":"camera","layer":"alpr","lat":40.724,"lng":-73.965}]}}"#.data(using: .utf8)!
         model.mapFeatures = try JSONDecoder().decode(MapLayersResponse.self, from: data).layers
         XCTAssertTrue(model.filters.isEmpty)
+        await model.waitForMapUpdate()
         XCTAssertEqual(Set(model.visibleFeatures.map(\.id)), ["enc", "pavement"])
         model.filters.insert(.homelessness)
         model.filters.removeAll()
+        await model.waitForMapUpdate()
         XCTAssertEqual(Set(model.visibleFeatures.map(\.id)), ["enc", "pavement"])
         model.visibleLayers.remove(.sidewalk)
+        await model.waitForMapUpdate()
         XCTAssertEqual(model.visibleFeatures.map(\.id), ["enc"])
         XCTAssertTrue(model.filters.isEmpty)
     }

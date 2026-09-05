@@ -16,19 +16,19 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
     private var completer: MKLocalSearchCompleter?
     @Published var routes: [RouteChoice] = []
     @Published var avoidance: AvoidanceSummary?
-    @Published var walkingStepIndex = 0
+    @Published var walkingStepIndex = 0 { didSet { persistWalk() } }
     @Published var selectedRouteID: String? {
-        didSet { if oldValue != selectedRouteID { walkingStepIndex = 0 } }
+        didSet { if oldValue != selectedRouteID { walkingStepIndex = 0 }; persistWalk() }
     }
     @Published var filters: Set<LayerDefinition> = []
-    @Published var visibleLayers: Set<LayerDefinition> = Set(LayerDefinition.allCases.filter { $0 != .alpr })
-    @Published var mapFeatures: [String: [MapFeature]] = [:]
+    @Published var visibleLayers: Set<LayerDefinition> = Set(LayerDefinition.allCases.filter { $0 != .alpr }) { didSet { scheduleProjection() } }
+    @Published var mapFeatures: [String: [MapFeature]] = [:] { didSet { scheduleProjection() } }
     @Published var bikes: [CitiBikeStation] = []
     @Published var showCitiBike = false
     @Published var isRouting = false
     @Published var status: String?
     @Published var position: MapCameraPosition = .region(.init(center: .init(latitude: 40.724, longitude: -73.965), span: .init(latitudeDelta: 0.12, longitudeDelta: 0.12)))
-    @Published var visibleRegion = MKCoordinateRegion(center: .init(latitude: 40.724, longitude: -73.965), span: .init(latitudeDelta: 0.12, longitudeDelta: 0.12))
+    @Published var visibleRegion = MKCoordinateRegion(center: .init(latitude: 40.724, longitude: -73.965), span: .init(latitudeDelta: 0.12, longitudeDelta: 0.12)) { didSet { scheduleProjection() } }
 
     let api = APIClient()
     private var routeTask: Task<Void, Never>?
@@ -38,24 +38,113 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
 
     var selectedRoute: RouteChoice? { routes.first(where: { $0.id == selectedRouteID }) ?? routes.first }
 
-    /// The nearest usable presence forecast to the map's focal point. Other evidence
-    /// stays available through map-content controls instead of competing on arrival.
-    var primaryForecast: MapFeature? {
-        let candidates = (mapFeatures[LayerDefinition.homelessness.rawValue] ?? []).filter {
-            $0.subjectType == "encampment" && $0.forecastScore != nil
+    @Published private(set) var primaryForecast: MapFeature?
+    @Published private(set) var visibleFeatures: [MapFeature] = []
+    @Published private(set) var recentPlaces: [Place] = []
+    @Published private(set) var mapSavedAt: Date?
+    @Published private(set) var showingSavedMap = false
+    @Published private(set) var plannedAt = Date()
+    private let local: LocalStore
+    private var projectionTask: Task<Void, Never>?
+    private var persistTask: Task<Void, Never>?
+    private var loaded = false
+    private var restoring = false
+    private var userChangedWalk = false
+
+    init(local: LocalStore = .shared) { self.local = local; super.init() }
+
+    func load() async {
+        guard !loaded else { return }; loaded = true
+        await loadLocalState()
+        do {
+            let response = try await api.mapLayers()
+            mapFeatures = response.layers; mapSavedAt = Date(); showingSavedMap = false
+            await local.write("map", value: response)
+        } catch { showingSavedMap = !mapFeatures.isEmpty }
+    }
+
+    func loadLocalState() async {
+        if let saved = await local.read("map", as: MapLayersResponse.self, maxAge: 7 * 86400) {
+            mapFeatures = saved.value.layers; mapSavedAt = saved.savedAt; showingSavedMap = true
         }
-        let likelyCandidates = candidates.filter { ($0.forecastScore ?? 0) >= 0.45 }
-        let pool = likelyCandidates.isEmpty ? candidates : likelyCandidates
-        let center = CLLocation(latitude: visibleRegion.center.latitude, longitude: visibleRegion.center.longitude)
-        return pool.min { left, right in
-            let leftDistance = center.distance(from: CLLocation(latitude: left.lat, longitude: left.lng))
-            let rightDistance = center.distance(from: CLLocation(latitude: right.lat, longitude: right.lng))
-            return leftDistance < rightDistance
+        if let saved = await local.read("places", as: [Place].self, maxAge: 30 * 86400) { recentPlaces = saved.value }
+        if let saved = await local.read("walk", as: LocalWalk.self, maxAge: 2 * 86400), !userChangedWalk, routes.isEmpty {
+            restoreWalk(saved.value)
         }
     }
 
-    func load() async {
-        if let response = try? await api.mapLayers() { mapFeatures = response.layers }
+    func restoreWalk(_ walk: LocalWalk) {
+        guard !walk.routes.isEmpty, Date().timeIntervalSince(walk.plannedAt) < 2 * 86400 else { return }
+        restoring = true
+        origin = walk.origin; destination = walk.destination; via = walk.via
+        originText = walk.origin.name; destinationText = walk.destination.name
+        filters = Set(walk.filters.compactMap(LayerDefinition.init(rawValue:)))
+        routes = walk.routes; avoidance = walk.avoidance; selectedRouteID = walk.selectedRouteID
+        plannedAt = walk.plannedAt; selectWalkingStep(walk.step)
+        restoring = false
+        status = "Saved walk · planned " + walk.plannedAt.formatted(date: .abbreviated, time: .shortened)
+        fitRoute()
+    }
+
+    var localWalk: LocalWalk? {
+        guard !isRouting, let origin, let destination, !routes.isEmpty else { return nil }
+        return LocalWalk(origin: origin, destination: destination, via: via, filters: filters.map(\.rawValue), routes: routes, avoidance: avoidance, selectedRouteID: selectedRouteID, step: walkingStepIndex, plannedAt: plannedAt)
+    }
+    func persistWalk() {
+        guard !restoring else { return }
+        persistTask?.cancel()
+        let walk = localWalk; let local = local
+        persistTask = Task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            if let walk { await local.write("walk", value: walk) } else { await local.remove("walk") }
+        }
+    }
+    func flushWalk() async {
+        persistTask?.cancel()
+        if let walk = localWalk { await local.write("walk", value: walk) } else { await local.remove("walk") }
+    }
+    func clearLocalHistory() async {
+        recentPlaces = []; await local.remove("places")
+    }
+    private func remember(_ place: Place) {
+        // A live location is not a saved address unless the person explicitly saves a walk.
+        guard place.name != "Current location" else { return }
+        recentPlaces.removeAll { $0.id == place.id }; recentPlaces.insert(place, at: 0)
+        recentPlaces = Array(recentPlaces.prefix(12))
+        let places = recentPlaces
+        Task { await local.write("places", value: places) }
+    }
+    func recentMatches(_ query: String) -> [Place] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Array(recentPlaces.filter { q.isEmpty || $0.name.localizedCaseInsensitiveContains(q) }.prefix(4))
+    }
+    func waitForMapUpdate() async { await projectionTask?.value }
+    private func scheduleProjection() {
+        projectionTask?.cancel()
+        let features = mapFeatures; let layers = visibleLayers.map(\.rawValue)
+        let lat = visibleRegion.center.latitude; let lng = visibleRegion.center.longitude
+        let latSpan = visibleRegion.span.latitudeDelta; let lngSpan = visibleRegion.span.longitudeDelta
+        projectionTask = Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                Self.project(features: features, layers: layers, lat: lat, lng: lng, latSpan: latSpan, lngSpan: lngSpan)
+            }.value
+            guard !Task.isCancelled else { return }
+            primaryForecast = result.0; visibleFeatures = result.1
+        }
+    }
+    nonisolated static func project(features: [String: [MapFeature]], layers: [String], lat: Double, lng: Double, latSpan: Double, lngSpan: Double) -> (MapFeature?, [MapFeature]) {
+        func distance(_ feature: MapFeature) -> Double { pow(feature.lat - lat, 2) + pow((feature.lng - lng) * cos(lat * .pi / 180), 2) }
+        let candidates = (features[LayerDefinition.homelessness.rawValue] ?? []).filter { $0.subjectType == "encampment" && $0.forecastScore != nil }
+        let likely = candidates.filter { ($0.forecastScore ?? 0) >= 0.45 }
+        let primary = (likely.isEmpty ? candidates : likely).min { distance($0) < distance($1) }
+        let limit = latSpan > 0.08 ? 40 : latSpan > 0.03 ? 120 : 250
+        let all: [MapFeature] = layers.flatMap { features[$0] ?? [] }
+        let nearby: [MapFeature] = all.filter {
+            abs($0.lat - lat) <= max(latSpan * 0.65, 0.008) && abs($0.lng - lng) <= max(lngSpan * 0.65, 0.008)
+        }
+        let visible = nearby.sorted { distance($0) < distance($1) }
+        return (primary, Array(visible.prefix(limit)))
     }
 
     func search(_ query: String) {
@@ -146,6 +235,7 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
 
     func select(_ place: Place, asOrigin: Bool) {
         cancelSearch()
+        remember(place)
         if asOrigin { origin = place; originText = place.name } else { destination = place; destinationText = place.name }
         suggestions = []
         invalidateRoute()
@@ -204,6 +294,7 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
                 status = "Choose a destination from the suggestions."
                 return
             }
+            remember(resolvedOrigin); remember(resolvedDestination)
             origin = resolvedOrigin
             destination = resolvedDestination
             originText = resolvedOrigin.name
@@ -231,22 +322,28 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
                 if delay { try await Task.sleep(for: .milliseconds(180)) }
                 let response = try await api.walkingRoutes(origin: origin, destination: destination, via: requestedVia, filters: requestedFilters)
                 guard !Task.isCancelled, routeGeneration == generation else { return }
+                plannedAt = Date()
                 walkingStepIndex = 0
                 routes = response.routes
                 avoidance = response.avoidance
                 selectedRouteID = response.routes.first(where: \.recommended)?.id ?? response.routes.first?.id
+                isRouting = false
                 status = response.cacheHit == true ? "Route ready · instant refresh" : "Route ready"
                 fitRoute()
+                persistWalk()
             } catch is CancellationError { } catch {
                 guard routeGeneration == generation else { return }
                 routes = []
                 avoidance = nil
+                selectedRouteID = nil
+                persistWalk()
                 status = error.localizedDescription
             }
         }
     }
 
     private func invalidateRoute() {
+        userChangedWalk = true
         routeTask?.cancel()
         resolveTask?.cancel()
         routeGeneration = nil
@@ -259,6 +356,7 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
     }
 
     private func places(matching query: String) async -> [Place] {
+        if let recent = recentPlaces.first(where: { $0.name.caseInsensitiveCompare(query) == .orderedSame }) { return [recent] }
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = query
         request.region = MKCoordinateRegion(
@@ -315,24 +413,12 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
         do { bikes = try await api.citiBike(near: center) } catch { status = error.localizedDescription }
     }
 
-    var visibleFeatures: [MapFeature] {
-        let latitudeRadius = max(visibleRegion.span.latitudeDelta * 0.65, 0.008)
-        let longitudeRadius = max(visibleRegion.span.longitudeDelta * 0.65, 0.008)
-        let markerLimit = visibleRegion.span.latitudeDelta > 0.08 ? 40
-            : visibleRegion.span.latitudeDelta > 0.03 ? 120 : 250
-        return visibleLayers
-            .flatMap { mapFeatures[$0.rawValue] ?? [] }
-            .filter {
-                abs($0.lat - visibleRegion.center.latitude) <= latitudeRadius
-                    && abs($0.lng - visibleRegion.center.longitude) <= longitudeRadius
-            }
-            .sorted {
-                let left = pow($0.lat - visibleRegion.center.latitude, 2) + pow($0.lng - visibleRegion.center.longitude, 2)
-                let right = pow($1.lat - visibleRegion.center.latitude, 2) + pow($1.lng - visibleRegion.center.longitude, 2)
-                return left < right
-            }
-            .prefix(markerLimit)
-            .map { $0 }
+    func useSavedWalk(_ walk: SavedWalk) {
+        cancelSearch(); invalidateRoute()
+        origin = walk.origin; destination = walk.destination; via = walk.via
+        originText = walk.origin.name; destinationText = walk.destination.name
+        filters = Set(walk.filters.compactMap(LayerDefinition.init(rawValue:)))
+        status = "Saved addresses ready. Open Walk to calculate a fresh route."
     }
 
     func selectRoute(_ route: RouteChoice) {

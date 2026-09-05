@@ -2071,6 +2071,8 @@ function renderActionReceipt(receipt) {
   </div>${receipt.sender_confirmed_at ? '' : `<button class="confirm" onclick="confirmSent(this)">I sent this</button>`}<div class="note">This receipt proves that Curbnote prepared the action and records requests to its unique evidence link. Sender confirmation is a user assertion, not delivery proof. A link request may come from a human or a security scanner and does not prove that the named official personally read it. Email opens cannot be reliably measured from a draft sent through the resident's mail app.</div></main><script>async function confirmSent(button){button.disabled=true;var response=await fetch('/api/action/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:${JSON.stringify(receipt.token)}})});if(response.ok)location.reload();else button.disabled=false;}</script>${PULSE_BEACON}</body></html>`;
 }
 
+const handleAccounts = require('./accounts').createAccountHandler(DATA_DIR, {origin:PUBLIC_ORIGIN});
+
 async function handleRequest(req, res) {
   const u = new URL(req.url, 'http://x');
   const legacyHost = String(req.headers.host || '').split(':')[0].toLowerCase();
@@ -2080,6 +2082,7 @@ async function handleRequest(req, res) {
     res.writeHead(308, { ...SECURITY_HEADERS, Location: PUBLIC_ORIGIN + u.pathname + u.search, 'Cache-Control': 'public, max-age=300' });
     return res.end();
   }
+  if (await handleAccounts({req,res,u,send,readBody,rateLimited})) return;
   if (await handleFeedback({req,res,u,send,readBody,authed,rateLimited,origin:PUBLIC_ORIGIN})) return;
 
   if (['/records','/api/records'].includes(u.pathname) && req.method === 'GET') {

@@ -1,5 +1,9 @@
 # Curbnote
 
+## Local speed and optional accounts · September 5, 2026
+
+See [SPEED-ACCOUNTS-20260905.md](./SPEED-ACCOUNTS-20260905.md). Native map data, active walks and recent places persist locally; marker calculations run off the UI actor. Accounts are optional passkeys gated at Save this walk across devices. Only explicitly saved address/stop/preference recipes sync. This supersedes the earlier launch decision to defer all accounts. Walking and feedback remain anonymous.
+
 ## Walking instruction ownership · September 5, 2026
 
 The Curbnote guide is now primary. Read [WALKING-GUIDE-20260905.md](./WALKING-GUIDE-20260905.md) for the handoff limitations, complete maneuver preservation, native/web step guide and actual release verification. External maps are secondary, explicitly separate route planning; walking links no longer pretend sampled waypoints transfer the generated avoidance walk. This supersedes earlier “Apple/Google are primary” descriptions below.

@@ -58,6 +58,15 @@ struct WalkingPlannerView: View {
 
             if focusedField != nil {
                 VStack(alignment: .leading, spacing: 0) {
+                    let matches = model.recentMatches(focusedField == .origin ? model.originText : model.destinationText)
+                    if !matches.isEmpty {
+                        Text("Recent · on this device").font(.caption).foregroundStyle(.secondary)
+                        ForEach(matches) { place in
+                            Button { let isOrigin = focusedField == .origin; focusedField = nil; model.select(place, asOrigin: isOrigin) } label: {
+                                Label(place.name, systemImage: "clock").font(.subheadline).frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 10)
+                            }.buttonStyle(.plain)
+                        }
+                    }
                     if model.isSearching { ProgressView("Finding addresses…").font(.caption).padding(.vertical, 8) }
                     if let message = model.searchStatus { Text(message).font(.caption).foregroundStyle(.secondary).padding(.vertical, 8) }
                     ForEach(Array(model.completions.enumerated()), id: \.offset) { index, completion in

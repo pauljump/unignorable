@@ -2,9 +2,10 @@ import MapKit
 import SwiftUI
 
 private enum ActiveSheet: Identifiable {
-    case feedback, records, forecastLocation, planner, controls(RouteOptionFocus), mapContent, directions, feature(MapFeature), reportIssue(ReportIssue)
+    case account(Bool), feedback, records, forecastLocation, planner, controls(RouteOptionFocus), mapContent, directions, feature(MapFeature), reportIssue(ReportIssue)
     var id: String {
         switch self {
+        case .account(let saving): "account-\(saving)"
         case .feedback: "feedback"
         case .records: "records"
         case .forecastLocation: "forecast-location"
@@ -19,6 +20,7 @@ private enum ActiveSheet: Identifiable {
 }
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var model: RouteModel
     @EnvironmentObject private var navigation: AppNavigation
     @StateObject private var reportModel = ReportModel()
@@ -34,6 +36,10 @@ struct ContentView: View {
 
             VStack(spacing: 0) {
                 topBar
+                if model.showingSavedMap, let date = model.mapSavedAt {
+                    Text("Saved map · downloaded " + date.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption2).padding(6).background(AppTheme.background, in: Capsule())
+                }
                 Spacer()
                 if let route = model.selectedRoute {
                     routeCard(route)
@@ -44,10 +50,11 @@ struct ContentView: View {
                 }
             }
         }
+        .onChange(of: scenePhase) { _, phase in if phase != .active { Task { await model.flushWalk() } } }
         .task { await model.load() }
-        .task { await reportModel.load(); applyReportFocus() }
+        .task(id: showPublicRecords) { if showPublicRecords { await reportModel.load(); applyReportFocus() } }
         .onChange(of: navigation.reportFocus) { _, _ in
-            applyReportFocus()
+            Task { await reportModel.load(); applyReportFocus() }
         }
         .onReceive(location.$coordinate) { coordinate in
             guard let coordinate else { return }
@@ -56,6 +63,7 @@ struct ContentView: View {
         .onReceive(location.$errorMessage) { message in if let message { model.status = message } }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
+            case .account(let saving): AccountView(saving: saving, onOpenWalk: { activeSheet = .planner })
             case .feedback: FeedbackView()
             case .records: RecordsView()
             case .forecastLocation: ForecastLocationView()
@@ -230,6 +238,7 @@ struct ContentView: View {
             }
             Spacer()
             Menu {
+                Button("Saved walks", systemImage: "bookmark") { activeSheet = .account(false) }
                 Button("Feedback", systemImage: "bubble.left") { activeSheet = .feedback }
                 Button("Block records", systemImage: "building.2") { activeSheet = .records }
                 Button("Map evidence", systemImage: "square.stack.3d.up") { activeSheet = .mapContent }
@@ -277,6 +286,7 @@ struct ContentView: View {
             HStack {
                 Button("Block records") { activeSheet = .records }
                 Spacer()
+                Button("Saved walks") { activeSheet = .account(false) }
                 Button("Feedback") { activeSheet = .feedback }
             }
             Text("Reported conditions are approximate, not live safety information.").font(.caption).foregroundStyle(.secondary)
@@ -473,6 +483,7 @@ struct ContentView: View {
                 .controlSize(.large)
                 .accessibilityIdentifier("start-curbnote-walk")
 
+
                 Button(action: model.fitRoute) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right").frame(width: 32, height: 32)
                 }
@@ -487,6 +498,9 @@ struct ContentView: View {
                 .controlSize(.large)
                 .accessibilityLabel("Report or inspect an issue near this route")
             }
+            Button { activeSheet = .account(true) } label: { Label("Save this walk", systemImage: "bookmark") }
+                .disabled(model.isRouting)
+                .accessibilityIdentifier("save-walk-account-gate")
         }
         .padding(14)
         .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
