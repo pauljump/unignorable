@@ -420,7 +420,10 @@ struct ContentView: View {
                 .fill(predictionColor(for: feature.layer))
                 .frame(width: 28, height: 28)
                 .overlay(Circle().stroke(.white, lineWidth: 2))
-            Image(systemName: "location.fill")
+            // Keep the condition marker a dot first: the white paper-plane
+            // glyph is the shared visual language from the original map,
+            // never a category-specific icon.
+            Image(systemName: "paperplane.fill")
                 .font(.system(size: 11, weight: .black))
                 .foregroundStyle(.white)
         }
