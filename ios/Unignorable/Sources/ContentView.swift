@@ -463,45 +463,15 @@ struct ContentView: View {
             Text(routeOutcome(route))
                 .font(.caption).foregroundStyle(.secondary).lineLimit(3)
 
-            if let routeExport = route.export {
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("OPEN THIS WALK")
-                        .font(.caption2.bold())
-                        .foregroundStyle(.secondary)
-
-                    HStack(spacing: 8) {
-                        Link(destination: routeExport.apple) {
-                            Label("Apple Maps", systemImage: "apple.logo")
-                                .font(.subheadline.bold())
-                                .frame(maxWidth: .infinity, minHeight: 42)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(AppTheme.brand)
-                        .accessibilityLabel("Open this walking route in Apple Maps")
-
-                        Link(destination: routeExport.google) {
-                            Label("Google Maps", systemImage: "map.fill")
-                                .font(.subheadline.bold())
-                                .frame(maxWidth: .infinity, minHeight: 42)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.blue)
-                        .accessibilityLabel("Open this walking route in Google Maps")
-                    }
-
-                    Text("Opens in walking mode with this route’s stop and shaping points. Maps may refine the line.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-            }
-
             HStack(spacing: 8) {
                 Button { activeSheet = .directions } label: {
-                    Label("Directions here", systemImage: "list.bullet").frame(maxWidth: .infinity)
+                    Label("Walk with Curbnote", systemImage: "figure.walk").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
+                .tint(AppTheme.brand)
+                .foregroundStyle(AppTheme.background)
                 .controlSize(.large)
+                .accessibilityIdentifier("start-curbnote-walk")
 
                 Button(action: model.fitRoute) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right").frame(width: 32, height: 32)

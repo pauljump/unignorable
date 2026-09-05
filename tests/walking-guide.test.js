@@ -9,7 +9,7 @@ function setup(){
   closeWalkPlanner(){node('route-form').hidden=true;node('results').hidden=true;},
   map:{closePopup(){},fitBounds(points,options){this.focus={points,options};}},
   L:{latLngBounds:p=>p,layerGroup:()=>({addTo(){return this;},clearLayers(){}}),circleMarker:()=>({bindTooltip(){return this;},addTo(){return this;}})},selectionRenderer:{}};
- for(const name of ['closeWalkGuide','renderWalkGuide','selectWalkStep','startWalkGuide','renderRouteHandoff'])env[name]=load(name,env);
+ for(const name of ['closeWalkGuide','leaveWalkGuide','renderWalkGuide','selectWalkStep','startWalkGuide','renderRouteHandoff'])env[name]=load(name,env);
  return {env,state,node,steps};
 }
 test('walking guide follows each actual maneuver and keeps its map location above the mobile sheet',()=>{
@@ -33,4 +33,11 @@ test('missing instructions do not fabricate a guided walk',()=>{
 test('external-map controls are secondary and identify separate stop legs',()=>{
  const {env}=setup();const out=env.renderRouteHandoff({export:{legs:[{name:'To stop: <Cafe>',apple:'https://maps.apple.com/?saddr=a&daddr=b',google:'https://www.google.com/maps/dir/?api=1'},{name:'From stop to destination',apple:'https://maps.apple.com/',google:'https://www.google.com/maps/dir/'}]}});
  assert.match(out,/Plan separately/);assert.match(out,/not transferred/);assert.match(out,/To stop: &lt;Cafe>/);assert.match(out,/From stop to destination/);assert.doesNotMatch(out,/Start in/);
+});
+
+test('leaving the guide restores route controls without requesting or replacing the walk',()=>{
+ const {env,state,node}=setup();let rendered=0;env.renderResults=()=>{rendered++;};env.fitRoute=()=>{};
+ env.startWalkGuide();env.selectWalkStep(1);const route=state.routes[0];env.leaveWalkGuide();
+ assert.equal(node('route-form').hidden,false);assert.equal(node('walk-guide').hidden,true);
+ assert.equal(rendered,1);assert.equal(state.routes[0],route);env.startWalkGuide();assert.equal(state.guide.index,1);
 });

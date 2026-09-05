@@ -734,6 +734,9 @@ function closeWalkGuide(){
   state.guide.open=false;document.getElementById('walk-guide').hidden=true;
   state.guide.group?.clearLayers();window.speechSynthesis?.cancel();
 }
+function leaveWalkGuide(){
+  closeWalkGuide();document.getElementById('route-form').hidden=false;renderResults();fitRoute();
+}
 function startWalkGuide(){
   const route=state.routes[state.selectedRoute];if(!route?.steps?.length)return;
   if(state.guide.route!==route){state.guide.index=0;state.guide.route=route;}
@@ -753,7 +756,7 @@ function renderWalkGuide(){
   panel.innerHTML=`<div class="guide-top"><b>Step ${index+1} of ${steps.length}</b><button data-walk-action="close" aria-label="Close walking guide">×</button></div><progress value="${index+1}" max="${steps.length}" aria-label="Instruction progress"></progress><h2>${esc(step.instruction)}</h2>${step.distance?`<strong>Continue for ${stepDistance(step.distance)}</strong>`:''}<p>Use Next as you reach each instruction.</p><div class="guide-controls"><button data-walk-action="back" ${index===0?'disabled':''}>Back</button><button class="guide-next" data-walk-action="next">${index===steps.length-1?'Finish walk':'Next instruction'}</button>${window.speechSynthesis?'<button data-walk-action="read" aria-label="Read this instruction aloud">Read step</button>':''}</div>${steps[index+1]?`<p>Then: ${esc(steps[index+1].instruction)}</p>`:''}<details><summary>All ${steps.length} instructions</summary>${steps.map((item,i)=>`<button class="guide-row" data-walk-step="${i}">${i+1}. ${esc(item.instruction)}</button>`).join('')}</details>`;
   panel.querySelectorAll('[data-walk-action]').forEach(button=>button.addEventListener('click',()=>{
     const action=button.dataset.walkAction;
-    if(action==='close'||action==='next'&&index===steps.length-1){closeWalkGuide();fitRoute();return;}
+    if(action==='close'||action==='next'&&index===steps.length-1){leaveWalkGuide();return;}
     if(action==='read'){const speech=new SpeechSynthesisUtterance(step.instruction+(step.distance?` Continue for ${stepDistance(step.distance)}.`:''));speech.lang='en-US';window.speechSynthesis.cancel();window.speechSynthesis.speak(speech);return;}
     selectWalkStep(index+(action==='back'?-1:1));
   }));

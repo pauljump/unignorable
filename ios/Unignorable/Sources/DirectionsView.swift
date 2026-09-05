@@ -1,118 +1,149 @@
 import SwiftUI
+import MapKit
+import AVFoundation
+
+@MainActor
+private final class WalkingVoice: ObservableObject {
+    private let speaker = AVSpeechSynthesizer()
+    func read(_ text: String) {
+        speaker.stopSpeaking(at: .immediate)
+        let speech = AVSpeechUtterance(string: text)
+        speech.voice = AVSpeechSynthesisVoice(language: "en-US")
+        speaker.speak(speech)
+    }
+    func stop() { speaker.stopSpeaking(at: .immediate) }
+}
 
 struct DirectionsView: View {
     @EnvironmentObject private var model: RouteModel
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var voice = WalkingVoice()
+    @State private var camera: MapCameraPosition = .automatic
 
     var body: some View {
         NavigationStack {
-            content
-            .navigationTitle("Directions")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-        }
-        .presentationDetents([.medium, .large])
-    }
-
-    @ViewBuilder private var content: some View {
-        if let route = model.selectedRoute, let steps = route.steps, !steps.isEmpty {
-            List {
-                Section {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(routeDuration(route.duration)).font(.title2.bold())
-                        Text(routeDistance(route.distance)).foregroundStyle(.secondary)
-                        Spacer()
-                        if route.recommended { Text("BEST").font(.caption2.bold()).foregroundStyle(AppTheme.coral) }
-                    }
-                    if let via = model.via {
-                        Label("Stop at \(via.name)", systemImage: "plus.circle.fill").font(.subheadline).foregroundStyle(AppTheme.mint)
-                    }
-                    Text(outcome(route)).font(.caption).foregroundStyle(.secondary)
-                }
-
-                if let routeExport = route.export {
-                    Section("Open this walk") {
-                        Link(destination: routeExport.apple) {
-                            Label("Open in Apple Maps", systemImage: "apple.logo")
-                                .font(.headline)
-                                .foregroundStyle(AppTheme.coral)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+            if let route = model.selectedRoute, let steps = route.steps, !steps.isEmpty {
+                let index = min(model.walkingStepIndex, steps.count - 1)
+                let step = steps[index]
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Text("\(max(1, Int((route.duration / 60).rounded()))) min · \(distance(route.distance))").font(.headline)
+                            Spacer()
+                            Text("Your planned walk").font(.caption).foregroundStyle(.secondary)
                         }
-                        Link(destination: routeExport.google) {
-                            Label("Open in Google Maps", systemImage: "map.fill")
-                                .font(.headline)
-                                .foregroundStyle(.blue)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                }
-
-                Section {
-                    ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
-                        Button {
-                            model.focus(step)
-                        } label: {
-                            HStack(alignment: .top, spacing: 13) {
-                                Image(systemName: maneuverSymbol(step, index: index, count: steps.count))
-                                    .font(.title3).foregroundStyle(AppTheme.coral).frame(width: 30)
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(step.instruction).font(.body.weight(.medium)).foregroundStyle(.primary)
-                                    Text(stepDistance(step.distance)).font(.caption).foregroundStyle(.secondary)
+                        if let via = model.via { Label("Stop: \(via.name)", systemImage: "mappin.and.ellipse").font(.subheadline) }
+                        Map(position: $camera, interactionModes: [.pan, .zoom]) {
+                            MapPolyline(coordinates: route.geometry.mapCoordinates).stroke(AppTheme.brand, lineWidth: 6)
+                            if let coordinate = step.location?.coordinate {
+                                Annotation("Step \(index + 1)", coordinate: coordinate) {
+                                    Text("\(index + 1)").font(.headline.bold()).padding(10)
+                                        .foregroundStyle(AppTheme.background).background(AppTheme.brand, in: Circle())
                                 }
-                                Spacer(minLength: 0)
                             }
-                            .padding(.vertical, 5)
                         }
-                        .buttonStyle(.plain)
-                    }
-                } header: {
-                    Text("Key walking directions")
-                } footer: {
-                    Text("Small path and crosswalk offsets are folded into the highlighted route instead of shown as fake turns.")
-                }
+                        .mapStyle(.standard(pointsOfInterest: .excludingAll))
+                        .frame(height: 190).clipShape(RoundedRectangle(cornerRadius: 16))
+                        .accessibilityIdentifier("walking-step-map")
 
-                Section {
-                    Text("The route drawn in Curbnote is exact. Apple and Google receive the stop and shaping points but may refine the line.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Step \(index + 1) of \(steps.count)").font(.subheadline.bold()).foregroundStyle(AppTheme.brand)
+                                .accessibilityIdentifier("walking-step-progress")
+                            ProgressView(value: Double(index + 1), total: Double(steps.count)).tint(AppTheme.brand)
+                            Label(step.instruction, systemImage: symbol(step))
+                                .font(.title2.bold()).fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("walking-step-instruction")
+                            if step.distance > 0 { Text("Continue for \(distance(step.distance))").font(.headline) }
+                            Text("Use Next as you reach each instruction.").font(.caption).foregroundStyle(.secondary)
+                            HStack(spacing: 12) {
+                                Button { model.selectWalkingStep(index - 1) } label: {
+                                    HStack { Image(systemName: "chevron.left"); Text("Back") }
+                                        .frame(maxWidth: .infinity, minHeight: 44)
+                                        .background(AppTheme.raised, in: RoundedRectangle(cornerRadius: 10))
+                                }
+                                .disabled(index == 0).opacity(index == 0 ? 0.45 : 1)
+                                .accessibilityIdentifier("walking-step-back")
+                                Button { voice.read(step.instruction + (step.distance > 0 ? " Continue for \(distance(step.distance))." : "")) } label: {
+                                    HStack { Image(systemName: "speaker.wave.2"); Text("Read step") }
+                                        .frame(maxWidth: .infinity, minHeight: 44)
+                                        .background(AppTheme.raised, in: RoundedRectangle(cornerRadius: 10))
+                                }.accessibilityIdentifier("walking-step-read")
+                            }.buttonStyle(.plain).foregroundStyle(AppTheme.brand)
+                            Button {
+                                if index == steps.count - 1 { dismiss() }
+                                else { model.selectWalkingStep(index + 1) }
+                            } label: {
+                                Text(index == steps.count - 1 ? "Finish walk" : "Next instruction")
+                                    .font(.headline).frame(maxWidth: .infinity, minHeight: 42)
+                            }
+                            .buttonStyle(.borderedProminent).tint(AppTheme.brand).foregroundStyle(AppTheme.background)
+                            .accessibilityIdentifier("walking-step-next")
+                            if index + 1 < steps.count {
+                                Text("Then: \(steps[index + 1].instruction)").font(.subheadline).foregroundStyle(.secondary)
+                            }
+                        }.padding(16).background(AppTheme.panel, in: RoundedRectangle(cornerRadius: 16))
+
+                        DisclosureGroup("All \(steps.count) instructions") {
+                            ForEach(Array(steps.enumerated()), id: \.offset) { row, item in
+                                Button { model.selectWalkingStep(row) } label: {
+                                    HStack(alignment: .top) {
+                                        Text("\(row + 1)").foregroundStyle(AppTheme.brand).frame(width: 28)
+                                        Text(item.instruction).frame(maxWidth: .infinity, alignment: .leading)
+                                        if item.distance > 0 { Text(distance(item.distance)).foregroundStyle(.secondary) }
+                                    }.padding(.vertical, 8)
+                                }.buttonStyle(.plain)
+                            }
+                        }
+                        if let handoff = route.export {
+                            DisclosureGroup("Plan separately in another map") {
+                                Text("These apps calculate a new walk. Curbnote’s route and avoidance choices are not transferred.")
+                                    .font(.caption).foregroundStyle(.secondary).padding(.vertical, 8)
+                                if let legs = handoff.legs {
+                                    ForEach(legs) { leg in
+                                        Text(leg.name).font(.subheadline.bold()).padding(.top, 8)
+                                        HStack {
+                                            Link("Apple Maps", destination: leg.apple)
+                                            Spacer()
+                                            Link("Google Maps", destination: leg.google)
+                                        }.padding(.vertical, 8)
+                                    }
+                                } else {
+                                    Link("Apple Maps", destination: handoff.apple)
+                                    Link("Google Maps", destination: handoff.google)
+                                }
+                            }
+                        }
+                    }.padding(16)
                 }
+                .background(AppTheme.background)
+                .onAppear { focus(step) }
+                .onChange(of: model.walkingStepIndex) { _, _ in voice.stop(); focus(steps[min(model.walkingStepIndex, steps.count - 1)]) }
+                .navigationTitle("Walk with Curbnote")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            } else {
+                ContentUnavailableView("Directions unavailable", systemImage: "map", description: Text("Rebuild the walk to load its instructions."))
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             }
-        } else {
-            ContentUnavailableView("Directions unavailable", systemImage: "point.topleft.down.to.point.bottomright.curvepath",
-                                   description: Text("Try rebuilding the route. The map needs maneuver data before it can show turn-by-turn directions."))
         }
+        .presentationDetents([.large])
+        .onDisappear { voice.stop() }
     }
 
-    private func stepDistance(_ meters: Double) -> String {
-        if meters < 402 { return "\(Int((meters * 3.28084).rounded())) ft" }
-        return String(format: "%.1f mi", meters / 1609.344)
+    private func focus(_ step: RouteStep) {
+        guard let coordinate = step.location?.coordinate else { camera = .automatic; return }
+        camera = .region(.init(center: coordinate, span: .init(latitudeDelta: 0.004, longitudeDelta: 0.004)))
     }
-
-    private func routeDuration(_ seconds: Double) -> String {
-        let minutes = max(1, Int((seconds / 60).rounded()))
-        return minutes >= 60 ? "\(minutes / 60) hr \(minutes % 60) min" : "\(minutes) min"
+    private func distance(_ meters: Double) -> String {
+        meters < 160 ? "\(max(1, Int((meters * 3.28084).rounded()))) ft" : String(format: "%.1f mi", meters / 1609.344)
     }
-
-    private func routeDistance(_ meters: Double) -> String {
-        String(format: "%.1f mi", meters / 1609.344)
-    }
-
-    private func outcome(_ route: RouteChoice) -> String {
-        guard !model.filters.isEmpty else { return "Fastest plausible route; no avoidance is selected." }
-        if route.selectedIntersections == 0 { return "No high-confidence selected locations are crossed." }
-        return "Cleanest reasonable route crosses \(route.selectedIntersections) high-confidence selected location\(route.selectedIntersections == 1 ? "" : "s")."
-    }
-
-    private func maneuverSymbol(_ step: RouteStep, index: Int, count: Int) -> String {
+    private func symbol(_ step: RouteStep) -> String {
         let text = "\(step.type ?? "") \(step.modifier ?? "") \(step.instruction)".lowercased()
-        if index == count - 1 || text.contains("arrive") || text.contains("destination") { return "mappin.circle.fill" }
+        if text.contains("arriv") { return "mappin.circle.fill" }
+        if text.contains("stair") { return "figure.stairs" }
         if text.contains("u-turn") || text.contains("uturn") { return "arrow.uturn.backward" }
-        if text.contains("roundabout") || text.contains("rotary") { return "arrow.clockwise.circle.fill" }
-        if text.contains("slight left") { return "arrow.up.left" }
-        if text.contains("slight right") { return "arrow.up.right" }
         if text.contains("left") { return "arrow.turn.up.left" }
         if text.contains("right") { return "arrow.turn.up.right" }
-        if text.contains("merge") { return "arrow.merge" }
         return "arrow.up"
     }
 }

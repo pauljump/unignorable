@@ -2,6 +2,8 @@
 
 **TestFlight:** 1.0.0 (5) is processed and available to Paul in Curbnote Internal. The Aqua Terminal ship method resolved headless signing; see [the release record](../RELEASE-CURBNOTE-20260905.md).
 
+The primary walking action is **Walk with Curbnote**: complete maneuver steps, a map of the active instruction, Back/Next, optional read-aloud and the full list. External maps are secondary route planners; see [the guide decision and verification](../WALKING-GUIDE-20260905.md).
+
 Display name: Curbnote. Bundle ID: `com.curbnote.app`. App Store Connect ID: `6809025615`; SKU: `curbnote`. API and shared links: `https://curbnote.polyfeeds.dev`. The native API client retries a DNS-resolution failure once through the retained `https://unignorable.polyfeeds.dev/api/` alias to the same backend. Ambiguous transport failures and HTTP errors are not retried.
 
 Civic evidence layers start visible independently of walking avoidance; cameras remain opt-in. Double-tap the map or a marker to zoom. Only a single tap on an actual marker opens map details; tapping empty map space does not select a nearby record.

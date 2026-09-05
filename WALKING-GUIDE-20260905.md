@@ -22,4 +22,4 @@ Walking handoffs now use simple endpoint links, Apple `saddr`/`daddr`/`dirflg=w`
 
 ## Verification and release
 
-All 66 web/backend tests pass, including long-walk arrival retention, exact handoff coordinates/mode, separate stop legs, guide navigation, map framing, progress reset and missing-instruction handling. Native tests and publication results follow after the live guide check.
+All 67 web/backend tests pass, including long-walk arrival retention, exact handoff coordinates/mode, separate stop legs, guide navigation, map framing, progress reset and missing-instruction handling. Eleven native unit tests and the live address-to-route-to-guide UI regression pass. The regression opens the native guide, advances to step 2 and returns to step 1. A rendered iPhone guide screen was inspected. Web browser gesture/render verification remains unavailable without a connected browser. The final native layout/navigation run also passes. Publication results follow after TestFlight processing.

@@ -40,6 +40,25 @@ final class ReportMapGestureTests: XCTestCase {
         route.lifetime = .keepAlways
         add(route)
         XCTAssertFalse(app.staticTexts["A server with the specified hostname could not be found."].exists)
+        app.buttons["Done"].tap()
+        let startWalk = app.buttons["start-curbnote-walk"]
+        XCTAssertTrue(startWalk.waitForExistence(timeout: 5))
+        startWalk.tap()
+        let progress = app.staticTexts["walking-step-progress"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 5))
+        XCTAssertTrue(progress.label.hasPrefix("Step 1 of"))
+        XCTAssertFalse(app.buttons["walking-step-back"].isEnabled)
+        let next = app.buttons["walking-step-next"]
+        if !next.isHittable { app.swipeUp() }
+        next.tap()
+        XCTAssertTrue(progress.label.hasPrefix("Step 2 of"))
+        app.buttons["walking-step-back"].tap()
+        XCTAssertTrue(progress.label.hasPrefix("Step 1 of"))
+        let guide = XCTAttachment(screenshot: app.screenshot())
+        guide.name = "Curbnote walking guide"
+        guide.lifetime = .keepAlways
+        add(guide)
+
     }
 
     func testLaunchOffersNativeFeedbackAndRecords() throws {

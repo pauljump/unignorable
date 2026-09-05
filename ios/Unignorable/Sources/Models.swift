@@ -47,6 +47,14 @@ struct RouteExport: Codable, Sendable {
     let shapingWaypoints: Int?
     let externalWaypoints: Int?
     let includesVia: Bool?
+    let legs: [RouteHandoffLeg]?
+}
+
+struct RouteHandoffLeg: Codable, Identifiable, Sendable {
+    let id: String
+    let name: String
+    let apple: URL
+    let google: URL
 }
 
 struct RouteChoice: Codable, Identifiable, Sendable {

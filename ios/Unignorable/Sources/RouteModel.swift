@@ -16,7 +16,10 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
     private var completer: MKLocalSearchCompleter?
     @Published var routes: [RouteChoice] = []
     @Published var avoidance: AvoidanceSummary?
-    @Published var selectedRouteID: String?
+    @Published var walkingStepIndex = 0
+    @Published var selectedRouteID: String? {
+        didSet { if oldValue != selectedRouteID { walkingStepIndex = 0 } }
+    }
     @Published var filters: Set<LayerDefinition> = []
     @Published var visibleLayers: Set<LayerDefinition> = Set(LayerDefinition.allCases.filter { $0 != .alpr })
     @Published var mapFeatures: [String: [MapFeature]] = [:]
@@ -228,6 +231,7 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
                 if delay { try await Task.sleep(for: .milliseconds(180)) }
                 let response = try await api.walkingRoutes(origin: origin, destination: destination, via: requestedVia, filters: requestedFilters)
                 guard !Task.isCancelled, routeGeneration == generation else { return }
+                walkingStepIndex = 0
                 routes = response.routes
                 avoidance = response.avoidance
                 selectedRouteID = response.routes.first(where: \.recommended)?.id ?? response.routes.first?.id
@@ -246,6 +250,7 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
         routeTask?.cancel()
         resolveTask?.cancel()
         routeGeneration = nil
+        walkingStepIndex = 0
         routes = []
         avoidance = nil
         selectedRouteID = nil
@@ -343,6 +348,11 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
     func clearVia() {
         via = nil
         rebuild()
+    }
+
+    func selectWalkingStep(_ index: Int) {
+        let count = selectedRoute?.steps?.count ?? 0
+        walkingStepIndex = min(max(0, index), max(0, count - 1))
     }
 
     func focus(_ step: RouteStep) {

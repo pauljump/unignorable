@@ -49,6 +49,21 @@ final class ConnectivityTests: XCTestCase {
     }
 
     @MainActor
+    func testWalkingStepProgressResetsWhenTheSelectedRouteChanges() throws {
+        let routeJSON = #"{"id":"a","distance":100,"duration":90,"geometry":{"type":"LineString","coordinates":[[-73.99,40.74],[-73.98,40.75]]},"recommended":true,"selectedIntersections":0,"metrics":{},"steps":[{"instruction":"Walk east","distance":90,"duration":80},{"instruction":"Arrive","distance":0,"duration":0}]}"#
+        let model = RouteModel()
+        model.routes = [try JSONDecoder().decode(RouteChoice.self, from: Data(routeJSON.utf8))]
+        model.selectedRouteID = "a"
+        model.selectWalkingStep(50)
+        XCTAssertEqual(model.walkingStepIndex, 1)
+        model.selectWalkingStep(-1)
+        XCTAssertEqual(model.walkingStepIndex, 0)
+        model.selectWalkingStep(1)
+        model.selectedRouteID = "b"
+        XCTAssertEqual(model.walkingStepIndex, 0)
+    }
+
+    @MainActor
     func testClearingOrSelectingAddressClearsPendingSuggestions() {
         let model = RouteModel()
         let place = Place(name: "247 Third Avenue", lat: 40.737, lng: -73.984)
