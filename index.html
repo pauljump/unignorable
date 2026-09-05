@@ -95,7 +95,7 @@
       <div class="forecast-body forecast-empty" id="forecast-body">
         <div class="forecast-kicker" id="forecast-kicker">Current condition estimate</div>
         <h1 id="forecast-title">Reading this area…</h1>
-        <div class="forecast-place" id="forecast-place">Search or tap a map location.</div>
+        <div class="forecast-place" id="forecast-place">Search an address or tap a condition dot.</div>
         <div class="forecast-window" id="forecast-window-box"><span id="forecast-window-label">Historical reporting pattern</span><b id="forecast-window">Checking for a reliable pattern…</b><small>Report timing only—not when people will be present.</small></div>
         <div class="forecast-confidence" id="forecast-confidence"><span class="confidence-pill">Beta forecast</span><span>Public evidence, not a live inventory</span></div>
         <section class="forecast-loop" id="forecast-loop" aria-labelledby="forecast-loop-stage"><div class="forecast-loop-head"><span>Resolve it · prove it held</span><b id="forecast-loop-stage">Detected</b></div><div class="loop-track" id="forecast-loop-track"><span class="loop-step current">Detected</span><span class="loop-step">Checked</span><span class="loop-step">Action</span><span class="loop-step">Clear</span><span class="loop-step">Held</span></div><p id="forecast-loop-copy">Public evidence found a recurring condition. A nearby check is the highest-value next step.</p><button class="forecast-next" id="forecast-verify" type="button" data-loop-mode="verify">Check this place</button><small class="loop-proof" id="forecast-loop-proof">Success means the condition is independently verified clear and stays clear; recurrence reopens the loop.</small></section>
@@ -146,8 +146,8 @@ const REPORT_TYPES={
 };
 const state={data:null,enabled:new Set(),visible:new Set(Object.keys(DEFS).filter(name=>name!=='alpr')),featureGroup:null,routes:[],routeLines:[],selectedRoute:0,endpoints:null,via:null,routeRequest:0,routeTimer:null,routeController:null,profile:'walking',avoidance:null,access:null,forecast:{feature:null,group:null,anchor:null,lastAnnouncement:null,conditionLoop:null,loopRequest:0,loopFeatureId:null,loopLoadedAt:0,restoringUrl:false},discover:{citibike:false,group:null,timer:null},report:{issues:null,enabled:new Set(),group:null,current:null,selectedStatus:null,photo:null,promise:null,error:null}};
 const PREF_KEY='unignorable-regular-route-v2';
-const canvas=L.canvas({padding:.5,tolerance:8});
-const map=L.map('map',{zoomControl:true,renderer:canvas,minZoom:10,maxZoom:19}).setView([40.74482,-73.98511],15);
+const canvas=L.canvas({padding:.5,tolerance:3});
+const map=L.map('map',{zoomControl:true,doubleClickZoom:true,renderer:canvas,minZoom:10,maxZoom:19}).setView([40.74482,-73.98511],15);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'}).addTo(map);
 const routeGroup=L.featureGroup().addTo(map),endpointGroup=L.layerGroup().addTo(map);
 map.createPane('selection');map.getPane('selection').style.zIndex=650;
@@ -248,7 +248,7 @@ const LOOP_STAGE_LABELS=['Detected','Checked','Action','Clear','Held'];
 function fallbackConditionLoop(feature){return feature?{stage:'detected',stage_index:0,stages:LOOP_STAGE_LABELS.map((label,index)=>({id:label.toLowerCase(),label,state:index===0?'current':'next'})),next_action:{mode:'verify',label:'Check this place'},checks:{total:0,pending:0,reviewed:0,forecast_unchanged:true,review_required:true},record:null,campaign:null,actions:{total:0,thisWeek:{total:0}}}:null;}
 function renderConditionLoop(loop){
   const button=document.getElementById('forecast-verify'),stage=document.getElementById('forecast-loop-stage'),copy=document.getElementById('forecast-loop-copy'),proof=document.getElementById('forecast-loop-proof'),track=document.getElementById('forecast-loop-track');
-  if(!loop){stage.textContent='No condition selected';copy.textContent='Search or tap the map to choose a modeled condition.';proof.textContent='The loop begins only when public evidence supports a location estimate.';button.disabled=true;button.dataset.loopMode='verify';button.textContent='Check unavailable';track.innerHTML=LOOP_STAGE_LABELS.map(label=>`<span class="loop-step">${label}</span>`).join('');return;}
+  if(!loop){stage.textContent='No condition selected';copy.textContent='Search an address or tap a condition dot.';proof.textContent='The loop begins only when public evidence supports a location estimate.';button.disabled=true;button.dataset.loopMode='verify';button.textContent='Check unavailable';track.innerHTML=LOOP_STAGE_LABELS.map(label=>`<span class="loop-step">${label}</span>`).join('');return;}
   state.forecast.conditionLoop=loop;const index=Math.max(0,Math.min(LOOP_STAGE_LABELS.length-1,Number(loop.stage_index)||0)),checks=loop.checks||{},record=loop.record,weekly=Number(loop.actions?.thisWeek?.total)||0,durable=loop.durable_resolution||{};
   stage.textContent=LOOP_STAGE_LABELS[index];track.innerHTML=(loop.stages||LOOP_STAGE_LABELS.map((label,i)=>({label,state:i===index?'current':i<index?'complete':'next'}))).map((item,i)=>`<span class="loop-step ${esc(item.state||'next')}"${i===index?' aria-current="step"':''}>${esc(item.label||LOOP_STAGE_LABELS[i])}</span>`).join('');
   if(index===0)copy.textContent='Public evidence found a recurring condition. A nearby check is the highest-value next step.';
@@ -341,7 +341,7 @@ function renderForecast(){
   const body=document.getElementById('forecast-body'),nearest=nearestForecast(),check=document.getElementById('forecast-check');state.forecast.group.clearLayers();drawForecastAnchor();check.hidden=true;document.getElementById('condition-status').textContent='';
   if(!nearest){
     state.forecast.feature=null;body.classList.add('forecast-empty');document.getElementById('forecast-kicker').textContent='Location forecast';
-    const title=state.data?(state.forecast.anchor?'No modeled condition near this point':'Choose an NYC place'):'Reading this area…';document.getElementById('forecast-title').textContent=title;document.getElementById('forecast-place').textContent=state.data?'Search an address or tap the map. Panning does not change your selection.':'Loading public condition evidence…';
+    const title=state.data?(state.forecast.anchor?'No modeled condition near this point':'Choose an NYC place'):'Reading this area…';document.getElementById('forecast-title').textContent=title;document.getElementById('forecast-place').textContent=state.data?'Tap a condition dot for details. Double-tap the map to zoom.':'Loading public condition evidence…';
     document.getElementById('forecast-window-box').hidden=true;document.getElementById('forecast-confidence').innerHTML='<span class="confidence-pill">No current estimate</span><span>Beta · uncalibrated</span>';document.getElementById('forecast-basis').textContent='A directional forecast needs recurring, recent condition evidence near the selected place. Scores are uncalibrated heuristics, not measured probabilities.';
     document.getElementById('forecast-site-pattern').textContent='No site selected';document.getElementById('forecast-score').textContent='Not available';document.getElementById('forecast-range').textContent='Not available';document.getElementById('forecast-tier').textContent='Not enough current evidence';document.getElementById('forecast-recency').textContent='—';document.getElementById('forecast-location-detail').textContent='No modeled area nearby';document.getElementById('forecast-time-detail').textContent='No reliable pattern published';
     state.forecast.conditionLoop=null;renderConditionLoop(null);renderForecastShareCard(null);announceForecast(title,'empty');return;
@@ -358,12 +358,12 @@ function renderForecast(){
   const timeDays=Number(forecast.window?.days_in_window),sample=Number(firstValue(forecast.window?.sample_size,forecast.window?.report_days));document.getElementById('forecast-time-detail').textContent=timeWindow?[windowStrength?`${windowStrength[0].toUpperCase()+windowStrength.slice(1)} pattern`:null,Number.isFinite(timeDays)&&Number.isFinite(sample)?`${fmt(timeDays)} of ${fmt(sample)} report days`:null,'Not a presence schedule'].filter(Boolean).join(' · '):forecast.window?'Weak pattern omitted from primary card':'No reliable pattern published';
   renderForecastShareCard(feature);loadConditionLoop(feature);
   announceForecast(label,feature.id||`${feature.lat},${feature.lng}`);
-  L.circleMarker([feature.lat,feature.lng],{renderer:selectionRenderer,radius:10,color:'#fff',weight:3,fillColor:'#ff5a47',fillOpacity:1,bubblingMouseEvents:false}).on('click',()=>{openForecastPanel();syncForecastUrl(false);document.getElementById('forecast-card').scrollTo({top:0,behavior:'auto'});}).addTo(state.forecast.group);
+  bindMapInstance(L.circleMarker([feature.lat,feature.lng],{renderer:selectionRenderer,radius:10,color:'#fff',weight:3,fillColor:'#ff5a47',fillOpacity:1,bubblingMouseEvents:false}),()=>{openForecastPanel();syncForecastUrl(false);document.getElementById('forecast-card').scrollTo({top:0,behavior:'auto'});}).addTo(state.forecast.group);
 }
 
 function isConditionObservationFeature(feature){return feature?.layer==='homelessness'&&feature?.subject_type==='encampment'&&Boolean(feature.id);}
 async function openForecastRecord(){
-  const feature=state.forecast.feature;if(!feature)return openReportMessage('No forecast is selected. Search or tap the map first.');
+  const feature=state.forecast.feature;if(!feature)return openReportMessage('No forecast is selected. Search an address or tap a condition dot first.');
   await loadReportIssues();const issue=relatedIssue(feature);
   if(issue)openReportIssue(issue);else openReportMessage('No matching public issue record is available for this forecast. The forecast evidence remains available under “Why we think this.”');
 }
@@ -421,6 +421,22 @@ const FULL_DETAIL_ZOOM=14;
 function featureSeverity(feature){
   return feature.condition?.routingLevel==='hard'||Number(feature.count)>=20?'high':feature.condition?.routingLevel==='soft'||Number(feature.count)>=5?'elevated':'lower';
 }
+let mapInstanceTapTimer=null;
+function cancelMapInstanceTap(){clearTimeout(mapInstanceTapTimer);mapInstanceTapTimer=null;}
+function bindMapInstance(marker,onSelect){
+  marker.on('click',event=>{
+    cancelMapInstanceTap();
+    if(event?.originalEvent?.detail>1)return;
+    mapInstanceTapTimer=setTimeout(()=>{mapInstanceTapTimer=null;onSelect();},500);
+  });
+  marker.on('dblclick',event=>{
+    cancelMapInstanceTap();
+    // These markers do not bubble events, so zoom explicitly at the tapped point.
+    map.setZoomAround(event.latlng||marker.getLatLng(),map.getZoom()+1);
+  });
+  marker.on('remove',cancelMapInstanceTap);
+  return marker;
+}
 function featureMarkerStyle(level,fill,cluster=false){
   return {renderer:canvas,radius:cluster?7:5,color:level==='high'?'#eaf0fb':level==='elevated'?'#ffc24b':'#28344a',weight:level==='lower'?1:1.5,fillColor:fill,fillOpacity:.92,bubblingMouseEvents:false};
 }
@@ -439,8 +455,8 @@ function drawFeatures(){
     const bounds=map.getBounds().pad(.3);
     entries.filter(({feature})=>bounds.contains([feature.lat,feature.lng])).slice(0,1500).forEach(({feature,name})=>{
       const marker=L.circleMarker([feature.lat,feature.lng],featureMarkerStyle(featureSeverity(feature),DEFS[name].color));
-      if(feature.subject_type==='encampment'&&forecastFor(feature).probability!=null)marker.on('click',()=>selectForecastAnchor({name:feature.address||feature.addr||'Reported area',lat:feature.lat,lng:feature.lng},{featureId:feature.id,move:false}));
-      else marker.bindPopup(popup(feature),{maxWidth:290});
+      if(feature.subject_type==='encampment'&&forecastFor(feature).probability!=null)bindMapInstance(marker,()=>selectForecastAnchor({name:feature.address||feature.addr||'Reported area',lat:feature.lat,lng:feature.lng},{featureId:feature.id,move:false}));
+      else bindMapInstance(marker,()=>L.popup({maxWidth:290}).setLatLng([feature.lat,feature.lng]).setContent(popup(feature)).openOn(map));
       marker.addTo(state.featureGroup);
     });
     return;
@@ -456,7 +472,7 @@ function drawFeatures(){
   }
   cells.forEach(cell=>{
     const lat=cell.lat/cell.weight,lng=cell.lng/cell.weight;
-    L.circleMarker([lat,lng],featureMarkerStyle(cell.severity,DEFS[cell.topLayer].color,true)).on('click',()=>map.flyTo([lat,lng],Math.min(FULL_DETAIL_ZOOM+1,zoom+3),{duration:.7})).addTo(state.featureGroup);
+    bindMapInstance(L.circleMarker([lat,lng],featureMarkerStyle(cell.severity,DEFS[cell.topLayer].color,true)),()=>map.flyTo([lat,lng],Math.min(FULL_DETAIL_ZOOM+1,zoom+3),{duration:.7})).addTo(state.featureGroup);
   });
 }
 
@@ -498,12 +514,12 @@ function drawReportIssues(){
   if(!state.report.issues||!state.report.enabled.size)return;
   const bounds=map.getBounds().pad(.35),zoom=map.getZoom(),visible=state.report.issues.filter(issue=>issue.status==='active'&&state.report.enabled.has(issue.type)&&bounds.contains([issue.lat,issue.lng]));
   if(zoom>=15||visible.length<=180){
-    const center=map.getCenter();visible.sort((a,b)=>reportDistanceMeters(center,a)-reportDistanceMeters(center,b)||Number(b.score)-Number(a.score)).slice(0,220).forEach(issue=>L.circleMarker([issue.lat,issue.lng],reportMarkerStyle(issue)).on('click',()=>openReportIssue(issue)).addTo(state.report.group));
+    const center=map.getCenter();visible.sort((a,b)=>reportDistanceMeters(center,a)-reportDistanceMeters(center,b)||Number(b.score)-Number(a.score)).slice(0,220).forEach(issue=>bindMapInstance(L.circleMarker([issue.lat,issue.lng],reportMarkerStyle(issue)),()=>openReportIssue(issue)).addTo(state.report.group));
     return;
   }
   const grid=zoom<=11?.028:zoom===12?.018:zoom===13?.010:.005,cells=new Map();
   visible.forEach(issue=>{const key=Math.round(issue.lat/grid)+'_'+Math.round(issue.lng/grid),weight=Math.max(1,Math.min(Number(issue.n)||1,500));let cell=cells.get(key);if(!cell){cell={lat:0,lng:0,weight:0,issue};cells.set(key,cell);}cell.lat+=issue.lat*weight;cell.lng+=issue.lng*weight;cell.weight+=weight;if(Number(issue.score)>Number(cell.issue.score))cell.issue=issue;});
-  cells.forEach(cell=>{const lat=cell.lat/cell.weight,lng=cell.lng/cell.weight;L.circleMarker([lat,lng],reportMarkerStyle(cell.issue,true)).on('click',()=>map.flyTo([lat,lng],Math.min(FULL_DETAIL_ZOOM+1,zoom+3),{duration:.55})).addTo(state.report.group);});
+  cells.forEach(cell=>{const lat=cell.lat/cell.weight,lng=cell.lng/cell.weight;bindMapInstance(L.circleMarker([lat,lng],reportMarkerStyle(cell.issue,true)),()=>map.flyTo([lat,lng],Math.min(FULL_DETAIL_ZOOM+1,zoom+3),{duration:.55})).addTo(state.report.group);});
 }
 function nearestReportIssue(lat,lng,includeDisabled=false){
   if(!state.report.issues)return null;
@@ -559,7 +575,10 @@ async function loadCitiBike(){
     const response=await fetch(`/api/discover/citibike?lat=${center.lat}&lng=${center.lng}`),payload=await response.json();if(!response.ok)throw new Error(payload.error||'Live bikes are unavailable.');
     state.discover.group.clearLayers();
     payload.stations.forEach(station=>{
-      L.circleMarker([station.lat,station.lng],{renderer:canvas,radius:5,color:'#fff',weight:1.5,fillColor:'#00a896',fillOpacity:.95}).bindPopup(`<b>${esc(station.name)}</b><br>${station.bikes} bikes · ${station.docks} open docks<br><button class="route-to-discovery" type="button">Add as a stop</button>`).on('popupopen',event=>{const action=event.popup.getElement()?.querySelector('.route-to-discovery');if(action)action.addEventListener('click',()=>chooseDiscovery(station),{once:true});}).addTo(state.discover.group);
+      bindMapInstance(L.circleMarker([station.lat,station.lng],{renderer:canvas,radius:5,color:'#fff',weight:1.5,fillColor:'#00a896',fillOpacity:.95,bubblingMouseEvents:false}),()=>{
+        const card=L.popup().setLatLng([station.lat,station.lng]).setContent(`<b>${esc(station.name)}</b><br>${station.bikes} bikes · ${station.docks} open docks<br><button class="route-to-discovery" type="button">Add as a stop</button>`).openOn(map);
+        card.getElement()?.querySelector('.route-to-discovery')?.addEventListener('click',()=>chooseDiscovery(station),{once:true});
+      }).addTo(state.discover.group);
     });
   }catch(error){document.getElementById('layer-hint').textContent=error.message||'Live bikes are unavailable.';}
   finally{button.disabled=false;button.lastElementChild.textContent=state.discover.citibike?'−':'+';}
@@ -607,8 +626,8 @@ async function geocodeOne(input){
 function drawRoutes(){
   routeGroup.clearLayers();endpointGroup.clearLayers();state.routeLines=[];
   state.routes.forEach((route,index)=>{
-    const line=L.geoJSON(route.geometry,{style:{color:index===state.selectedRoute?'#ff5a47':'#7f8da4',weight:index===state.selectedRoute?7:4,opacity:index===state.selectedRoute?.96:.55}}).addTo(routeGroup);
-    line.on('click',()=>selectRoute(index));state.routeLines.push(line);
+    const line=L.geoJSON(route.geometry,{interactive:false,style:{color:index===state.selectedRoute?'#ff5a47':'#7f8da4',weight:index===state.selectedRoute?7:4,opacity:index===state.selectedRoute?.96:.55}}).addTo(routeGroup);
+    state.routeLines.push(line);
   });
   if(state.endpoints){
     L.circleMarker([state.endpoints.origin.lat,state.endpoints.origin.lng],{radius:10,color:'#fff',weight:3,fillColor:'#4ad6c8',fillOpacity:1}).bindTooltip('Start',{direction:'top'}).addTo(endpointGroup);
@@ -784,8 +803,8 @@ document.getElementById('discover-toggle').addEventListener('click',()=>{const p
 document.getElementById('citibike-toggle').addEventListener('click',()=>{state.discover.citibike=!state.discover.citibike;const button=document.getElementById('citibike-toggle');button.setAttribute('aria-pressed',String(state.discover.citibike));button.lastElementChild.textContent=state.discover.citibike?'−':'+';if(state.discover.citibike)loadCitiBike();else state.discover.group.clearLayers();});
 map.on('zoomend',()=>{syncLayers();drawReportIssues();});window.addEventListener('resize',()=>{syncLayers();drawReportIssues();if(state.routes.length)fitRoute();});
 map.on('moveend',()=>{syncReportLink();drawReportIssues();drawFeatures();if(state.discover.citibike){clearTimeout(state.discover.timer);state.discover.timer=setTimeout(loadCitiBike,450);}});
-map.on('contextmenu',event=>focusReport(event.latlng.lat,event.latlng.lng,true));
-map.on('click',event=>{if(event.originalEvent.target.closest('[data-report-lat]'))return;selectForecastAnchor({name:'Selected map point',lat:event.latlng.lat,lng:event.latlng.lng},{move:false,push:true,open:true});});
+map.on('movestart dblclick',cancelMapInstanceTap);
+// Empty map taps never select nearby evidence. Leaflet owns background double-tap zoom.
 document.getElementById('about-open').addEventListener('click',()=>{document.getElementById('about').classList.add('open');document.getElementById('about-close').focus();});
 document.getElementById('about-close').addEventListener('click',()=>{document.getElementById('about').classList.remove('open');document.getElementById('about-open').focus();});
 document.getElementById('about').addEventListener('click',event=>{if(event.target.id==='about')document.getElementById('about-close').click();});

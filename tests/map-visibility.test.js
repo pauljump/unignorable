@@ -18,12 +18,15 @@ function fixture() {
   const state = new Function('DEFS', `${stateSource}; return state;`)(DEFS);state.data=data;
   const nodes=new Map(),markerGroups=[];
   function node(id) { if(!nodes.has(id))nodes.set(id,{hidden:false,style:{},classList:{add(){},remove(){},toggle(){}},setAttribute(){},focus(){}});return nodes.get(id); }
-  const env={state,DEFS,FULL_DETAIL_ZOOM:14,canvas:{},selectionRenderer:{},
+  const timers=new Map();let timerID=0;
+  const env={state,DEFS,FULL_DETAIL_ZOOM:14,canvas:{},selectionRenderer:{},mapInstanceTapTimer:null,
+    setTimeout(fn){timers.set(++timerID,fn);return timerID;},clearTimeout(id){timers.delete(id);},
+    flushTaps(){const pending=[...timers.values()];timers.clear();pending.forEach(fn=>fn());},
     map:{getZoom:()=>15,getBounds:()=>({pad(){return this;},contains:()=>true})},
     document:{getElementById:node},popup:()=>'',forecastFor:()=>({probability:.6}),
     L:{layerGroup(){const group={layers:[],addTo(){return this;},remove(){},clearLayers(){this.layers=[];}};markerGroups.push(group);return group;},circleMarker(point,style){return {point,style,handlers:{},on(name,fn){this.handlers[name]=fn;return this;},bindPopup(){return this;},bindTooltip(){return this;},addTo(group){group.layers.push(this);return this;}}}},
   };
-  for(const name of ['featureSeverity','featureMarkerStyle','featureCellSize','drawFeatures','closeWalkPlanner','drawForecastAnchor'])env[name]=load(name,env);
+  for(const name of ['cancelMapInstanceTap','bindMapInstance','featureSeverity','featureMarkerStyle','featureCellSize','drawFeatures','closeWalkPlanner','drawForecastAnchor'])env[name]=load(name,env);
   state.forecast.group=env.L.layerGroup();return {env,node,state};
 }
 test('reported areas remain drawn with no avoidance, after closing walking, and after clearing avoidance',()=>{
@@ -39,11 +42,11 @@ test('tapping a condition dot selects that record and does not bubble into a dif
   const {env,state}=fixture();let selection;
   env.selectForecastAnchor=(anchor,options)=>{selection={anchor,options};};
   env.drawFeatures();const marker=state.featureGroup.layers.find(x=>x.handlers.click);assert.ok(marker);
-  assert.equal(marker.style.bubblingMouseEvents,false);assert.ok(marker.style.radius>=5);marker.handlers.click();
+  assert.equal(marker.style.bubblingMouseEvents,false);assert.ok(marker.style.radius>=5);marker.handlers.click();env.flushTaps();
   const record=Object.values(state.data.layers).flat().find(x=>x.id===selection.options.featureId);assert.ok(record);
   assert.deepEqual(marker.point,[record.lat,record.lng]);assert.equal(selection.anchor.lat,record.lat);
 });
-test('a map tap draws its actual coordinate even without nearby forecast evidence',()=>{
+test('an explicitly selected search location draws its coordinate even without nearby forecast evidence',()=>{
   const {env,state}=fixture();state.forecast.anchor={lat:40.75,lng:-73.98};env.drawForecastAnchor();
   assert.deepEqual(state.forecast.group.layers[0].point,[40.75,-73.98]);assert.equal(state.forecast.group.layers[0].style.renderer,env.selectionRenderer);
 });
@@ -60,4 +63,31 @@ test('selected area and tap are fitted above the mobile detail sheet',()=>{
 test('late route results cannot cover the map after the planner is dismissed',()=>{
   const {env,node}=fixture();node('route-form').hidden=true;
   env.esc=String;load('renderResults',env)('Route request completed');assert.equal(node('results').hidden,true);
+});
+
+test('a double tap on a marker zooms without opening any details',()=>{
+  const {env}=fixture();let opened=0,zoom;
+  env.map.getZoom=()=>15;env.map.setZoomAround=(point,level)=>{zoom={point,level};};
+  const marker=env.L.circleMarker([40.74,-73.98],{});
+  env.bindMapInstance(marker,()=>opened++);
+  marker.handlers.click({originalEvent:{detail:1}});
+  assert.equal(opened,0,'First tap must wait for a possible double tap');
+  marker.handlers.click({originalEvent:{detail:2}});
+  marker.handlers.dblclick({latlng:{lat:40.74,lng:-73.98}});
+  env.flushTaps();assert.equal(opened,0);assert.equal(zoom.level,16);
+  assert.deepEqual(zoom.point,{lat:40.74,lng:-73.98});
+});
+test('a single marker tap opens only that marker and panning cancels a pending selection',()=>{
+  const {env}=fixture();let selected=[];
+  const first=env.bindMapInstance(env.L.circleMarker([1,2],{}),()=>selected.push('first'));
+  const second=env.bindMapInstance(env.L.circleMarker([3,4],{}),()=>selected.push('second'));
+  first.handlers.click();env.flushTaps();assert.deepEqual(selected,['first']);
+  second.handlers.click();env.cancelMapInstanceTap();env.flushTaps();assert.deepEqual(selected,['first']);
+  second.handlers.click();second.handlers.remove();env.flushTaps();assert.deepEqual(selected,['first']);
+});
+test('map background has no selection handlers and retains native double-click zoom',()=>{
+  assert.doesNotMatch(html,/map\.on\(['"](?:click|contextmenu)['"]/);
+  assert.match(html,/doubleClickZoom:true/);
+  assert.match(html,/map\.on\('movestart dblclick',cancelMapInstanceTap\)/);
+  assert.doesNotMatch(html,/line\.on\('click'/);
 });
