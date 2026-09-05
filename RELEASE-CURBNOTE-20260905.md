@@ -1,5 +1,16 @@
 # Curbnote rebrand release · September 5, 2026
 
+## Local speed and optional passkey accounts · build 7
+
+Native map snapshots, the active walk and step progress, and recent addresses restore from protected local storage. Condition selection and raw-report clustering run off the UI actor; optional report data loads on demand. Accounts are offered at Save this walk across devices. Native passkeys and browser WebAuthn share a private saved-walk library containing only explicitly saved address/stop/preference recipes. Opening a saved walk prepares a fresh route request. Anonymous walking and feedback remain available. Both clients provide sign-out, walk removal, additional passkeys and account deletion. See [the implementation and operating contract](./SPEED-ACCOUNTS-20260905.md).
+
+Verification: 72 backend/web tests and fourteen native unit tests pass. Native UI verifies route creation, optional signup, continuing anonymously, relaunch/resume at step 2, and map gestures. Headless mobile Chromium with a virtual authenticator verifies signup, explicit save, logout/login, real planner restoration and account deletion against isolated data. Final signup/save screenshots were inspected. Native passkey creation on a physical phone remains an acceptance check.
+
+**Released: Curbnote 1.0.0 (7)** from `7610880`. Apple build ID `113f3f55-c01b-4fb4-8f76-abb380c88f4d` is `VALID` and `IN_BETA_TESTING`, with Curbnote Internal access and What to Test notes verified. The signed archive passes strict validation and carries the required Associated Domains entitlement; Apple’s association CDN confirms the matching app identity. Web is live through the fleet/vault runner, with public TLS checks passing. Source is pushed and the portfolio scan completed.
+
+Artifacts: `/Users/mini-home/.local/share/curbnote-releases/testflight-20260905T212341Z`.
+
+
 ## Curbnote walking guide · build 6
 
 Curbnote now owns the primary walking experience on web and native iOS. The guide keeps turns, crossings, stops and arrival, shows each instruction on the generated route, offers Next/Back and optional read-aloud, and resumes when reopened. Progress is manual. The old exporter tried to shape external routes with sampled stops, and instruction compression could hide actual maneuvers. Walking map links now use compatible endpoint parameters and separately labeled stop legs, behind an explanation that Apple and Google calculate a new route. See [the walking-guide decision and evidence](./WALKING-GUIDE-20260905.md).

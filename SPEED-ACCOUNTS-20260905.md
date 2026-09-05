@@ -34,4 +34,8 @@ Passkeys are bound to **curbnote.polyfeeds.dev**. The associated-domain capabili
 
 Sources: [Apple passkeys](https://developer.apple.com/documentation/authenticationservices/supporting-passkeys), [SimpleWebAuthn](https://simplewebauthn.dev/docs/packages/server), [Apple responsiveness](https://developer.apple.com/documentation/xcode/improving-app-responsiveness).
 
-Publication results follow after final release checks.
+Released from `7610880`: web is live at `https://curbnote.polyfeeds.dev`, deployed through the fleet/vault runner. Public TLS checks pass for health, account session, signup page, passkey browser library and association file. Apple’s association CDN returns the exact authorized bundle identity; the signed archive includes `webcredentials:curbnote.polyfeeds.dev` and passes strict signature verification.
+
+Curbnote **1.0.0 (7)**, Apple build ID `113f3f55-c01b-4fb4-8f76-abb380c88f4d`, is `VALID` and `IN_BETA_TESTING`. Curbnote Internal access and English What to Test notes are verified. It remains an internal-only TestFlight release. Source is pushed to the canonical GitHub branch, and the portfolio scan completed.
+
+Artifacts: `/Users/mini-home/.local/share/curbnote-releases/testflight-20260905T212341Z` contains archive/upload evidence, signed entitlement confirmation, unit/UI/browser test logs, inspected signup/save screenshots, Apple processing/group confirmations and testing notes.
