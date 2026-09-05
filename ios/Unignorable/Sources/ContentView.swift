@@ -26,6 +26,7 @@ struct ContentView: View {
     @StateObject private var reportModel = ReportModel()
     @StateObject private var location = LocationManager()
     @State private var activeSheet: ActiveSheet?
+    @State private var highlightedMapMarkerID: String?
     @State private var showPublicRecords = false
     @State private var introductionDismissed = false
 
@@ -81,6 +82,7 @@ struct ContentView: View {
         MapReader { proxy in
             Map(position: $model.position, interactionModes: .all) {
                 UserAnnotation()
+                    .tint(.blue)
 
                 ForEach(model.routes.filter { $0.id != model.selectedRoute?.id }) { route in
                     MapPolyline(coordinates: route.geometry.mapCoordinates)
@@ -91,20 +93,23 @@ struct ContentView: View {
                         .stroke(AppTheme.coral, style: .init(lineWidth: 7, lineCap: .round, lineJoin: .round))
                 }
 
-                if let origin = model.origin {
+                if model.selectedRoute != nil, let origin = model.origin {
                     Annotation("Start", coordinate: origin.coordinate) { endpointMarker("A", color: .green) }
                 }
-                if let destination = model.destination {
+                if model.selectedRoute != nil, let destination = model.destination {
                     Annotation("Destination", coordinate: destination.coordinate) { endpointMarker("B", color: .red) }
                 }
-                if let via = model.via {
+                if model.selectedRoute != nil, let via = model.via {
                     Annotation("Stop", coordinate: via.coordinate) { endpointMarker("C", color: AppTheme.mint) }
                 }
 
-                if let forecast = model.primaryForecast {
+                if model.visibleLayers.contains(.homelessness), let forecast = model.primaryForecast {
                     Annotation("Presence forecast", coordinate: forecast.coordinate) {
-                        MapInstanceMarker(onSelect: { inspectFeature(forecast) }, onZoom: { zoomMap(at: forecast.coordinate) }) {
-                            forecastMarker(forecast)
+                        MapInstanceMarker(onSelect: {
+                            highlightMarker("forecast:\(forecast.id)")
+                            inspectFeature(forecast)
+                        }, onZoom: { zoomMap(at: forecast.coordinate) }) {
+                            forecastMarker(forecast, highlighted: highlightedMapMarkerID == "forecast:\(forecast.id)")
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("forecast-map-marker")
@@ -113,8 +118,13 @@ struct ContentView: View {
 
                 ForEach(model.visibleFeatures.filter { $0.id != model.primaryForecast?.id }) { feature in
                     Annotation("", coordinate: feature.coordinate) {
-                        MapInstanceMarker(onSelect: { inspectFeature(feature) }, onZoom: { zoomMap(at: feature.coordinate) }) {
-                            marker(for: feature).frame(width: 24, height: 24).contentShape(Circle())
+                        MapInstanceMarker(onSelect: {
+                            highlightMarker("evidence:\(feature.id)")
+                            inspectFeature(feature)
+                        }, onZoom: { zoomMap(at: feature.coordinate) }) {
+                            marker(for: feature, highlighted: highlightedMapMarkerID == "evidence:\(feature.id)")
+                                .frame(width: 24, height: 24)
+                                .contentShape(Circle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(feature.address ?? feature.layer ?? "Reported condition")
@@ -138,12 +148,18 @@ struct ContentView: View {
                 }
 
                 ForEach(showPublicRecords ? reportModel.markers : []) { marker in
+                    let markerID = "report:\(marker.id)"
                     Annotation("", coordinate: marker.coordinate) {
                         MapInstanceMarker(onSelect: {
+                            highlightMarker(markerID)
                             if let issue = marker.issue { activeSheet = .reportIssue(issue) }
                             else { zoomReportMarker(marker) }
                         }, onZoom: { zoomMap(at: marker.coordinate) }) {
-                            IssueDot(color: reportColor(for: marker.type), severity: marker.severity)
+                            IssueDot(
+                                color: reportColor(for: marker.type),
+                                severity: marker.severity,
+                                highlighted: highlightedMapMarkerID == markerID
+                            )
                         }
                         .accessibilityLabel(marker.issue == nil ? "Issue cluster; zoom in" : marker.type)
                     }
@@ -174,6 +190,12 @@ struct ContentView: View {
             latitudeDelta: max(0.0002, model.visibleRegion.span.latitudeDelta / 2),
             longitudeDelta: max(0.0002, model.visibleRegion.span.longitudeDelta / 2)
         )))
+    }
+
+    private func highlightMarker(_ id: String) {
+        withAnimation(.easeOut(duration: 0.16)) {
+            highlightedMapMarkerID = id
+        }
     }
 
     private func applyReportFocus() {
@@ -398,6 +420,7 @@ struct ContentView: View {
                         Toggle(isOn: visibleLayerBinding(layer)) {
                             Label(layer.title, systemImage: layer.symbol)
                         }
+                        .accessibilityIdentifier("map-layer-\(layer.rawValue)")
                     }
                 }
 
@@ -536,7 +559,7 @@ struct ContentView: View {
         }
     }
 
-    private func forecastMarker(_ feature: MapFeature) -> some View {
+    private func forecastMarker(_ feature: MapFeature, highlighted: Bool = false) -> some View {
         ZStack {
             Circle()
                 .fill(AppTheme.coral.opacity(0.2))
@@ -549,6 +572,14 @@ struct ContentView: View {
                 .font(.system(size: 11, weight: .black))
                 .foregroundStyle(.white)
         }
+        .overlay {
+            if highlighted {
+                Circle()
+                    .stroke(AppTheme.brand, lineWidth: 3)
+                    .frame(width: 58, height: 58)
+            }
+        }
+        .scaleEffect(highlighted ? 1.16 : 1)
         .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
         .accessibilityLabel(feature.forecastTitle)
         .accessibilityValue(forecastLocation(feature))
@@ -612,11 +643,11 @@ struct ContentView: View {
         )
     }
 
-    private func marker(for feature: MapFeature) -> some View {
+    private func marker(for feature: MapFeature, highlighted: Bool = false) -> some View {
         let count = feature.count ?? 0
         let severity: MarkerSeverity = feature.condition?.routingLevel == "hard" || count >= 20
             ? .high : feature.condition?.routingLevel == "soft" || count >= 5 ? .elevated : .lower
-        return IssueDot(color: color(for: feature.layer), severity: severity)
+        return IssueDot(color: color(for: feature.layer), severity: severity, highlighted: highlighted)
     }
 
     private func duration(_ seconds: Double) -> String {

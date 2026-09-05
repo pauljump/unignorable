@@ -135,10 +135,8 @@ final class ReportMapGestureTests: XCTestCase {
         XCTAssertTrue(map.waitForExistence(timeout: 8))
         let dismiss = app.buttons["Dismiss introduction"]
         if dismiss.exists { dismiss.tap() }
-        let marker = app.buttons["forecast-map-marker"]
-        XCTAssertTrue(marker.waitForExistence(timeout: 12))
         let before = try XCTUnwrap(Double(map.value as? String ?? ""))
-        marker.doubleTap()
+        map.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)).doubleTap()
         let zoomed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             (Double(map.value as? String ?? "") ?? before) < before * 0.9
         }, object: nil)
@@ -161,9 +159,11 @@ final class ReportMapGestureTests: XCTestCase {
         wait(for: [backgroundZoomed], timeout: 6)
         XCTAssertFalse(app.buttons["Done"].exists)
 
-        XCTAssertTrue(marker.waitForExistence(timeout: 6))
-        marker.tap()
-        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5), "A single marker tap must still open its details")
+        let why = app.buttons["Why / verify"]
+        XCTAssertTrue(why.waitForExistence(timeout: 5))
+        why.tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5), "A map-point detail must open its popup")
+        XCTAssertTrue(app.buttons["share-dot-button"].waitForExistence(timeout: 3), "Every dot detail must offer sharing")
         let detail = XCTAttachment(screenshot: app.screenshot())
         detail.name = "Single marker tap opens details after double-tap zoom"
         detail.lifetime = .keepAlways
@@ -180,14 +180,9 @@ final class ReportMapGestureTests: XCTestCase {
 
         let dismiss = app.buttons["Dismiss introduction"]
         if dismiss.exists { dismiss.tap() }
-        let forecastMarker = app.buttons["forecast-map-marker"]
-        XCTAssertTrue(forecastMarker.waitForExistence(timeout: 8))
         let before = try XCTUnwrap(Double(map.value as? String ?? ""))
 
-        // The full Map accessibility frame extends under the prediction card. Pinching
-        // its center can hit that card; this visible native annotation is guaranteed to
-        // sit in the uncovered map canvas and still sends a real MapKit pinch.
-        forecastMarker.pinch(withScale: 2.0, velocity: 1.0)
+        map.pinch(withScale: 2.0, velocity: 1.0)
 
         let changed = XCTNSPredicateExpectation(
             predicate: NSPredicate { _, _ in

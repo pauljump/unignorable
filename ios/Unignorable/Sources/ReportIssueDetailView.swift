@@ -59,6 +59,19 @@ struct ReportIssueDetailView: View {
                 fact("\(issue.returnedN.formatted())", "came back")
             }
             if let headline = issue.headline { Text(headline).font(.subheadline).foregroundStyle(AppTheme.ink) }
+            ShareLink(
+                item: accountabilityURL,
+                subject: Text(shareSubject),
+                message: Text(shareMessage)
+            ) {
+                Label("Share this dot", systemImage: "square.and.arrow.up")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(AppTheme.brand)
+            .foregroundStyle(AppTheme.background)
+            .controlSize(.large)
+            .accessibilityIdentifier("share-dot-button")
             Link(destination: accountabilityURL) {
                 Label("Open accountability record", systemImage: "doc.text.magnifyingglass")
                     .font(.subheadline.bold())
@@ -169,6 +182,16 @@ struct ReportIssueDetailView: View {
         var parts = URLComponents(string: "https://curbnote.polyfeeds.dev/c")!
         parts.queryItems = [.init(name: "t", value: issue.type), .init(name: "id", value: issue.recordID)]
         return parts.url!
+    }
+
+    private var shareSubject: String {
+        "Curbnote · \(issue.type)"
+    }
+
+    private var shareMessage: String {
+        let location = issue.addr?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let place = location.flatMap { $0.isEmpty ? nil : $0 } ?? "an approximate NYC block"
+        return "👀 Worth a closer look near \(place). Curbnote’s public record is evidence—not live safety information."
     }
 
     private var avoidanceLayer: LayerDefinition? {

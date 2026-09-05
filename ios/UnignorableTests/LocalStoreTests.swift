@@ -52,7 +52,9 @@ final class LocalStoreTests: XCTestCase {
         let data = Data(#"{"layers":{"sidewalk":[{"id":"pavement","lat":40.724,"lng":-73.965,"layer":"sidewalk"}]}}"#.utf8)
         await store.write("map", value: try JSONDecoder().decode(MapLayersResponse.self, from: data))
         let model = RouteModel(local: store)
-        await model.loadLocalState(); await model.waitForMapUpdate()
+        await model.loadLocalState()
+        model.visibleLayers = [.sidewalk]
+        await model.waitForMapUpdate()
         XCTAssertEqual(model.visibleFeatures.map(\.id), ["pavement"])
         XCTAssertTrue(model.showingSavedMap); XCTAssertNotNil(model.mapSavedAt)
         for i in 0..<20 { model.select(Place(name: "Place \(i)", lat: 40.74, lng: -73.99), asOrigin: true) }

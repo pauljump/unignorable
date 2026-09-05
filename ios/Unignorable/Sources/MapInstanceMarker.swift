@@ -15,6 +15,7 @@ struct MapInstanceMarker<Content: View>: View {
                 case .second: onSelect()
                 }
             })
+            .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { onSelect() }
     }

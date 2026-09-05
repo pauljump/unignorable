@@ -21,7 +21,10 @@ final class RouteModel: NSObject, ObservableObject, @preconcurrency MKLocalSearc
         didSet { if oldValue != selectedRouteID { walkingStepIndex = 0 }; persistWalk() }
     }
     @Published var filters: Set<LayerDefinition> = []
-    @Published var visibleLayers: Set<LayerDefinition> = Set(LayerDefinition.allCases.filter { $0 != .alpr }) { didSet { scheduleProjection() } }
+    // The launch map is intentionally quiet. Optional evidence layers are
+    // revealed from Map evidence instead of silently making every dot part of
+    // the first-run experience.
+    @Published var visibleLayers: Set<LayerDefinition> = [] { didSet { scheduleProjection() } }
     @Published var mapFeatures: [String: [MapFeature]] = [:] { didSet { scheduleProjection() } }
     @Published var bikes: [CitiBikeStation] = []
     @Published var showCitiBike = false

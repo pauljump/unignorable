@@ -13,6 +13,25 @@ struct FeatureDetailView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("Share this dot") {
+                    ShareLink(
+                        item: webReportURL,
+                        subject: Text(shareSubject),
+                        message: Text(shareMessage)
+                    ) {
+                        Label("Share this dot", systemImage: "square.and.arrow.up")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.brand)
+                    .foregroundStyle(AppTheme.background)
+                    .controlSize(.large)
+                    .accessibilityIdentifier("share-dot-button")
+                    Text("Send the map point to X, Messages, or any other app. The link keeps the evidence and uncertainty attached.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 if feature.recordArchived == true {
                     Section("Retained history") {
                         Text("This record is from an earlier refresh. Current status is unknown; leaving the forecast map does not establish resolution.")
@@ -148,7 +167,6 @@ struct FeatureDetailView: View {
                         } label: {
                             Label("Open nearby public record", systemImage: "exclamationmark.bubble.fill")
                         }
-                        ShareLink("Share this block record", item: webReportURL)
                         Link(destination: webReportURL) {
                             Label("Open the web record", systemImage: "safari")
                         }
@@ -201,6 +219,16 @@ struct FeatureDetailView: View {
             .init(name: "z", value: "17"),
         ]
         return parts.url!
+    }
+
+    private var shareSubject: String {
+        "Curbnote · \(title)"
+    }
+
+    private var shareMessage: String {
+        let location = feature.address?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let place = location.flatMap { $0.isEmpty ? nil : $0 } ?? "an approximate NYC block"
+        return "👀 Worth a closer look near \(place). Curbnote’s map evidence is approximate—not live proof."
     }
 
     private func routingText(_ value: String?) -> String {

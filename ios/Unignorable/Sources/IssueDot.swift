@@ -7,6 +7,13 @@ enum MarkerSeverity: Int, Codable, Sendable {
 struct IssueDot: View {
     let color: Color
     let severity: MarkerSeverity
+    let highlighted: Bool
+
+    init(color: Color, severity: MarkerSeverity, highlighted: Bool = false) {
+        self.color = color
+        self.severity = severity
+        self.highlighted = highlighted
+    }
 
     var body: some View {
         Circle()
@@ -16,6 +23,15 @@ struct IssueDot: View {
                 Circle().stroke(outline, lineWidth: severity == .lower ? 0.75 : 1.5)
             }
             .frame(width: 28, height: 28)
+            .overlay {
+                if highlighted {
+                    Circle()
+                        .stroke(AppTheme.brand, lineWidth: 3)
+                        .frame(width: 30, height: 30)
+                }
+            }
+            .scaleEffect(highlighted ? 1.35 : 1)
+            .shadow(color: highlighted ? AppTheme.brand.opacity(0.7) : .clear, radius: 5)
             .contentShape(Rectangle())
     }
 
