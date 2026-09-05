@@ -18,7 +18,9 @@ The UI regression reproduced a separate focus-state bug: the parent map owned th
 
 Verification: all ten native unit tests and all five UI tests pass across the focused runs. The live address-entry regression selects both addresses from tappable suggestions above the keyboard, creates a walking route and verifies “Route ready” with no hostname error. The map-marker/pinch test now loads actual backend evidence and passes; the earlier DNS-related UI failure is resolved by the API fallback. Autocomplete and successful-route screenshots were exported and visually inspected. The 57 web/backend checks for the map fix remain passing; build 4 changes only native code and release documentation.
 
-Publication results follow after final region-bound autocomplete verification and Apple processing.
+**Released: Curbnote 1.0.0 (4)** from commit `2121859`. Apple build ID `9adb286f-9f3f-48a7-9208-ff84083d7fd7` is `VALID` and `IN_BETA_TESTING`; the Curbnote Internal group has access. English What to Test notes are saved and verified. The signed archive passes strict signature validation, embeds `com.curbnote.app` and build 4, and exported/uploaded successfully through the Aqua Terminal playbook. Code is pushed to `origin/deploy/prediction-first-20260821`.
+
+Artifacts: `/Users/mini-home/.local/share/curbnote-releases/testflight-20260905T193308Z` contains the signed archive, upload receipt, complete ship log, test logs, inspected autocomplete/route screenshots, App Store Connect processing confirmation, group confirmation and testing notes. A physical-device walk remains a user acceptance check; simulator tests did use the live service. The portfolio inventory scan completed after the native correction.
 
 
 ## TestFlight released · September 5, 2026, 19:07 UTC
