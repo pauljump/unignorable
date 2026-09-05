@@ -1,3 +1,9 @@
+# Curbnote native release identity
+
+Display name: Curbnote. Bundle ID: `com.curbnote.app`. App Store Connect ID: `6809025615`; SKU: `curbnote`. API and shared links: `https://curbnote.polyfeeds.dev`. The Xcode project/scheme/module remain `Unignorable` for source continuity. Branding: [../BRAND.md](../BRAND.md). Use `python3 ../scripts/build-brand.py` from this directory to rebuild all shared assets.
+
+The earlier instructions below are historical where they mention the previous public name, bundle identifier or URL.
+
 # Unignorable for iPhone
 
 The September 5 launch is a native SwiftUI + MapKit walking companion: **Know your walk. Improve your block.** It shares walking routes, optional avoidance, block evidence, nearby checks, canonical record links and feedback with the web app. `RecordsView` and `FeedbackView` are native forms and lists. Feedback receipts use app preferences; UserDefaults purpose is declared in the privacy manifest. Free early access uses the existing backend bypass; StoreKit is deferred until repeat value is established. Privacy and support are `/privacy` and `/support` on the canonical host.

@@ -72,7 +72,7 @@ struct DirectionsView: View {
                 }
 
                 Section {
-                    Text("The route drawn in Unignorable is exact. Apple and Google receive the stop and shaping points but may refine the line.")
+                    Text("The route drawn in Curbnote is exact. Apple and Google receive the stop and shaping points but may refine the line.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

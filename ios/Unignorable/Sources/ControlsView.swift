@@ -69,7 +69,7 @@ struct ControlsView: View {
                     } header: {
                         Text("Go by on the way")
                     } footer: {
-                        Text("Choose a useful stop and Unignorable will shape the walk near it without changing your final destination.")
+                        Text("Choose a useful stop and Curbnote will shape the walk near it without changing your final destination.")
                     }
                     .id(RouteOptionFocus.onTheWay.rawValue)
 

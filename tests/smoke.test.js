@@ -180,7 +180,7 @@ test('health and public assets are available with security headers', async () =>
   assert.equal(forecastShare.status, 200);
   const forecastShareHtml = await forecastShare.text();
   assert.match(forecastShareHtml, /property="og:title"/);
-  assert.match(forecastShareHtml, /name="twitter:card" content="summary"/);
+  assert.match(forecastShareHtml, /name="twitter:card" content="summary_large_image"/);
   assert.match(forecastShareHtml, /Public condition record/);
   assert.match(forecastShareHtml, /Check this place/);
   assert.match(forecastShareHtml, /Inspect response history and action options/);
@@ -616,4 +616,39 @@ test('launch feedback round trip, origin guards, review privacy and native recor
   const native=await post('/api/feedback',{...input,platform:'ios'},{origin:''});assert.equal(native.status,201);
   const records=await (await fetch(origin+'/api/records?q=20')).json();assert.ok(Array.isArray(records.records));
   const map=await (await fetch(origin+'/')).text();assert.ok(!map.includes('data-profile="driving"'));assert.match(map,/Was this walk useful/);
+});
+
+// Exercise the public brand URLs and host migration, not just generated source text.
+test('Curbnote previews serve real assets and old browser links preserve their destination', async () => {
+  const home = await (await fetch(origin + '/')).text();
+  assert.match(home, /<title>Curbnote/);
+  assert.ok(home.includes(`property="og:url" content="${origin}/"`));
+  assert.ok(home.includes(`rel="canonical" href="${origin}/"`));
+  assert.doesNotMatch(home, /https:\/\/unignorable\.polyfeeds\.dev/);
+  for (const page of ['/', '/records', '/f?id=311-encampment-1']) {
+    const html = await (await fetch(origin + page)).text();
+    const image = html.match(/property="og:image" content="([^"]+)"/)[1];
+    const response = await fetch(image);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'image/png');
+    const bytes = Buffer.from(await response.arrayBuffer());
+    assert.equal(bytes.subarray(1, 4).toString(), 'PNG');
+    assert.equal(bytes.readUInt32BE(16), 1200);
+    assert.equal(bytes.readUInt32BE(20), 630);
+  }
+  const icon = await fetch(origin + '/assets/brand/curbnote-favicon-v1.svg');
+  assert.equal(icon.status, 200);
+  assert.equal(icon.headers.get('content-type'), 'image/svg+xml');
+  assert.equal((await fetch(origin + '/assets/brand/curbnote-missing.png')).status, 404);
+  const manifest = await (await fetch(origin + '/assets/brand/curbnote.webmanifest')).json();
+  assert.equal(manifest.name, 'Curbnote');
+  const legacyGet = path => new Promise((resolve, reject) => {
+    require('node:http').get(origin + path, {headers:{host:'unignorable.polyfeeds.dev'}}, res => {
+      res.resume(); res.on('end', () => resolve(res));
+    }).on('error', reject);
+  });
+  const moved = await legacyGet('/f?id=311-encampment-1&via=share');
+  assert.equal(moved.statusCode, 308);
+  assert.equal(moved.headers.location, origin + '/f?id=311-encampment-1&via=share');
+  assert.equal((await legacyGet('/api/records')).statusCode, 200);
 });

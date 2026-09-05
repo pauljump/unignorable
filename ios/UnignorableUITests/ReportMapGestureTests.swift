@@ -7,7 +7,7 @@ final class ReportMapGestureTests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["Plan my walk"].waitForExistence(timeout: 5))
         let launch = XCTAttachment(screenshot: app.screenshot())
-        launch.name = "Unignorable launch"
+        launch.name = "Curbnote launch"
         launch.lifetime = .keepAlways
         add(launch)
         app.buttons["Feedback"].tap()

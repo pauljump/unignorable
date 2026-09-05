@@ -20,7 +20,7 @@ test('record separates aggregations, escapes source text, and does not claim fre
     record: { reports: 718, city_closures: 695, returns_after_closure: 306, distance_m: 42, href: '/c?t=Encampment&id=legacy' }
   } });
   assert.match(html, /&lt;Block &amp; Avenue&gt;/);
-  assert.doesNotMatch(html, /<Block|undefined|null|summary_large_image|og:image/);
+  assert.doesNotMatch(html, /<Block|undefined|null/);
   assert.match(html, /582/); assert.match(html, /718 legacy reports/);
   assert.match(html, /must not be added/);
   assert.match(html, /Current status needs a fresh check/);

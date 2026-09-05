@@ -1,0 +1,17 @@
+{
+  "project": "curbnote",
+  "canonicalRoot": "/Users/mini-home/projects/unignorable",
+  "surface": "cloudflare-tunnel",
+  "stage": "pre-GA",
+  "publicOrigin": "https://curbnote.polyfeeds.dev",
+  "hostnames": ["curbnote.polyfeeds.dev", "unignorable.polyfeeds.dev"],
+  "futureHostname": "curbnote.xyz",
+  "futureHostnameStatus": "User intends to purchase; not configured",
+  "tunnel": "mini-dev",
+  "tunnelId": "446b30c6-5aca-42a1-be3c-786debad09ad",
+  "service": "http://localhost:8000",
+  "processOwner": "unignorable-canonical",
+  "healthcheck": "/healthz",
+  "deployCommand": "cd /Users/mini-home/projects/control-plane && node scripts/migrate-pm2-fleet.mjs --apply --only unignorable-canonical",
+  "legacyBehavior": "Old GET/HEAD browser links redirect with path and query preserved. Legacy API paths remain accessible."
+}

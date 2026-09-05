@@ -1,4 +1,4 @@
-// unignorable — zero-dep civic accountability map.
+// curbnote — zero-dep civic accountability map.
 // City 311 data is the BAIT (their self-serving "resolved 100x"); citizen commentary is the TRUTH.
 const http = require('http');
 const https = require('https');
@@ -20,7 +20,7 @@ const recordEventHits = new Map();
 // Nominatim usage policy requires a descriptive User-Agent and an identifiable contact; bounded
 // to NYC's viewbox so "3 Peter Cooper Rd" resolves to the right block, not a same-named street.
 const NYC_VIEWBOX = '-74.2591,40.9176,-73.7004,40.4774'; // left,top,right,bottom
-const GEO_UA = 'unignorable/1.0 (NYC 311 accountability map; +https://unignorable.polyfeeds.dev)';
+const GEO_UA = 'curbnote/1.0 (NYC 311 accountability map; +https://curbnote.polyfeeds.dev)';
 const geoCache = new Map(); // LRU: query → JSON string of [{name,lat,lng}]
 let geocodeQueue = Promise.resolve(), lastGeocodeAt = 0;
 function fetchGeocode(q) {
@@ -151,7 +151,7 @@ const TRACKABLE_ACTIONS = new Set(
   ACTION_TYPES.filter(a => a.enabled && a.kind !== 'coming').map(a => a.id)
 );
 
-const PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN || 'https://unignorable.polyfeeds.dev';
+const PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN || 'https://curbnote.polyfeeds.dev';
 const CANARY_TYPE = 'Encampment';
 const CANARY_ID = '40.736,-73.983';
 const CANARY_URL = `/c?t=${encodeURIComponent(CANARY_TYPE)}&id=${encodeURIComponent(CANARY_ID)}`;
@@ -218,7 +218,12 @@ const SECURITY_HEADERS = {
   'Origin-Agent-Cluster': '?1',
   'Permissions-Policy': 'camera=(self), geolocation=(self), microphone=(), tools=(self)',
 };
+const BRAND_HEAD = "<link rel=\"icon\" type=\"image/svg+xml\" href=\"/assets/brand/curbnote-favicon-v1.svg\"><link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"/assets/brand/curbnote-icon-32-v1.png\"><link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/assets/brand/curbnote-icon-180-v1.png\"><meta name=\"theme-color\" content=\"#142722\"><meta name=\"apple-mobile-web-app-title\" content=\"Curbnote\"><link rel=\"stylesheet\" href=\"/assets/brand/curbnote-v1.css\">";
 const send = (res, code, body, type, extra = {}) => {
+  if (type.startsWith('text/html')) {
+    body = String(body);
+    if (!body.includes('curbnote-favicon-v1.svg')) body = body.replace('</title>', '</title>' + BRAND_HEAD);
+  }
   res.writeHead(code, { ...SECURITY_HEADERS, 'Content-Type': type, ...extra });
   res.end(body);
 };
@@ -576,7 +581,7 @@ async function createRouteCheckout(planName) {
     cancel_url: `${PUBLIC_ORIGIN}/?checkout=cancelled`,
     'line_items[0][price_data][currency]': 'usd',
     'line_items[0][price_data][unit_amount]': String(plan.amount),
-    'line_items[0][price_data][product_data][name]': `Unignorable ${plan.label}`,
+    'line_items[0][price_data][product_data][name]': `Curbnote ${plan.label}`,
     'line_items[0][price_data][product_data][description]': 'Unlimited NYC avoidance routes on this browser during the access period.',
     'line_items[0][quantity]': '1',
     'metadata[product]': 'unignorable-route-access',
@@ -1370,8 +1375,12 @@ async function prepareOfficialAction(button,actionType){
 <meta property="og:title" content="${esc(ogTitle)}">
 <meta property="og:description" content="${esc(ogDesc)}">
 <meta property="og:url" content="${esc(shareUrl)}">
-<meta property="og:site_name" content="unignorable">
-<meta name="twitter:card" content="summary">
+<meta property="og:site_name" content="curbnote">
+<meta property="og:image" content="${esc(PUBLIC_ORIGIN)}/assets/brand/curbnote-share-record-v1.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Curbnote. Every block has a story. Read the evidence. Check what changed.">
+<meta name="twitter:image" content="${esc(PUBLIC_ORIGIN)}/assets/brand/curbnote-share-record-v1.png">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${esc(ogTitle)}">
 <meta name="twitter:description" content="${esc(ogDesc)}">
 <style>
@@ -1470,7 +1479,7 @@ async function prepareOfficialAction(button,actionType){
   .start-link{display:inline-block;background:var(--amber);color:#000;text-decoration:none;border-radius:6px;padding:10px 15px;font-weight:800;font-size:14px}
   @media(max-width:520px){.state-verdict{grid-template-columns:1fr}.state-verdict>div{text-align:left}.state-facts{grid-template-columns:repeat(2,1fr)}}
 </style></head><body><div class="wrap">
-  <div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">UN<b>IGNOR</b>ABLE</a><span class="tag">a public receipt</span></div>
+  <div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">curbnote</a><span class="tag">a public receipt</span></div>
 
   <div class="hero">
     <div class="kicker">${esc(issue.type)} &middot; ${esc(area)}</div>
@@ -1703,8 +1712,12 @@ function renderArea(area) {
 <meta property="og:title" content="${esc(ogTitle)}">
 <meta property="og:description" content="${esc(ogDesc)}">
 <meta property="og:url" content="${esc(shareUrl)}">
-<meta property="og:site_name" content="unignorable">
-<meta name="twitter:card" content="summary">
+<meta property="og:site_name" content="curbnote">
+<meta property="og:image" content="${esc(PUBLIC_ORIGIN)}/assets/brand/curbnote-share-record-v1.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Curbnote. Every block has a story. Read the evidence. Check what changed.">
+<meta name="twitter:image" content="${esc(PUBLIC_ORIGIN)}/assets/brand/curbnote-share-record-v1.png">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${esc(ogTitle)}">
 <meta name="twitter:description" content="${esc(ogDesc)}">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -1756,7 +1769,7 @@ function renderArea(area) {
   .scount{font-size:12px;color:var(--mut)}
   .stamp{margin-top:26px;padding-top:14px;border-top:1px solid var(--line);font-size:12px;color:var(--mut)}
 </style></head><body><div class="wrap">
-  <div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">UN<b>IGNOR</b>ABLE</a><span class="tag">a public receipt</span></div>
+  <div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">curbnote</a><span class="tag">a public receipt</span></div>
 
   <div class="kicker">${esc(st.boroughs.join(', ') || 'NYC')} &middot; ${fmtN(st.spots)} spot${st.spots !== 1 ? 's' : ''}</div>
   <div class="day-hero">${fmtN(st.spots)}</div>
@@ -1930,7 +1943,7 @@ function renderHotspotsIndex() {
   }).join('');
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
-<title>The worst ignored zones — unignorable</title>
+<title>The worst ignored zones — curbnote</title>
 <style>
   :root{--bg:#0b0d10;--card:#14171c;--ink:#e8eaed;--mut:#8b9098;--line:#262b32;--alarm:#ff4d4d;--amber:#ffb020}
   *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
@@ -1942,7 +1955,7 @@ function renderHotspotsIndex() {
   .htxt{flex:1;min-width:0}.httl{display:block;font-weight:700;font-size:15px}.hmeta{display:block;font-size:12px;color:var(--mut);margin-top:2px}
   .hslug{color:var(--amber);flex:none;font-size:12px}
 </style></head><body><div class="wrap">
-  <div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">UN<b>IGNOR</b>ABLE</a><span style="font-size:11px;color:var(--mut)">standing zones</span></div>
+  <div class="mast"><a class="word" href="${esc(PUBLIC_ORIGIN)}/map">curbnote</a><span style="font-size:11px;color:var(--mut)">standing zones</span></div>
   <h1>The worst ignored zones</h1>
   <p class="sub">Each is a permanent link. Auto-detected from NYC's own 311 record, refreshed daily.</p>
   ${rows || '<p class="sub">No active clusters right now.</p>'}
@@ -1970,7 +1983,7 @@ function renderCampaignStart(selectedIssue) {
   } : null;
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="index,follow"><title>Start a campaign on your block — unignorable</title>
+<meta name="robots" content="index,follow"><title>Start a campaign on your block — curbnote</title>
 <style>
   :root{--bg:#0b0d10;--ink:#e8eaed;--mut:#969ba4;--line:#2b3038;--alarm:#ff4d4d;--amber:#ffb020;--field:#14171c}
   *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
@@ -1990,7 +2003,7 @@ function renderCampaignStart(selectedIssue) {
   .fine{font-size:12px;color:var(--mut);margin:10px 0 16px}.status{font-size:13px;color:var(--mut);margin-top:10px;min-height:20px}.status.error{color:#ff7b7b}
   [hidden]{display:none!important}@media(max-width:520px){h1{font-size:32px}.search{grid-template-columns:1fr}.search .btn{width:100%}}
 </style></head><body><div class="wrap">
-  <div class="mast"><a class="word" href="${esc(CANARY_URL)}">UN<b>IGNOR</b>ABLE</a><a class="map-link" href="/map">Explore NYC</a></div>
+  <div class="mast"><a class="word" href="${esc(CANARY_URL)}">curbnote</a><a class="map-link" href="/map">Explore NYC</a></div>
   <div class="hero"><div class="eyebrow">Your block can be next</div><h1>Start a public campaign from the city's own record.</h1><p>Find a recurring issue, confirm it is still present, and give the block one permanent place to organize.</p></div>
   <section class="step"><h2>1. Find the block</h2><p>Search an address or intersection in New York City.</p>
     <form id="search-form" class="search"><input id="address" class="field" autocomplete="street-address" placeholder="Address or intersection" required><button class="btn" type="submit">Search</button></form>
@@ -2042,9 +2055,9 @@ function renderActionReceipt(receipt) {
   const location = issue ? displayLocation(issue) : 'campaign record';
   const campaignUrl = issue
     ? `/c?t=${encodeURIComponent(issue.type)}&id=${encodeURIComponent(issue.id)}` : '/map';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Action receipt | Unignorable</title><style>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Action receipt | Curbnote</title><style>
   :root{--bg:#0b0d10;--card:#14171c;--ink:#e8eaed;--mut:#8b9098;--line:#262b32;--amber:#ffb020}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:640px;margin:0 auto;padding:32px 18px 64px}a{color:var(--amber)}h1{font-size:30px;margin:28px 0 4px}.sub{color:var(--mut)}.receipt{margin-top:24px;border-top:1px solid var(--line)}.row{display:grid;grid-template-columns:170px 1fr;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}.row span{color:var(--mut)}.count{font-size:34px;color:var(--amber);font-weight:800}.confirm{margin-top:20px;padding:10px 15px;border:0;border-radius:6px;background:var(--amber);font-weight:800;cursor:pointer}.note{margin-top:24px;padding:14px;border-left:3px solid var(--amber);background:var(--card);font-size:13px;color:var(--mut)}@media(max-width:520px){.row{grid-template-columns:1fr;gap:3px}}
-  </style></head><body><main class="wrap"><a href="${esc(campaignUrl)}">UNIGNORABLE</a><h1>Permanent action receipt</h1><p class="sub">${esc(label)} for ${esc(location)}</p><div class="receipt">
+  </style></head><body><main class="wrap"><a href="${esc(campaignUrl)}">curbnote</a><h1>Permanent action receipt</h1><p class="sub">${esc(label)} for ${esc(location)}</p><div class="receipt">
   <div class="row"><span>Receipt</span><b>${esc(receipt.token)}</b></div>
   <div class="row"><span>Prepared</span><b>${esc(new Date(receipt.created_at).toLocaleString('en-US', { timeZone: 'America/New_York' }))} ET</b></div>
   <div class="row"><span>Target</span><b>${esc(receipt.target || 'official channel')}</b></div>
@@ -2052,11 +2065,18 @@ function renderActionReceipt(receipt) {
   <div class="row"><span>Tracked-link requests</span><b class="count">${fmtN(receipt.link_requests || 0)}</b></div>
   <div class="row"><span>First link request</span><b>${receipt.first_link_request_at ? esc(new Date(receipt.first_link_request_at).toLocaleString('en-US', { timeZone: 'America/New_York' })) + ' ET' : 'None recorded'}</b></div>
   <div class="row"><span>Last link request</span><b>${receipt.last_link_request_at ? esc(new Date(receipt.last_link_request_at).toLocaleString('en-US', { timeZone: 'America/New_York' })) + ' ET' : 'None recorded'}</b></div>
-  </div>${receipt.sender_confirmed_at ? '' : `<button class="confirm" onclick="confirmSent(this)">I sent this</button>`}<div class="note">This receipt proves that Unignorable prepared the action and records requests to its unique evidence link. Sender confirmation is a user assertion, not delivery proof. A link request may come from a human or a security scanner and does not prove that the named official personally read it. Email opens cannot be reliably measured from a draft sent through the resident's mail app.</div></main><script>async function confirmSent(button){button.disabled=true;var response=await fetch('/api/action/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:${JSON.stringify(receipt.token)}})});if(response.ok)location.reload();else button.disabled=false;}</script>${PULSE_BEACON}</body></html>`;
+  </div>${receipt.sender_confirmed_at ? '' : `<button class="confirm" onclick="confirmSent(this)">I sent this</button>`}<div class="note">This receipt proves that Curbnote prepared the action and records requests to its unique evidence link. Sender confirmation is a user assertion, not delivery proof. A link request may come from a human or a security scanner and does not prove that the named official personally read it. Email opens cannot be reliably measured from a draft sent through the resident's mail app.</div></main><script>async function confirmSent(button){button.disabled=true;var response=await fetch('/api/action/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:${JSON.stringify(receipt.token)}})});if(response.ok)location.reload();else button.disabled=false;}</script>${PULSE_BEACON}</body></html>`;
 }
 
 async function handleRequest(req, res) {
   const u = new URL(req.url, 'http://x');
+  const legacyHost = String(req.headers.host || '').split(':')[0].toLowerCase();
+  if ((req.method === 'GET' || req.method === 'HEAD') &&
+      ['unignorable.polyfeeds.dev', 'sidewalk.polyfeeds.dev'].includes(legacyHost) &&
+      !u.pathname.startsWith('/api/') && new URL(PUBLIC_ORIGIN).hostname !== legacyHost) {
+    res.writeHead(308, { ...SECURITY_HEADERS, Location: PUBLIC_ORIGIN + u.pathname + u.search, 'Cache-Control': 'public, max-age=300' });
+    return res.end();
+  }
   if (await handleFeedback({req,res,u,send,readBody,authed,rateLimited,origin:PUBLIC_ORIGIN})) return;
 
   if (['/records','/api/records'].includes(u.pathname) && req.method === 'GET') {
@@ -2141,9 +2161,9 @@ async function handleRequest(req, res) {
     return send(res, 200, renderActionReceipt(receipt), 'text/html; charset=utf-8', { 'Cache-Control': 'no-store' });
   }
 
-  // Consolidation: sidewalk was absorbed into unignorable. Redirect the old host.
+  // Consolidation: sidewalk was absorbed into curbnote. Redirect the old host.
   if ((req.headers.host || '').startsWith('sidewalk')) {
-    res.writeHead(301, { Location: 'https://unignorable.polyfeeds.dev' + req.url });
+    res.writeHead(301, { Location: 'https://curbnote.polyfeeds.dev' + req.url });
     return res.end();
   }
 
@@ -2400,10 +2420,17 @@ async function handleRequest(req, res) {
     });
   }
 
-  if (u.pathname === '/assets/share-card.png') {
+  if (u.pathname.startsWith('/assets/brand/')) {
+    const name = u.pathname.slice('/assets/brand/'.length);
+    if (!/^curbnote[a-z0-9.-]*\.(svg|png|css|webmanifest)$/.test(name)) return send(res, 404, 'not found', 'text/plain');
+    const types = { svg: 'image/svg+xml', png: 'image/png', css: 'text/css; charset=utf-8', webmanifest: 'application/manifest+json' };
     try {
-      return send(res, 200, fs.readFileSync(path.join(DIR, 'assets', 'share-card.png')), 'image/png', { 'Cache-Control': 'public, max-age=31536000, immutable' });
+      return send(res, 200, fs.readFileSync(path.join(DIR, 'assets', 'brand', name)), types[name.split('.').pop()],
+        { 'Cache-Control': name.endsWith('.webmanifest') ? 'public, max-age=300' : 'public, max-age=31536000, immutable' });
     } catch { return send(res, 404, 'not found', 'text/plain'); }
+  }
+  if (u.pathname === '/assets/share-card.png') {
+    return send(res, 200, fs.readFileSync(path.join(DIR, 'assets/brand/curbnote-share-walk-v1.png')), 'image/png', { 'Cache-Control': 'public, max-age=300' });
   }
 
   if (u.pathname.startsWith('/photos/')) {
@@ -2695,7 +2722,7 @@ async function handleRequest(req, res) {
   // The NYC awareness map is the product front door. Legacy campaign and accountability routes
   // remain directly addressable while the rebuilt first viewport stays focused on map + routing.
   if (u.pathname === '/' || u.pathname === '/index.html' || u.pathname === '/map') {
-    return send(res, 200, fs.readFileSync(path.join(DIR, 'index.html')), 'text/html; charset=utf-8');
+    return send(res, 200, fs.readFileSync(path.join(DIR, 'index.html'), 'utf8').replaceAll('https://curbnote.polyfeeds.dev', esc(PUBLIC_ORIGIN)), 'text/html; charset=utf-8');
   }
 
   send(res, 404, 'not found', 'text/plain');
@@ -2711,7 +2738,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`unignorable on ${HOST}:${PORT} — ${ISSUES.length} issues`);
+  console.log(`curbnote on ${HOST}:${PORT} — ${ISSUES.length} issues`);
   console.log('review queue ready');
 });
 

@@ -189,11 +189,11 @@ struct FeatureDetailView: View {
     }
     private var webReportURL: URL {
         if feature.subjectType == "encampment" {
-            var record = URLComponents(string: "https://unignorable.polyfeeds.dev/f")!
+            var record = URLComponents(string: "https://curbnote.polyfeeds.dev/f")!
             record.queryItems = [.init(name: "id", value: feature.id)]
             return record.url!
         }
-        var parts = URLComponents(string: "https://unignorable.polyfeeds.dev/")!
+        var parts = URLComponents(string: "https://curbnote.polyfeeds.dev/")!
         parts.queryItems = [
             .init(name: "mode", value: "report"),
             .init(name: "lat", value: String(feature.lat)),

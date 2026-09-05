@@ -1,4 +1,9 @@
-# Unignorable
+# Curbnote
+
+## Curbnote identity · September 5, 2026
+
+The product is now **Curbnote**. See [BRAND.md](./BRAND.md) for the mint/deep-green identity, icon and share assets, and [deploy/web.json](./deploy/web.json) for the current `curbnote.polyfeeds.dev` target. The native bundle identifier is `com.curbnote.app`, matching Apple ID `6809025615`. `curbnote.xyz` is planned after purchase. Historical Unignorable references below describe earlier releases; the canonical repository and runtime data paths remain unchanged.
+
 
 ## Converged walking launch · September 5, 2026
 

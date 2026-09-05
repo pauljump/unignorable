@@ -6,7 +6,7 @@ struct APIClient {
     private let session: URLSession
     private let encoder = JSONEncoder()
 
-    init(baseURL: URL = URL(string: "https://unignorable.polyfeeds.dev")!) {
+    init(baseURL: URL = URL(string: "https://curbnote.polyfeeds.dev")!) {
         self.baseURL = baseURL
         let configuration = URLSessionConfiguration.default
         configuration.timeoutIntervalForRequest = 18

@@ -55,16 +55,16 @@ struct FeedbackView: View {
                 if let receipt {
                     Section("Your latest feedback") {
                         LabeledContent("Status", value: receipt.status.capitalized)
-                        Text(receipt.reply?.isEmpty == false ? receipt.reply! : "No reply yet. Thanks for helping shape Unignorable.")
-                        ShareLink("Keep your private receipt", item: URL(string: "https://unignorable.polyfeeds.dev/feedback?receipt=\(receipt.id)")!)
+                        Text(receipt.reply?.isEmpty == false ? receipt.reply! : "No reply yet. Thanks for helping shape Curbnote.")
+                        ShareLink("Keep your private receipt", item: URL(string: "https://curbnote.polyfeeds.dev/feedback?receipt=\(receipt.id)")!)
                         Text("Keep this link to see our reply. Anyone with it can read the reply. Feedback expires after 90 days.")
                             .font(.footnote).foregroundStyle(.secondary)
                         Button("Refresh reply") { Task { await refresh() } }
                     }
                 }
                 Section {
-                    Link("Privacy", destination: URL(string: "https://unignorable.polyfeeds.dev/privacy")!)
-                    Link("Support", destination: URL(string: "https://unignorable.polyfeeds.dev/support")!)
+                    Link("Privacy", destination: URL(string: "https://curbnote.polyfeeds.dev/privacy")!)
+                    Link("Support", destination: URL(string: "https://curbnote.polyfeeds.dev/support")!)
                 }
             }
             .navigationTitle("Feedback")

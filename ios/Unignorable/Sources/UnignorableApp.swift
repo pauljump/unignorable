@@ -6,6 +6,6 @@ struct UnignorableApp: App {
     @StateObject private var navigation = AppNavigation()
 
     var body: some Scene {
-        WindowGroup { AppRootView().environmentObject(model).environmentObject(navigation) }
+        WindowGroup { AppRootView().environmentObject(model).environmentObject(navigation).tint(AppTheme.brand) }
     }
 }

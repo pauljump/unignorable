@@ -18,7 +18,7 @@ final class AppNavigation: ObservableObject {
 struct AppRootView: View {
     var body: some View {
         ContentView()
-            .tint(AppTheme.coral)
+            .tint(AppTheme.brand)
             .preferredColorScheme(.dark)
     }
 }

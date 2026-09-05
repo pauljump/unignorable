@@ -325,7 +325,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = dev.polyfeeds.unignorable.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.curbnote.app.tests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Unignorable.app/Unignorable";
@@ -342,7 +342,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = dev.polyfeeds.unignorable;
+				PRODUCT_BUNDLE_IDENTIFIER = com.curbnote.app;
 				SDKROOT = iphoneos;
 				SUPPORTED_INTERFACE_ORIENTATIONS = UIInterfaceOrientationPortrait;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -359,7 +359,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "dev.polyfeeds.unignorable.ui-tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.curbnote.app.ui-tests";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Unignorable;
@@ -436,7 +436,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = dev.polyfeeds.unignorable;
+				PRODUCT_BUNDLE_IDENTIFIER = com.curbnote.app;
 				SDKROOT = iphoneos;
 				SUPPORTED_INTERFACE_ORIENTATIONS = UIInterfaceOrientationPortrait;
 				TARGETED_DEVICE_FAMILY = 1;
@@ -520,7 +520,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "dev.polyfeeds.unignorable.ui-tests";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.curbnote.app.ui-tests";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = Unignorable;
@@ -537,7 +537,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = dev.polyfeeds.unignorable.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.curbnote.app.tests;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Unignorable.app/Unignorable";

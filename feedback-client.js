@@ -6,7 +6,7 @@
     receipt.hidden=false;
     const link=document.getElementById('receipt-link');link.href='/feedback?receipt='+encodeURIComponent(id);
     const status=document.getElementById('receipt-status');status.textContent='Loading receipt…';
-    try{const response=await fetch('/api/feedback/'+encodeURIComponent(id));const body=await response.json();if(!response.ok)throw new Error(body.error);status.textContent='Status: '+body.status;document.getElementById('receipt-reply').textContent=body.reply||'No reply yet. Thanks for helping shape Unignorable.';}catch(error){status.textContent=error.message||'Could not load receipt. Try again later.';}
+    try{const response=await fetch('/api/feedback/'+encodeURIComponent(id));const body=await response.json();if(!response.ok)throw new Error(body.error);status.textContent='Status: '+body.status;document.getElementById('receipt-reply').textContent=body.reply||'No reply yet. Thanks for helping shape Curbnote.';}catch(error){status.textContent=error.message||'Could not load receipt. Try again later.';}
   }
   if(form){
     const params=new URLSearchParams(location.search);let saved=null;try{saved=localStorage.getItem('unignorable-feedback-receipt');}catch{}

@@ -211,13 +211,17 @@ struct ContentView: View {
     private var topBar: some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
-                Text("unignorable").font(.headline.bold())
+                HStack(spacing: 2) {
+                    Image("CurbnoteMark").resizable().scaledToFit().frame(width: 38, height: 38).accessibilityHidden(true)
+                    Text("curbnote").font(.headline.bold()).lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                }
                 Text("NYC walks").font(.caption2).foregroundStyle(.secondary)
             }
             Spacer()
             Menu {
                 Button("Feedback", systemImage: "bubble.left") { activeSheet = .feedback }
                 Button("Block records", systemImage: "building.2") { activeSheet = .records }
+                Button("Map evidence", systemImage: "square.stack.3d.up") { activeSheet = .mapContent }
             } label: { Image(systemName: "ellipsis.circle").frame(width: 30, height: 30) }
             .accessibilityLabel("Feedback and block records")
             .accessibilityIdentifier("launch-menu")
@@ -229,19 +233,13 @@ struct ContentView: View {
             .accessibilityLabel("Choose forecast location")
             .accessibilityIdentifier("forecast-location-button")
 
-            Button { activeSheet = .mapContent } label: {
-                Image(systemName: "square.stack.3d.up")
-                    .frame(width: 30, height: 30)
-            }
-            .buttonStyle(.bordered)
-            .accessibilityLabel("Map evidence and public records")
-
             Button { introductionDismissed = true; activeSheet = .planner } label: {
                 Label("Walk", systemImage: "figure.walk")
                     .font(.subheadline.bold())
             }
             .buttonStyle(.borderedProminent)
-            .tint(AppTheme.coral)
+            .tint(AppTheme.brand)
+            .foregroundStyle(AppTheme.background)
             .accessibilityIdentifier("plan-walk-button")
         }
         .padding(10)
@@ -264,7 +262,7 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
             Button { introductionDismissed = true; activeSheet = .planner } label: {
                 Label("Plan my walk", systemImage: "figure.walk").frame(maxWidth: .infinity)
-            }.buttonStyle(.borderedProminent).controlSize(.large)
+            }.buttonStyle(.borderedProminent).tint(AppTheme.brand).foregroundStyle(AppTheme.background).controlSize(.large)
             HStack {
                 Button("Block records") { activeSheet = .records }
                 Spacer()
@@ -342,7 +340,7 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity, minHeight: 38)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(AppTheme.coral)
+                    .tint(AppTheme.brand)
 
                     Button { activeSheet = .feature(feature) } label: {
                         Label("Why / verify", systemImage: "checkmark.shield")
@@ -415,7 +413,7 @@ struct ContentView: View {
                 }
 
                 Section("Data and privacy") {
-                    Text("Address searches are sent to the Unignorable service and its public geocoder. Walking-route coordinates are sent to the routing service. The server does not retain trip history.")
+                    Text("Address searches are sent to the Curbnote service and its public geocoder. Walking-route coordinates are sent to the routing service. The server does not retain trip history.")
                     Text("Precise location is requested only when you choose a location action. A verification coordinate is proximity-checked and discarded; no raw location history is stored.")
                     Link(destination: URL(string: "https://data.cityofnewyork.us/d/erm2-nwe9")!) {
                         Label("NYC 311 source", systemImage: "arrow.up.right.square")
@@ -436,7 +434,7 @@ struct ContentView: View {
             HStack {
                 Label("Walking route", systemImage: "figure.walk").font(.headline)
                 Spacer()
-                Text("unignorable").font(.caption.bold()).foregroundStyle(AppTheme.muted)
+                Text("curbnote").font(.caption.bold()).foregroundStyle(AppTheme.muted)
                 Button { inspectReportCenter() } label: {
                     Label("Report nearby", systemImage: "exclamationmark.bubble.fill")
                 }
@@ -486,7 +484,7 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, minHeight: 40)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(AppTheme.coral)
+                .tint(AppTheme.brand)
                 .disabled(model.isRouting || model.originText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.destinationText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                 Button { location.requestLocation() } label: {
@@ -655,7 +653,7 @@ struct ContentView: View {
                                 .frame(maxWidth: .infinity, minHeight: 42)
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(AppTheme.coral)
+                        .tint(AppTheme.brand)
                         .accessibilityLabel("Open this walking route in Apple Maps")
 
                         Link(destination: routeExport.google) {

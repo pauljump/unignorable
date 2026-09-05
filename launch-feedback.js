@@ -35,7 +35,7 @@ function createFeedbackStore(directory) {
     }, close() { db.close(); }
   };
 }
-const page = (title, content) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex"><title>${title} · Unignorable</title><link rel="stylesheet" href="/launch.css"><body class="launch-page"><main><a href="/">← Unignorable</a>${content}</main></body></html>`;
+const page = (title, content) => `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex"><title>${title} · Curbnote</title><link rel="stylesheet" href="/launch.css"><body class="launch-page"><main><a href="/">← Curbnote</a>${content}</main></body></html>`;
 function reviewPage(rows) {
   return page('Feedback inbox', `<h1>Feedback inbox</h1><p>Latest 200 submissions · retained for 90 days. Replies are visible to the person with the receipt link. No email is sent.</p>${rows.map(row => `<article><small>${escape(row.created_at)} · ${escape(row.platform)} · ${escape(row.category)} · useful: ${escape(row.usefulness)}</small><p class="feedback-message">${escape(row.message)}</p><form data-review-id="${escape(row.id)}"><label>Status<select name="status">${STATUSES.map(s=>`<option ${s===row.status?'selected':''}>${s}</option>`).join('')}</select></label><label>Reply<textarea name="reply" maxlength="2000">${escape(row.reply)}</textarea></label><button>Save update</button><p role="status"></p></form></article>`).join('') || '<p>No feedback yet.</p>'}<script src="/feedback-client.js" defer></script>`);
 }
@@ -55,7 +55,7 @@ function createFeedbackHandler(directory) {
     }
     if (!u.pathname.startsWith('/api/feedback')) return false;
     if (req.method==='POST') {
-      if ((req.headers.origin && req.headers.origin!==origin) || req.headers['sec-fetch-site']==='cross-site' || !/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')) {json(403,{error:'Use the feedback form in Unignorable.'});return true;}
+      if ((req.headers.origin && req.headers.origin!==origin) || req.headers['sec-fetch-site']==='cross-site' || !/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')) {json(403,{error:'Use the feedback form in Curbnote.'});return true;}
       if (rateLimited(req)) {json(429,{error:'Too many submissions. Please try later.'});return true;}
       const body=await readBody(req);
       if (u.pathname==='/api/feedback') {json(201,store.submit(body));return true;}

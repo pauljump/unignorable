@@ -81,7 +81,7 @@
     {
       name: 'unignorable_read_current_condition',
       title: 'Read the current condition',
-      description: 'Read the condition, lifecycle, and map context currently selected in Unignorable without changing the page or any stored data.',
+      description: 'Read the condition, lifecycle, and map context currently selected in Curbnote without changing the page or any stored data.',
       inputSchema: emptyObjectSchema,
       annotations: { readOnlyHint: true, untrustedContentHint: true },
       execute: () => bridge.readCurrent(),
@@ -114,7 +114,7 @@
       if (status) status.hidden = false;
       document.documentElement.dataset.webmcpTools = String(tools.length);
     })
-    .catch(error => console.warn('Unignorable site tools were not registered.', error));
+    .catch(error => console.warn('Curbnote site tools were not registered.', error));
 
   window.addEventListener('pagehide', () => registration.abort(), { once: true });
 })();

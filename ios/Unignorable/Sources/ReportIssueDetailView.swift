@@ -166,7 +166,7 @@ struct ReportIssueDetailView: View {
     }
 
     private var accountabilityURL: URL {
-        var parts = URLComponents(string: "https://unignorable.polyfeeds.dev/c")!
+        var parts = URLComponents(string: "https://curbnote.polyfeeds.dev/c")!
         parts.queryItems = [.init(name: "t", value: issue.type), .init(name: "id", value: issue.recordID)]
         return parts.url!
     }
