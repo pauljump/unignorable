@@ -7,6 +7,7 @@ const path = require('path');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const ugc = require('./ugc');
+const { createFeedbackHandler } = require('./launch-feedback');
 const { pointInGeoJSON, routeHitFeatures, scoreRoute, featureRadius, featureRisk, plausibleRoutes, chooseRecommended, exportUrls, simplifyWalkingSteps, LAYER_RADII } = require('./map-core');
 const { routingLevel } = require('./condition-model');
 const { buildHB295Checklist } = require('./hb295-evidence');
@@ -63,6 +64,7 @@ const DIR = __dirname;
 const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(DIR, 'data'));
 const PORT = process.env.PORT || 8000;
 const HOST = process.env.HOST || '0.0.0.0';
+const handleFeedback = createFeedbackHandler(DATA_DIR);
 const NYC_BOUNDARY = JSON.parse(fs.readFileSync(path.join(DIR, 'config', 'nyc-boroughs.geojson'), 'utf8'));
 const JURISDICTIONS = new Map();
 try {
@@ -511,8 +513,9 @@ function reviewToken(req, u) {
 }
 function authed(req, u) {
   const token = reviewToken(req, u);
-  if (!REVIEW_KEY || token.length !== REVIEW_KEY.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(REVIEW_KEY));
+  const candidate = Buffer.from(token), expected = Buffer.from(REVIEW_KEY);
+  if (!REVIEW_KEY || candidate.length !== expected.length) return false;
+  return crypto.timingSafeEqual(candidate, expected);
 }
 
 // Route access is the paid product; browsing every public map layer stays free. Checkout is
@@ -2054,13 +2057,15 @@ function renderActionReceipt(receipt) {
 
 async function handleRequest(req, res) {
   const u = new URL(req.url, 'http://x');
+  if (await handleFeedback({req,res,u,send,readBody,authed,rateLimited,origin:PUBLIC_ORIGIN})) return;
 
-  if (u.pathname === '/records' && req.method === 'GET') {
+  if (['/records','/api/records'].includes(u.pathname) && req.method === 'GET') {
     const query = String(u.searchParams.get('q') || '').trim().slice(0, 100);
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
     const matches = query ? [...new Set(RECORD_FEATURE_BY_ID.values())]
       .filter(feature => terms.every(term => String(feature.address || feature.addr || '').toLowerCase().includes(term)))
       .sort((a, b) => String(a.address || '').localeCompare(String(b.address || ''))) : PILOT_FEATURES;
+    if (u.pathname === '/api/records') return send(res,200,JSON.stringify({records:matches.slice(0,30),total:matches.length}),'application/json');
     return send(res, 200, renderDirectory(matches.slice(0, 30), PUBLIC_ORIGIN, query, matches.length), 'text/html; charset=utf-8');
   }
   if (u.pathname === '/methodology' && req.method === 'GET') {

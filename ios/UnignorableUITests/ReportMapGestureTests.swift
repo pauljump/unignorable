@@ -2,6 +2,26 @@ import XCTest
 
 @MainActor
 final class ReportMapGestureTests: XCTestCase {
+    func testLaunchOffersNativeFeedbackAndRecords() throws {
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.buttons["Plan my walk"].waitForExistence(timeout: 5))
+        let launch = XCTAttachment(screenshot: app.screenshot())
+        launch.name = "Unignorable launch"
+        launch.lifetime = .keepAlways
+        add(launch)
+        app.buttons["Feedback"].tap()
+        XCTAssertTrue(app.buttons["feedback-send"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["feedback-send"].isEnabled)
+        let feedback = XCTAttachment(screenshot: app.screenshot())
+        feedback.name = "Native feedback"
+        feedback.lifetime = .keepAlways
+        add(feedback)
+        app.buttons["Done"].tap()
+        app.buttons["Block records"].tap()
+        XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 3))
+    }
+
     func testForecastLocationLeadsWithoutSettingRouteOrigin() throws {
         let app = XCUIApplication()
         app.launch()
@@ -35,6 +55,8 @@ final class ReportMapGestureTests: XCTestCase {
         let map = app.otherElements["unified-map"]
         XCTAssertTrue(map.waitForExistence(timeout: 8))
 
+        let dismiss = app.buttons["Dismiss introduction"]
+        if dismiss.exists { dismiss.tap() }
         let forecastMarker = app.buttons["forecast-map-marker"]
         XCTAssertTrue(forecastMarker.waitForExistence(timeout: 8))
         let before = try XCTUnwrap(Double(map.value as? String ?? ""))

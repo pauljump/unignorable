@@ -13,6 +13,13 @@ struct FeatureDetailView: View {
     var body: some View {
         NavigationStack {
             List {
+                if feature.recordArchived == true {
+                    Section("Retained history") {
+                        Text("This record is from an earlier refresh. Current status is unknown; leaving the forecast map does not establish resolution.")
+                    }
+                }
+                if let lastSeen = feature.lastSeen { LabeledContent("Last source report", value: String(lastSeen.prefix(10))) }
+
                 if feature.subjectType == "encampment" {
                     Section("One condition · one loop") {
                         if let conditionLoop {
@@ -141,6 +148,7 @@ struct FeatureDetailView: View {
                         } label: {
                             Label("Open nearby public record", systemImage: "exclamationmark.bubble.fill")
                         }
+                        ShareLink("Share this block record", item: webReportURL)
                         Link(destination: webReportURL) {
                             Label("Open the web record", systemImage: "safari")
                         }
@@ -180,6 +188,11 @@ struct FeatureDetailView: View {
             : feature.manufacturer ?? feature.descriptor ?? layer.title
     }
     private var webReportURL: URL {
+        if feature.subjectType == "encampment" {
+            var record = URLComponents(string: "https://unignorable.polyfeeds.dev/f")!
+            record.queryItems = [.init(name: "id", value: feature.id)]
+            return record.url!
+        }
         var parts = URLComponents(string: "https://unignorable.polyfeeds.dev/")!
         parts.queryItems = [
             .init(name: "mode", value: "report"),

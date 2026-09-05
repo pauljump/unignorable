@@ -1,5 +1,10 @@
 # Unignorable
 
+## Converged walking launch · September 5, 2026
+
+The current launch decision is **Know your walk. Improve your block.** Read [LAUNCH-DECISION.md](./LAUNCH-DECISION.md) for competitive evidence, the common web/native feature contract, feedback operations and the two-week experiment. [RELEASE-20260905.md](./RELEASE-20260905.md) records actual release state. This section supersedes historical records-first positioning and unreleased-branch notes below.
+
+
 Unignorable is the public record for a recurring condition on your NYC block: see what the evidence supports, check what changed, and follow the response through to a reviewed outcome. This positioning is a pilot hypothesis; independently verified improvement and audience fit remain unproven.
 
 ## Block-record production slice — local, 2026-09-05

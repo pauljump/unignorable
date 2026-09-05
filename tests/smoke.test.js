@@ -110,12 +110,12 @@ test('health and public assets are available with security headers', async () =>
   assert.match(root.headers.get('permissions-policy'), /tools=\(self\)/);
   const rootHtml = await root.text();
   assert.match(rootHtml, /id="forecast-card"/);
-  assert.match(rootHtml, /enabled:new Set\(\['homelessness'\]\)/);
+  assert.match(rootHtml, /const state=\{data:null,enabled:new Set\(\)/);
   assert.match(rootHtml, /Current condition estimate/);
   assert.match(rootHtml, /Historical reports most often arrived/);
   assert.match(rootHtml, /uncalibrated current score/);
   assert.doesNotMatch(rootHtml, /% estimated presence/);
-  assert.match(rootHtml, /Plan a route around it/);
+  assert.match(rootHtml, /Plan your NYC walk/);
   assert.match(rootHtml, /Homeless \/ encampment reports/);
   assert.match(rootHtml, /Drug activity/);
   assert.match(rootHtml, /Download exact route \(GPX\)/);
@@ -599,4 +599,21 @@ test('review key bootstraps an HTTP-only cookie and leaves the URL', async () =>
   const cookie = setCookie.split(';')[0];
   const allowed = await fetch(`${origin}/api/review`, { headers: { cookie } });
   assert.equal(allowed.status, 200);
+});
+
+test('launch feedback round trip, origin guards, review privacy and native record parity', async () => {
+  for (const url of ['/feedback','/privacy','/support','/launch.css','/launch-client.js','/feedback-client.js']) assert.equal((await fetch(origin+url)).status,200);
+  assert.equal((await fetch(origin+'/feedback/review')).status,401);
+  const post=(url,body,headers={})=>fetch(origin+url,{method:'POST',headers:{'content-type':'application/json',origin,...headers},body:JSON.stringify(body)});
+  const input={platform:'web',category:'route',usefulness:'partly',message:'Fixture only: walking directions feedback'};
+  assert.equal((await post('/api/feedback',input,{origin:'https://elsewhere.example'})).status,403);
+  assert.equal((await post('/api/feedback',{...input,lat:40.7})).status,400);
+  const saved=await post('/api/feedback',input);assert.equal(saved.status,201);const {id}=await saved.json();
+  assert.equal((await post('/api/feedback/review',{id,status:'planned',reply:'Fixture reply'})).status,401);
+  assert.equal((await post('/api/feedback/review?k='+reviewKey,{id,status:'planned',reply:'Fixture reply'})).status,200);
+  const receipt=await (await fetch(origin+'/api/feedback/'+id)).json();
+  assert.equal(receipt.reply,'Fixture reply');assert.equal(receipt.message,undefined);
+  const native=await post('/api/feedback',{...input,platform:'ios'},{origin:''});assert.equal(native.status,201);
+  const records=await (await fetch(origin+'/api/records?q=20')).json();assert.ok(Array.isArray(records.records));
+  const map=await (await fetch(origin+'/')).text();assert.ok(!map.includes('data-profile="driving"'));assert.match(map,/Was this walk useful/);
 });

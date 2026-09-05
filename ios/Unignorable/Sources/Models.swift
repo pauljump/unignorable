@@ -80,6 +80,8 @@ struct RouteResponse: Codable, Sendable {
 }
 
 struct MapFeature: Codable, Identifiable, Sendable {
+    let recordArchived: Bool?
+    let lastSeen: String?
     let id: String
     let lat: Double
     let lng: Double

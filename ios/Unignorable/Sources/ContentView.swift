@@ -3,9 +3,11 @@ import SwiftUI
 
 private enum SearchField: Hashable { case origin, destination }
 private enum ActiveSheet: Identifiable {
-    case forecastLocation, planner, controls(RouteOptionFocus), mapContent, directions, feature(MapFeature), reportIssue(ReportIssue)
+    case feedback, records, forecastLocation, planner, controls(RouteOptionFocus), mapContent, directions, feature(MapFeature), reportIssue(ReportIssue)
     var id: String {
         switch self {
+        case .feedback: "feedback"
+        case .records: "records"
         case .forecastLocation: "forecast-location"
         case .planner: "planner"
         case .controls(let focus): "controls-\(focus.rawValue)"
@@ -25,6 +27,7 @@ struct ContentView: View {
     @State private var activeSheet: ActiveSheet?
     @State private var selectedReportMarkerID: String?
     @State private var showPublicRecords = false
+    @State private var introductionDismissed = false
     @FocusState private var focusedField: SearchField?
 
     var body: some View {
@@ -37,6 +40,8 @@ struct ContentView: View {
                 Spacer()
                 if let route = model.selectedRoute {
                     routeCard(route)
+                } else if !introductionDismissed {
+                    launchCard
                 } else {
                     forecastCard
                 }
@@ -54,6 +59,8 @@ struct ContentView: View {
         .onReceive(location.$errorMessage) { message in if let message { model.status = message } }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
+            case .feedback: FeedbackView()
+            case .records: RecordsView()
             case .forecastLocation: ForecastLocationView()
             case .planner: plannerSheet
             case .controls(let focus): ControlsView(focus: focus)
@@ -205,9 +212,15 @@ struct ContentView: View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 1) {
                 Text("unignorable").font(.headline.bold())
-                Text("NYC condition forecasts").font(.caption2).foregroundStyle(.secondary)
+                Text("NYC walks").font(.caption2).foregroundStyle(.secondary)
             }
             Spacer()
+            Menu {
+                Button("Feedback", systemImage: "bubble.left") { activeSheet = .feedback }
+                Button("Block records", systemImage: "building.2") { activeSheet = .records }
+            } label: { Image(systemName: "ellipsis.circle").frame(width: 30, height: 30) }
+            .accessibilityLabel("Feedback and block records")
+            .accessibilityIdentifier("launch-menu")
             Button { activeSheet = .forecastLocation } label: {
                 Image(systemName: "location.magnifyingglass")
                     .frame(width: 30, height: 30)
@@ -223,7 +236,7 @@ struct ContentView: View {
             .buttonStyle(.bordered)
             .accessibilityLabel("Map evidence and public records")
 
-            Button { activeSheet = .planner } label: {
+            Button { introductionDismissed = true; activeSheet = .planner } label: {
                 Label("Walk", systemImage: "figure.walk")
                     .font(.subheadline.bold())
             }
@@ -236,6 +249,32 @@ struct ContentView: View {
         .shadow(color: .black.opacity(0.14), radius: 10, y: 4)
         .padding(.horizontal, 10)
         .padding(.top, 4)
+    }
+
+    private var launchCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("NYC · FREE EARLY ACCESS").font(.caption.bold()).foregroundStyle(AppTheme.mint)
+                Spacer()
+                Button { introductionDismissed = true } label: { Image(systemName: "xmark") }
+                    .accessibilityLabel("Dismiss introduction")
+            }
+            Text("Know your walk.\nImprove your block.").font(.largeTitle.bold())
+            Text("Choose what to walk around. See the dated evidence behind it. Help us learn what changed.")
+                .foregroundStyle(.secondary)
+            Button { introductionDismissed = true; activeSheet = .planner } label: {
+                Label("Plan my walk", systemImage: "figure.walk").frame(maxWidth: .infinity)
+            }.buttonStyle(.borderedProminent).controlSize(.large)
+            HStack {
+                Button("Block records") { activeSheet = .records }
+                Spacer()
+                Button("Feedback") { activeSheet = .feedback }
+            }
+            Text("Reported conditions are approximate, not live safety information.").font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(20)
+        .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 24))
+        .padding(10)
     }
 
     @ViewBuilder
@@ -596,6 +635,9 @@ struct ContentView: View {
                     }
                 }
             }
+
+            Button("Was this walk useful? Give feedback") { activeSheet = .feedback }
+                .font(.subheadline)
 
             Text(routeOutcome(route))
                 .font(.caption).foregroundStyle(.secondary).lineLimit(3)

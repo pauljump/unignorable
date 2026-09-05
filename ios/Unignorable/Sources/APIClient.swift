@@ -15,6 +15,20 @@ struct APIClient {
         self.session = URLSession(configuration: configuration)
     }
 
+    func submitFeedback(_ feedback: FeedbackRequest) async throws -> FeedbackReceipt {
+        var request = URLRequest(url: baseURL.appending(path: "/api/feedback"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.httpBody = try encoder.encode(feedback)
+        return try await perform(request)
+    }
+    func feedbackReceipt(_ id: String) async throws -> FeedbackReceipt { try await get(baseURL.appending(path: "/api/feedback/\(id)")) }
+    func records(_ query: String) async throws -> RecordsResponse {
+        var parts = URLComponents(url: baseURL.appending(path: "/api/records"), resolvingAgainstBaseURL: false)!
+        parts.queryItems = [.init(name: "q", value: query)]
+        return try await get(parts.url!)
+    }
+
     func geocode(_ query: String) async throws -> [Place] {
         var parts = URLComponents(url: baseURL.appending(path: "/api/geocode"), resolvingAgainstBaseURL: false)!
         parts.queryItems = [.init(name: "q", value: query)]

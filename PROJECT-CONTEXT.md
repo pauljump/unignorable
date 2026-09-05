@@ -1,5 +1,10 @@
 # unignorable
 
+## Converged walking launch · September 5, 2026
+
+The current launch decision is **Know your walk. Improve your block.** Read [LAUNCH-DECISION.md](./LAUNCH-DECISION.md) for competitive evidence, the common web/native feature contract, feedback operations and the two-week experiment. [RELEASE-20260905.md](./RELEASE-20260905.md) records actual release state. This section supersedes historical records-first positioning and unreleased-branch notes below.
+
+
 ## Product decision — 2026-09-05 (local branch, not deployed)
 
 Primary wedge: readable public records for residents and block-group coordinators who repeatedly encounter the same NYC block. Search is acquisition; walking is utility and evidence recruitment. [PRODUCTION-DIRECTION.md](./PRODUCTION-DIRECTION.md) contains the pre-implementation decision, alternatives, 30-day targets, falsification criteria and bounded two-week slice.

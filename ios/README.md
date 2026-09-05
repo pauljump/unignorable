@@ -1,5 +1,10 @@
 # Unignorable for iPhone
 
+The September 5 launch is a native SwiftUI + MapKit walking companion: **Know your walk. Improve your block.** It shares walking routes, optional avoidance, block evidence, nearby checks, canonical record links and feedback with the web app. `RecordsView` and `FeedbackView` are native forms and lists. Feedback receipts use app preferences; UserDefaults purpose is declared in the privacy manifest. Free early access uses the existing backend bypass; StoreKit is deferred until repeat value is established. Privacy and support are `/privacy` and `/support` on the canonical host.
+
+Read [the launch decision](../LAUNCH-DECISION.md) and [release status](../RELEASE-20260905.md). Historical implementation notes follow; their older positioning and paywall release gate are superseded.
+
+
 Native, walking-only SwiftUI + MapKit client for the existing Unignorable NYC service. The opening experience is the map plus one nearby qualitative condition forecast. Each condition exposes the same product loop as the web: Detected → Checked → Action → Outcome, with one next useful action. Walking is an evidence-recruitment and avoidance surface around that loop, not a separate product identity. Uncalibrated numeric model scores and heuristic score ranges remain behind disclosure; they are never described as empirical probabilities or confidence intervals. Stronger historical report-time patterns may appear separately and never claim when people will be present.
 
 The walking planner, filters, raw public-record dots, supplemental map layers, reports, and methodology remain available through progressive disclosure. The planner flow is: enter or resolve both addresses, choose what to avoid, optionally choose something useful to pass on the way, then tap **Create walking route**. Address suggestions use native MapKit search first and retain the API geocoder as a fallback. Editing either address invalidates the old route, while changing preferences updates an existing route automatically.
