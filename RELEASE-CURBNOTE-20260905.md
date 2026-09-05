@@ -1,5 +1,15 @@
 # Curbnote rebrand release · September 5, 2026
 
+## Map clarity and shareable dots · build 8
+
+The launch map now shows only the user’s blue location dot. Evidence layers remain opt-in, and route endpoints appear only after a route is selected. Tapping an instance dot immediately highlights it and opens its detail sheet. Every map point now has a prominent Share this dot action for X, Messages and other share targets, with uncertainty-preserving copy and a stable public link.
+
+Verification: 72 backend/web tests pass; fourteen native unit tests pass; native build-for-testing succeeds; focused map gesture UI checks pass. The signed archive passes strict validation and embeds `com.curbnote.app`, Curbnote, version 1.0.0 and build 8.
+
+**Released: Curbnote 1.0.0 (8)** from `8f50ba4`. Apple build ID `5672d67f-54f9-4432-ac5e-b38a27e6e948` is `VALID` in App Store Connect. The upload succeeded through the Aqua Terminal playbook for the Curbnote Internal TestFlight group. Source is pushed to `origin/deploy/prediction-first-20260821`.
+
+Artifacts: `/Users/mini-home/.local/share/curbnote-releases/testflight-20260905T222610Z`.
+
 ## Local speed and optional passkey accounts · build 7
 
 Native map snapshots, the active walk and step progress, and recent addresses restore from protected local storage. Condition selection and raw-report clustering run off the UI actor; optional report data loads on demand. Accounts are offered at Save this walk across devices. Native passkeys and browser WebAuthn share a private saved-walk library containing only explicitly saved address/stop/preference recipes. Opening a saved walk prepares a fresh route request. Anonymous walking and feedback remain available. Both clients provide sign-out, walk removal, additional passkeys and account deletion. See [the implementation and operating contract](./SPEED-ACCOUNTS-20260905.md).
