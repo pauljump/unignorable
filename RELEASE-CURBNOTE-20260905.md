@@ -1,14 +1,16 @@
 # Curbnote rebrand release · September 5, 2026
 
-## Prediction-only map · build 9
+## Current-condition prediction map · build 10
 
-The native map now has one visual language: every condition dot is an approximate homelessness-condition prediction. The separate map-center-driven “Presence forecast” marker and forecast panel are gone, so panning and zooming no longer move a selected forecast. The user’s blue location dot remains the only location marker; tapping any prediction dot opens its own detail and share action.
+The map now uses the same rule across encampments, drug activity, dumping, sidewalk, street and signal conditions: draw a dot only when the current-condition model classifies that location as `likely_present`. Historical or unresolved evidence, likely-absent/cleared states and dormant locations are not drawn; when a location moves out of `likely_present`, its dot disappears on the next map-data refresh. Each category keeps its own color, and the user’s blue location dot remains separate. The map-center-driven “Presence forecast” marker is gone, so panning and zooming no longer move a special prediction marker. Tapping any current-condition dot highlights it immediately and opens its own detail/share action.
 
-Verification: 14 native unit tests pass; the native test build succeeds; all 4 focused map UI checks pass, including prediction-dot detail/share and absence of the moving forecast UI. The signed archive passes strict validation and embeds `com.curbnote.app`, Curbnote, version 1.0.0 and build 9.
+The refresh model promotes recent recurring evidence to `likely_present` for the civic condition layers while preserving explicit agency observations, post-action returns and explicit absence/clearance outcomes. This keeps the map a prediction surface without presenting uncalibrated nowcast scores as probabilities.
 
-**Released: Curbnote 1.0.0 (9)** from `3615324` / `70f0b6d`. Apple build ID `133627ff-f666-4178-80c3-ff6ffd94cf6b` is `VALID` in App Store Connect. The internal-only TestFlight upload succeeded through the Aqua Terminal playbook. Source is pushed to `origin/deploy/prediction-first-20260821`.
+Verification: 73 backend/web tests pass; 14 native unit tests pass; the native test build succeeds; all 4 focused map UI checks pass, including current-condition dot filtering, immediate dot detail/share feedback and absence of the moving forecast UI. The signed archive passes strict validation and embeds `com.curbnote.app`, Curbnote, version 1.0.0 and build 10.
 
-Artifacts: `/Users/mini-home/.local/share/curbnote-releases/testflight-20260905T224916Z`.
+**Released: Curbnote 1.0.0 (10)** from `97eaa88` / `607d67b`. Apple build ID `2f355509-0379-4d23-8c77-f89737a2b12d` is `VALID` in App Store Connect. The internal-only TestFlight upload succeeded through the Aqua Terminal playbook. Source is pushed to `origin/deploy/prediction-first-20260821`.
+
+Artifacts: `/Users/mini-home/.local/share/curbnote-releases/testflight-20260905T230407Z`.
 
 ## Map clarity and shareable dots · build 8
 
