@@ -1,5 +1,15 @@
 # Curbnote rebrand release · September 5, 2026
 
+## Compact condition dots · build 11
+
+The native condition markers now match the original Curbnote map language: compact coral/purple/etc. dots with one shared white paper-plane glyph. There are no category-specific icons inside the dots. Category identity remains color-based, the blue user-location dot remains MapKit-owned, and the current-condition `likely_present` add/remove rule is unchanged.
+
+Verification: the signed native archive passes strict validation; the focused launch and dot-detail/share UI checks pass. Apple build ID `54d63743-2130-42d8-8afe-0d1c9c23b357` reports `VALID` in App Store Connect.
+
+**Released: Curbnote 1.0.0 (11)** from `0271f6a` / `969330b`. The internal-only TestFlight upload succeeded through the Aqua Terminal playbook. Source is pushed to `origin/deploy/prediction-first-20260821`.
+
+Artifacts: `/Users/mini-home/.local/share/curbnote-releases/testflight-20260905T231410Z`.
+
 ## Current-condition prediction map · build 10
 
 The map now uses the same rule across encampments, drug activity, dumping, sidewalk, street and signal conditions: draw a dot only when the current-condition model classifies that location as `likely_present`. Historical or unresolved evidence, likely-absent/cleared states and dormant locations are not drawn; when a location moves out of `likely_present`, its dot disappears on the next map-data refresh. Each category keeps its own color, and the user’s blue location dot remains separate. The map-center-driven “Presence forecast” marker is gone, so panning and zooming no longer move a special prediction marker. Tapping any current-condition dot highlights it immediately and opens its own detail/share action.
