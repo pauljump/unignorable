@@ -1,6 +1,16 @@
 # Curbnote native release identity
 
+**TestFlight:** 1.0.0 (2) is processed and available to Paul in Curbnote Internal. The Aqua Terminal ship method resolved headless signing; see [the release record](../RELEASE-CURBNOTE-20260905.md).
+
 Display name: Curbnote. Bundle ID: `com.curbnote.app`. App Store Connect ID: `6809025615`; SKU: `curbnote`. API and shared links: `https://curbnote.polyfeeds.dev`. The Xcode project/scheme/module remain `Unignorable` for source continuity. Branding: [../BRAND.md](../BRAND.md). Use `python3 ../scripts/build-brand.py` from this directory to rebuild all shared assets.
+
+## Ship to TestFlight from an agent session
+
+Use `ios/ship-testflight.sh`, following the canonical [TestFlight playbook](../../_factory/brain/playbooks/ios-testflight.md). It reads ASC IDs from the vault, verifies the app and build number, archives, validates the embedded identity, and exports/uploads for internal TestFlight. Each run uses a new artifact directory and refuses an already-uploaded build number. The Mini has Python 3 with PyJWT, Xcode and XcodeGen installed.
+
+When headless signing returns `errSecInternalComponent`, launch the script through a Terminal `.command` file using `open`, as the playbook describes. The existing logged-in Aqua session can access the signing key. **Do not treat this error as proof that Paul must unlock the keychain or provide a password.** Both archive and export receive the vault's ASC authentication flags.
+
+After an upload, query App Store Connect for processing state and beta-group availability. Upload completion alone does not establish installability. The shipping script does not create tester invitations or public links.
 
 The earlier instructions below are historical where they mention the previous public name, bundle identifier or URL.
 

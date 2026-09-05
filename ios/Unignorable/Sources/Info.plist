@@ -14,6 +14,8 @@
   <key>NSLocationWhenInUseUsageDescription</key><string>Curbnote uses your location when you choose a nearby forecast, start a walk from your location, or submit a nearby condition check.</string>
   <key>NSCameraUsageDescription</key><string>Curbnote uses the camera only when you choose to add a photo to an issue report.</string>
   <key>NSPhotoLibraryUsageDescription</key><string>Curbnote accesses a photo only when you choose one for an issue report.</string>
+  <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string></array>
+  <key>UISupportedInterfaceOrientations~ipad</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationPortraitUpsideDown</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
   <key>UILaunchScreen</key><dict/>
   <key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
 </dict></plist>

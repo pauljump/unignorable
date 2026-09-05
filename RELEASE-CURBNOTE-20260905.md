@@ -1,5 +1,18 @@
 # Curbnote rebrand release · September 5, 2026
 
+## TestFlight released · September 5, 2026, 19:07 UTC
+
+**Curbnote 1.0.0 (2) has been uploaded and processed successfully.** App Store Connect build ID `bdb6f51b-0290-41de-9fbd-eddfa7d8f723` reports `VALID`, `usesNonExemptEncryption: false`, and internal state `IN_BETA_TESTING`. The Curbnote Internal group includes Paul Jump and build 2. No public link or external testing was enabled. English What to Test notes are saved.
+
+The earlier signing-blocker statements below are historical and resolved. The canonical playbook's **Aqua Terminal `.command` launch** signed and uploaded successfully without unlocking the keychain, handling a password, or changing keychain permissions. Headless `errSecInternalComponent` did not imply that Paul needed to unlock the keychain manually. `ios/ship-testflight.sh` now implements the working archive/export flow with vault ASC authentication on both steps, duplicate-build protection, embedded identity checks, and unique artifact directories.
+
+Native build-2 verification reran all nine tests: five model and three UI tests pass; the map-marker/pinch test still fails while the Mac system resolver retains a negative answer for the new hostname. Public and router DNS now answer correctly, but the normal system resolver remains stale. This follow-up limitation is separate from the verified TestFlight processing/install availability. No claim of a completed physical-device walk is made.
+
+Archive signature validation (`codesign --verify --deep --strict`) passes. The uploaded build embeds Curbnote, `com.curbnote.app`, version 1.0.0, build 2, the mint app icon, HTTPS backend URLs and iPad orientation declarations required by the current SDK. Export returned `EXPORT SUCCEEDED`; Apple completed processing and made the build available to the internal group.
+
+Artifacts: `/Users/mini-home/.local/share/curbnote-releases/testflight-20260905T190535Z` (signed archive, export options, ship log, uploaded receipt and App Store Connect confirmation).
+
+
 Curbnote replaces the Unignorable public identity. Paul selected the name, created App Store Connect record 6809025615 (`com.curbnote.app`, SKU `curbnote`), and selected `curbnote.polyfeeds.dev` as the interim web target before purchasing `curbnote.xyz`. Yellow was rejected; the delivered brand uses mint, deep green and warm paper.
 
 All 52 web/backend tests pass, including public PNG dimensions, configured canonical metadata, manifest delivery, old-host redirects, and legacy API access. App/icon and both social-card PNGs were rendered and visually inspected. No connected browser is available, so a web-browser visual pass is not claimed.
