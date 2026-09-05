@@ -1,5 +1,15 @@
 # Curbnote rebrand release · September 5, 2026
 
+## Plain condition dots and full prediction visibility · build 12
+
+The native map now renders condition predictions as actual compact color-only dots—no paper-plane glyph, halo, or category icon. Tapping still uses the larger invisible hit target and immediately highlights the selected dot before opening its detail/share surface. The map projection ceiling is also raised on broad views so dense street and signal predictions cannot crowd known current encampment predictions out of the viewport.
+
+Verification: 14 native unit tests pass; the native test build succeeds; all 4 focused map UI checks pass. The signed archive passes strict validation. Apple build ID `f537f7e2-2896-496b-8c9f-02ffb47d70dc` reports `VALID` in App Store Connect.
+
+**Released: Curbnote 1.0.0 (12)** from `df2dca8` / `dc5d909`. The internal-only TestFlight upload succeeded through the Aqua Terminal playbook. Source is pushed to `origin/deploy/prediction-first-20260821`.
+
+Artifacts: `/Users/mini-home/.local/share/curbnote-releases/testflight-20260905T232413Z`.
+
 ## Compact condition dots · build 11
 
 The native condition markers now match the original Curbnote map language: compact coral/purple/etc. dots with one shared white paper-plane glyph. There are no category-specific icons inside the dots. Category identity remains color-based, the blue user-location dot remains MapKit-owned, and the current-condition `likely_present` add/remove rule is unchanged.
