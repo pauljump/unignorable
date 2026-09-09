@@ -14,6 +14,6 @@ Install Apple’s free [TestFlight app](https://apps.apple.com/app/testflight/id
 
 **Beta status:** Public testing is being prepared for Apple’s beta review. The invite link may say the beta is not accepting testers until an approved build is available.
 
-[Support](https://curbnote.polyfeeds.dev/support) · [Privacy](https://curbnote.polyfeeds.dev/privacy)
+[Support](https://unignorable.polyfeeds.dev/support) · [Privacy](https://unignorable.polyfeeds.dev/privacy)
 
-This repository is the public download home for Unignorable, formerly Curbnote. Application source is maintained privately.
+This repository is the public download home for Unignorable. Application source is maintained privately.
