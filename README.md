@@ -2,7 +2,7 @@
 
 # Unignorable for iOS
 
-**Know your walk. Improve your block.**
+**Know your block.**
 
 More context for your walk. Explore reported street conditions, plan a walk, and leave a nearby check to help keep the picture current.
 
