@@ -1,10 +1,10 @@
-<p align="center"><img src="assets/unignorable.png" width="112" height="112" alt="Unignorable app icon"></p>
+<p align="center"><img src="assets/unignorable-v5.png" width="112" height="112" alt="Unignorable app icon"></p>
 
 # Unignorable for iOS
 
 **Know your walk. Improve your block.**
 
-More context for your NYC walk. Explore reported street conditions, plan a walk, and leave a nearby check to help keep the picture current.
+More context for your walk. Explore reported street conditions, plan a walk, and leave a nearby check to help keep the picture current.
 
 ## Join the iOS beta
 
