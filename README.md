@@ -6,11 +6,13 @@
 
 More context for your NYC walk. Explore reported street conditions, plan a walk, and leave a nearby check to help keep the picture current.
 
-## Get the app
+## Join the iOS beta
 
-[**Download Curbnote on the App Store →**](https://apps.apple.com/app/id6809025615)
+[**Join the Curbnote beta on TestFlight →**](https://testflight.apple.com/join/zTRj23fF)
 
-Curbnote is preparing for its first public release. The download will be available once Apple approves the app and it is released.
+Install Apple’s free [TestFlight app](https://apps.apple.com/app/testflight/id899247664), then open the invite link on your iPhone. Requires iOS 17 or later.
+
+**Beta status:** Public testing is being prepared for Apple’s beta review. The invite link may say the beta is not accepting testers until an approved build is available.
 
 [Support](https://curbnote.polyfeeds.dev/support) · [Privacy](https://curbnote.polyfeeds.dev/privacy)
 
