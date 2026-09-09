@@ -1,6 +1,6 @@
-<p align="center"><img src="assets/curbnote.png" width="112" height="112" alt="Curbnote app icon"></p>
+<p align="center"><img src="assets/unignorable.png" width="112" height="112" alt="Unignorable app icon"></p>
 
-# Curbnote for iOS
+# Unignorable for iOS
 
 **Know your walk. Improve your block.**
 
@@ -8,7 +8,7 @@ More context for your NYC walk. Explore reported street conditions, plan a walk,
 
 ## Join the iOS beta
 
-[**Join the Curbnote beta on TestFlight →**](https://testflight.apple.com/join/zTRj23fF)
+[**Join the Unignorable beta on TestFlight →**](https://testflight.apple.com/join/zTRj23fF)
 
 Install Apple’s free [TestFlight app](https://apps.apple.com/app/testflight/id899247664), then open the invite link on your iPhone. Requires iOS 17 or later.
 
@@ -16,4 +16,4 @@ Install Apple’s free [TestFlight app](https://apps.apple.com/app/testflight/id
 
 [Support](https://curbnote.polyfeeds.dev/support) · [Privacy](https://curbnote.polyfeeds.dev/privacy)
 
-This repository is the public download home for Curbnote, formerly Unignorable. Application source is maintained privately.
+This repository is the public download home for Unignorable, formerly Curbnote. Application source is maintained privately.
